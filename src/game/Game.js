@@ -353,6 +353,50 @@ export class Game {
     else if (ev.t === 'endDay' && this.isNetClient()) this.endDay({ fromNet: true });
     else if (ev.t === 'turretPlaced') this.applyNetTurret(ev);
     else if (ev.t === 'pigSpawn') this.applyNetPigSpawn(ev);
+    else if (ev.t === 'world') this.applyNetWorld(ev);
+  }
+
+  /**
+   * Run farm mutations and broadcast the resulting voxel patch so peers see
+   * the same till / plant / harvest / repair (host AI + any player's tools).
+   */
+  syncFarm(fn) {
+    if (!this.online) return fn();
+    const w = this.world;
+    const orig = w.set.bind(w);
+    const raw = [];
+    w.set = (x, y, z, id) => {
+      orig(x, y, z, id);
+      if (w.inside(x, y, z)) raw.push(w.idx(x, y, z), id & 0xff);
+    };
+    let out;
+    try { out = fn(); }
+    finally { w.set = orig; }
+    if (!raw.length) return out;
+    const last = new Map();
+    for (let i = 0; i < raw.length; i += 2) last.set(raw[i], raw[i + 1]);
+    const p = [];
+    for (const [idx, id] of last) p.push(idx, id);
+    netBroadcast({ t: 'world', p });
+    return out;
+  }
+
+  applyNetWorld(ev) {
+    if (!Array.isArray(ev.p) || !ev.p.length) return;
+    const w = this.world;
+    const plane = WX * WZ;
+    const n = w.data.length;
+    for (let i = 0; i + 1 < ev.p.length; i += 2) {
+      const idx = ev.p[i] | 0;
+      const id = ev.p[i + 1] | 0;
+      if (idx < 0 || idx >= n) continue;
+      const x = idx % WX;
+      const z = ((idx / WX) | 0) % WZ;
+      const y = (idx / plane) | 0;
+      w.set(x, y, z, id);
+      if (isCrop(id)) this.crops.set(idx, 0);
+      else this.crops.delete(idx);
+    }
   }
 
   /** Peer placed a guard tower — mirror without charging coins again. */
@@ -985,8 +1029,8 @@ export class Game {
     }
     const line = t(`astra.report.${ok ? 'good' : 'ok'}.${Math.floor(Math.random() * 3)}`);
     fillReport(this.screens, { day: this.dayIndex + 1, harvest: this.today.harvest, kills: this.today.kills, booms: this.today.booms, goal: c.goal, line, last, endless: this.mode === 'endless' });
-    // 夜のあいだにアストラが穴を埋めておく（畑のまわり）
-    this.repairAll();
+    // Overnight hole fill — host broadcasts the patch so clients match
+    this.syncFarm(() => this.repairAll());
     if (!last) {
       // つぎの日の朝として保存（いま「つづきから」を選ぶと、つぎの日から）
       const keep = this.dayIndex;
@@ -1805,16 +1849,18 @@ export class Game {
     }
     const tg = this.target;
     if (!tg) return;
-    if (atk.act === 'harvest') this.harvest(tg.x, tg.y, tg.z, 'player');
+    if (atk.act === 'harvest') this.syncFarm(() => this.harvest(tg.x, tg.y, tg.z, 'player'));
     else if (atk.act === 'cut') {
-      const id = tg.id;
-      let y = tg.y;
-      // サトウキビは上の段もいっしょに
-      while (this.world.get(tg.x, y + 1, tg.z) === id && id === B.CANE) y++;
-      for (let yy = y; yy >= tg.y; yy--) this.world.set(tg.x, yy, tg.z, B.AIR);
-      this.particles.burst(tg.x, tg.y, tg.z, BLOCKS[id].particle, 8, this.lightBright(tg.x, tg.y, tg.z), 0.8);
-      this.audio.sfx('pluck', { pos: { x: tg.x + 0.5, y: tg.y + 0.3, z: tg.z + 0.5 } });
-      if (id === B.CANE) this.talk.say('astra.caneBroken', { cool: 60, delay: 0.6 });
+      this.syncFarm(() => {
+        const id = tg.id;
+        let y = tg.y;
+        // サトウキビは上の段もいっしょに
+        while (this.world.get(tg.x, y + 1, tg.z) === id && id === B.CANE) y++;
+        for (let yy = y; yy >= tg.y; yy--) this.world.set(tg.x, yy, tg.z, B.AIR);
+        this.particles.burst(tg.x, tg.y, tg.z, BLOCKS[id].particle, 8, this.lightBright(tg.x, tg.y, tg.z), 0.8);
+        this.audio.sfx('pluck', { pos: { x: tg.x + 0.5, y: tg.y + 0.3, z: tg.z + 0.5 } });
+        if (id === B.CANE) this.talk.say('astra.caneBroken', { cool: 60, delay: 0.6 });
+      });
     }
   }
 
@@ -1822,18 +1868,18 @@ export class Game {
     const tg = this.target;
     const pl = this.player;
     switch (u.act) {
-      case 'harvest': pl.swingHand(); return this.harvest(tg.x, tg.y, tg.z, 'player') > 0;
+      case 'harvest': pl.swingHand(); return this.syncFarm(() => this.harvest(tg.x, tg.y, tg.z, 'player') > 0);
       case 'plant': {
         pl.swingHand();
         const crop = u.crop || this.peekNextSeed();
         if (!crop) return false;
-        const ok = this.plant(tg.x, tg.y + 1, tg.z, 'player', crop);
+        const ok = this.syncFarm(() => this.plant(tg.x, tg.y + 1, tg.z, 'player', crop));
         if (ok) this.advanceSeedCursor(crop);
         return ok;
       }
-      case 'till': pl.swingHand(); return this.till(tg.x, tg.y, tg.z, 'player');
-      case 'fertilize': pl.swingHand(); return this.fertilize(tg.x, tg.y, tg.z);
-      case 'fill': pl.swingHand(); return this.repair(...u.at, 'player');
+      case 'till': pl.swingHand(); return this.syncFarm(() => this.till(tg.x, tg.y, tg.z, 'player'));
+      case 'fertilize': pl.swingHand(); return this.syncFarm(() => this.fertilize(tg.x, tg.y, tg.z));
+      case 'fill': pl.swingHand(); return this.syncFarm(() => this.repair(...u.at, 'player'));
       case 'placeTurret': pl.swingHand(); return this.tryPlaceTurret(u.x, u.z);
       case 'sellPig': if (fresh) { pl.swingHand(); return this.sellPig(this.targetPig); } return false;
       case 'pigWild': if (fresh) this.talk.sys('sys.pigWild'); return false;

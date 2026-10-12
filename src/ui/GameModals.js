@@ -67,7 +67,7 @@ export function fillReport(screens, d) {
   const g = m.querySelector('.r-goal');
   g.textContent = d.harvest >= d.goal ? t('report.goalOk') : t('report.goalNg', { n: d.goal - d.harvest });
   g.classList.toggle('ok', d.harvest >= d.goal);
-  m.querySelector('.r-line').innerHTML = `<span class="who">&lt;${esc(t('name.astra'))}&gt;</span> ${esc(d.line)}`;
+  m.querySelector('.r-line').innerHTML = `<span class="who">${esc(t('name.astra'))}</span> ${esc(d.line)}`;
   const nb = m.querySelector('.r-next');
   nb.dataset.i18n = d.last ? 'report.last' : 'report.next';
   // エンドレス：ここで区切ってタイトルへ（つぎの日の朝として保存してある）

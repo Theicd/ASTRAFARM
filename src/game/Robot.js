@@ -236,15 +236,18 @@ export class Robot {
 
   doTask(t) {
     const g = this.game, w = g.world;
-    if (t.type === 'harvest') { if (isRipe(w.get(t.x, t.y, t.z))) g.harvest(t.x, t.y, t.z, 'robot'); }
-    else if (t.type === 'plant') {
+    // Online clients mirror soil from host patches — do not mutate locally.
+    if (g.isNetClient?.()) return;
+    const run = (fn) => (g.syncFarm ? g.syncFarm(fn) : fn());
+    if (t.type === 'harvest') {
+      if (isRipe(w.get(t.x, t.y, t.z))) run(() => g.harvest(t.x, t.y, t.z, 'robot'));
+    } else if (t.type === 'plant') {
       const kind = t.crop || g.pickPlantSeed?.(2);
       if (kind && isFarm(w.get(t.x, t.y - 1, t.z)) && w.get(t.x, t.y, t.z) === B.AIR) {
-        g.plant(t.x, t.y, t.z, 'robot', kind);
+        run(() => g.plant(t.x, t.y, t.z, 'robot', kind));
       }
-    }
-    else if (t.type === 'till') g.till(t.x, t.y, t.z, 'robot');
-    else if (t.type === 'repair') g.repair(t.x, t.y, t.z, 'robot');
+    } else if (t.type === 'till') run(() => g.till(t.x, t.y, t.z, 'robot'));
+    else if (t.type === 'repair') run(() => g.repair(t.x, t.y, t.z, 'robot'));
   }
 
   // ------------------------------------------------------------------ できごと
