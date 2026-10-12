@@ -712,13 +712,16 @@ export class Dragon {
 
   pickPrey() {
     const g = this.game;
-    const crew = [g.robot, ...(g.helpers || [])].filter((r) => r && !r.dead && r.state !== 'kidnapped' && !r.captive);
-    // Prefer helpers outdoors; else anyone
-    const open = crew.filter((r) => r.exposed || r.state === 'toBed' || r.state === 'sleep');
-    const pool = open.length ? open : crew;
-    if (!pool.length) return null;
+    // Only grab robots that are actually working outdoors — never from bed/house
+    const crew = [g.robot, ...(g.helpers || [])].filter((r) => {
+      if (!r || r.dead || r.captive) return false;
+      if (r.state === 'kidnapped' || r.state === 'sleep' || r.state === 'toBed' || r.state === 'hide') return false;
+      if (!r.exposed || r.inHouse) return false;
+      return r.state === 'work' || r.state === 'scare' || r.state === 'panic' || r.state === 'sulk' || r.state === 'flung';
+    });
+    if (!crew.length) return null;
     let best = null, bd = Infinity;
-    for (const r of pool) {
+    for (const r of crew) {
       const d = Math.hypot(r.body.pos.x - this.body.pos.x, r.body.pos.z - this.body.pos.z);
       if (d < bd) { bd = d; best = r; }
     }
@@ -761,9 +764,13 @@ export class Dragon {
     }
 
     if (this.state === 'swoop') {
-      if (!this.prey || this.prey.dead || this.prey.state === 'kidnapped') this.prey = this.pickPrey();
+      // Dusk/night: crew goes indoors — abort the raid
+      if (g.isNightish) { this.leave(); return; }
+      if (!this.prey || this.prey.dead || this.prey.state === 'kidnapped' || this.prey.inHouse || !this.prey.exposed) {
+        this.prey = this.pickPrey();
+      }
       if (!this.prey) {
-        // Nobody to grab — circle then leave
+        // Nobody outdoors to grab — circle then leave
         if (this.stateT > 6) { this.leave(); return; }
         this.yaw += dt * 1.2;
         this.body.pos.x += Math.sin(this.yaw) * this.speed * dt * 0.5;

@@ -975,10 +975,14 @@ export class Game {
     if (i >= 1 && daySlots.length >= 2) {
       daySlots[1].kind = rng() < 0.5 ? 'thief' : 'golem';
     }
-    // Daytime dragon swoop — common enough to notice
-    if (i >= 1 && rng() < 0.55) {
-      const tDay = i === 0 ? 145 : start + (end - start) * (0.35 + rng() * 0.45);
-      daySlots.push({ t: tDay, kind: 'dragon' });
+    // Dragon only by day — robots sleep indoors at night, so night snatches are unfair
+    if (i === 0) {
+      daySlots.push({ t: 150, kind: 'dragon' }); // after tutorial boom settles
+    } else {
+      daySlots.push({ t: start + (end - start) * (0.4 + rng() * 0.35), kind: 'dragon' });
+      if (rng() < 0.35) {
+        daySlots.push({ t: start + (end - start) * (0.15 + rng() * 0.2), kind: 'dragon' });
+      }
     }
     for (const s of daySlots) list.push(s);
 
@@ -991,12 +995,10 @@ export class Game {
         kind: this.pickSwarmKind(rng),
       });
     }
-    // Guarantee special roles on top of the swarm mix
+    // Guarantee special roles on top of the swarm mix (no dragon at night)
     if (nightSlots.length >= 2) nightSlots[1].kind = 'thief';
     if (nightSlots.length >= 3) nightSlots[2].kind = 'golem';
     if (nightSlots.length >= 5) nightSlots[4].kind = rng() < 0.5 ? 'thief' : 'chomp';
-    // Dragon every night (the funny sky event)
-    list.push({ t: ns + cfg.night * (0.38 + rng() * 0.22), kind: 'dragon' });
     for (const s of nightSlots) list.push(s);
     if (cfg.boss) list.push({ t: ns + cfg.night * 0.35, big: true, kind: 'boom' });
     return list.sort((a, b) => a.t - b.t);
@@ -1043,9 +1045,6 @@ export class Game {
       const waveT = ns + nightLen * (0.38 + rng() * 0.22);
       const n = Math.min(4, 1 + towers);
       for (let i = 0; i < n; i++) this.schedule.push({ t: waveT + i * (0.9 + rng() * 0.4), surge: true, kind: this.pickSwarmKind(rng) });
-    }
-    if (towers >= 1 && !this.schedule.some((s) => s.kind === 'dragon')) {
-      this.schedule.push({ t: ns + nightLen * (0.42 + rng() * 0.15), kind: 'dragon' });
     }
     this.schedule.sort((a, b) => a.t - b.t);
     this.talk.sys('sys.turretThreat', { n: towers, mobs: targetMobs });
@@ -1349,6 +1348,8 @@ export class Game {
     // Keep scheduled roles — never silently downgrade to boom (that hid all new pests).
     let role = kind || 'boom';
     if (role === 'dragon' && this.mobs.some((m) => m.kind === 'dragon' && !m.dead)) role = 'thief';
+    // Never spawn a kidnap-dragon while robots are sheltering
+    if (role === 'dragon' && this.isNightish) role = this.pickSwarmKind(() => Math.random());
 
     const m = this.makeMob(role, best[0], best[1], { big });
     m.netId = this._mobNetSeq++;
