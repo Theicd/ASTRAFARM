@@ -1,10 +1,13 @@
 // このゲームの画面：これまでのこと（はじめに）、1 日のおわりの報告、5 日間のおわり。
-import { t, applyDom } from '../core/i18n.js';
+import { t, applyDom, onLangChange } from '../core/i18n.js';
+import { BUY, PIG_SELL, SELL_PRICE } from '../game/economy.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export function addGameModals(screens, atlas) {
   const icon = (n) => atlas.iconURL(n);
+  fillHowtoGuide(screens, atlas);
+  onLangChange(() => fillHowtoGuide(screens, atlas));
   screens.addModal('intro', `
 <section id="m-intro" class="modal hidden"><div class="card story" data-scroll>
   <h2 data-i18n="intro.title">${t('intro.title')}</h2>
@@ -50,6 +53,44 @@ export function addGameModals(screens, atlas) {
   <button data-act="endlessNew" data-i18n="endless.new">${t('endless.new')}</button>
   <button data-act="back" data-i18n="ui.back">${t('ui.back')}</button>
 </div></section>`);
+}
+
+/** Icon guide for hotbar tools + economy (arcade-style howto). */
+export function fillHowtoGuide(screens, atlas) {
+  const box = screens.modals?.howto?.querySelector('.howto-guide');
+  if (!box || !atlas) return;
+  const icon = (n) => atlas.iconURL(n);
+  const row = (src, titleKey, body, extra = '') => `
+    <div class="guide-row">
+      <img alt="" src="${src}">
+      <div><b data-i18n="${titleKey}">${t(titleKey)}</b><span>${esc(body)}${extra}</span></div>
+    </div>`;
+  const tools = [
+    ['item_sword', 'item.sword', t('howto.tool.sword')],
+    ['item_hoe', 'item.hoe', t('howto.tool.hoe')],
+    ['item_seed', 'item.seed', t('howto.tool.seed')],
+    ['item_dirt', 'item.dirt', t('howto.tool.dirt')],
+    ['item_powder', 'item.powder', t('howto.tool.powder')],
+    ['item_turret', 'item.turret', t('howto.tool.turret', { n: BUY.turret })],
+  ];
+  const crops = [
+    ['item_potato', 'item.potato', SELL_PRICE.potato],
+    ['item_wheat', 'item.wheat', SELL_PRICE.wheat],
+    ['item_carrot', 'item.carrot', SELL_PRICE.carrot],
+    ['item_corn', 'item.corn', SELL_PRICE.corn],
+  ];
+  box.innerHTML = `
+    <h3 data-i18n="howto.tools">${t('howto.tools')}</h3>
+    <div class="guide-grid">${tools.map(([img, tk, body]) => row(icon(img), tk, body)).join('')}</div>
+    <h3 data-i18n="howto.economy">${t('howto.economy')}</h3>
+    <div class="guide-grid">
+      <div class="guide-row">
+        <span class="guide-pig" aria-hidden="true"></span>
+        <div><b data-i18n="howto.pig">${t('howto.pig')}</b><span>${esc(t('howto.pigVal', { n: PIG_SELL }))}</span></div>
+      </div>
+      ${crops.map(([img, tk, n]) => row(icon(img), tk, t('howto.sellVal', { n }))).join('')}
+    </div>`;
+  applyDom(box);
 }
 
 /** エンドレスの画面の「つづきから（N 日目）」。 */

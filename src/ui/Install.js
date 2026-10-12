@@ -19,14 +19,12 @@ const isIOS = () =>
 const ICON = './icons/icon-192.png';
 
 const CSS = `
+/* Lives in #title .title-tools (download left of settings gear) */
 .af-install-btn{
-  position:fixed;z-index:90;
-  top:calc(env(safe-area-inset-top,0px) + 10px);
-  right:calc(env(safe-area-inset-right,0px) + 10px);
   width:48px;height:48px;padding:0;min-width:0;border-radius:0;cursor:pointer;
   display:grid;place-items:center;background:#6a6a6a;border:2px solid #000;
   box-shadow:inset 2px 2px 0 #aaa,inset -2px -2px 0 #444;color:#fff;
-  -webkit-tap-highlight-color:transparent;pointer-events:auto;
+  -webkit-tap-highlight-color:transparent;pointer-events:auto;position:relative;z-index:5;
 }
 .af-install-btn:hover,.af-install-btn.gp-focus{background:#7d88c4}
 .af-install-btn svg{width:26px;height:26px;display:block;pointer-events:none}
@@ -36,7 +34,7 @@ const CSS = `
 .af-idlg.show{display:grid}
 .af-idlg-card{width:min(420px,100%);padding:1.15em 1.25em;background:var(--paper,#c6c6c6);
   border:3px solid #000;box-shadow:inset 3px 3px 0 #fff,inset -3px -3px 0 #555,0 10px 40px rgba(0,0,0,.45);
-  color:#3a3a3a;text-align:center;font:inherit}
+  color:#3a3a3a;text-align:center;font:inherit;max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box}
 .af-idlg-card img{width:64px;height:64px;image-rendering:pixelated;border:2px solid #000}
 .af-idlg-card h3{margin:.6em 0 .35em;font-weight:400;font-size:1.25em}
 .af-idlg-card p{margin:0 0 .4em;font-size:.92em;line-height:1.55}
@@ -102,10 +100,12 @@ export function installAppButton() {
     btn = document.createElement('button');
     btn.type = 'button';
     btn.id = 'af-install-btn';
-    btn.className = 'af-install-btn';
-    btn.innerHTML = DL_SVG;
-    document.body.appendChild(btn);
+    btn.className = 'af-install-btn tool-btn';
+    const tools = document.querySelector('#title .title-tools');
+    (tools || document.body).appendChild(btn);
   }
+  btn.classList.add('af-install-btn', 'tool-btn');
+  if (!btn.querySelector('svg')) btn.innerHTML = DL_SVG;
   btn.title = t('install.btn');
   btn.setAttribute('aria-label', t('install.btn'));
   btn.classList.remove('hide');
