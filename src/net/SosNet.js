@@ -73,6 +73,10 @@ const LAMP_CSS = `
 .af-net-lamp.show { display: flex; }
 .af-net-lamp.on { background: #38d86b; box-shadow: 0 0 12px #38d86b; animation: none; }
 @keyframes af-lamp { 50% { opacity: 0.35; } }
+[data-device="touch"] .af-net-lamp {
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
+  right: auto;
+}
 `;
 
 /** Hooks the game fills in after construction. */
