@@ -164,38 +164,49 @@ export class Sky {
     this.state = skyAt(0.2);
   }
 
-  /** 時間帯 t（0〜1）とカメラで、空・光の uniform をそろえる。 */
-  update(t, camera, dt, time) {
+  /**
+   * 時間帯 t（0〜1）とカメラで、空・光の uniform をそろえる。
+   * weather.storm = 0..1 arcade storm mix (hurricane / tide).
+   */
+  update(t, camera, dt, time, weather = {}) {
     const s = (this.state = skyAt(t));
-    this.uniforms.uTop.value.copy(s.top);
-    this.uniforms.uHor.value.copy(s.hor);
+    const storm = clamp(weather.storm || 0, 0, 1);
+    const stormTop = C(0x2a3040), stormHor = C(0x5a6878), stormTint = C(0x8aa0b8);
+    const top = s.top.clone().lerp(stormTop, storm * 0.92);
+    const hor = s.hor.clone().lerp(stormHor, storm * 0.88);
+    const tint = s.tint.clone().lerp(stormTint, storm * 0.75);
+    const skyLit = lerp(s.sky, 0.28, storm * 0.85);
+
+    this.uniforms.uTop.value.copy(top);
+    this.uniforms.uHor.value.copy(hor);
     this.group.position.copy(camera.position);
     this.group.updateMatrixWorld(true);
     // 太陽：t = 0 で東（+x）から昇り、0.25 で真上、0.5 で西に沈む
     const ang = t * Math.PI * 2;
     const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0.25).normalize();
     this.uniforms.uSun.value.copy(dir);
-    this.uniforms.uGlowAmt.value = 1 - smoothstep(0.06, 0.16, Math.min(Math.abs(t - 0.5), Math.abs(t), Math.abs(t - 1)));
+    this.uniforms.uGlowAmt.value = (1 - smoothstep(0.06, 0.16, Math.min(Math.abs(t - 0.5), Math.abs(t), Math.abs(t - 1)))) * (1 - storm * 0.85);
     // Keep celestial discs well inside camera.far (must not sit on the clip plane)
     this.sun.position.copy(dir).multiplyScalar(180);
     this.moon.position.copy(dir).multiplyScalar(-180);
     this.group.updateMatrixWorld(true);
     this.sun.lookAt(camera.position);
     this.moon.lookAt(camera.position);
-    this.sun.visible = dir.y > -0.15;
+    this.sun.visible = dir.y > -0.15 && storm < 0.85;
     this.moon.visible = dir.y < 0.15;
     const night = smoothstep(0.52, 0.6, t) * (1 - smoothstep(0.93, 0.99, t));
-    this.stars.material.opacity = night * 0.9;
+    this.stars.material.opacity = night * 0.9 * (1 - storm);
     this.stars.rotation.y = time * 0.004;
 
-    shared.uSky.value = s.sky;
-    shared.uSkyColor.value.copy(s.tint);
-    shared.uFogColor.value.copy(s.hor).lerp(s.top, 0.15);
-    // 雲
-    this.cloudU.uOff.value.x = time * 0.0025;
+    shared.uSky.value = skyLit;
+    shared.uSkyColor.value.copy(tint);
+    shared.uFogColor.value.copy(hor).lerp(top, 0.15 + storm * 0.25);
+    // 雲 — darker + faster in storm
+    this.cloudU.uOff.value.x = time * (0.0025 + storm * 0.012);
     this.cloudU.uCam.value.copy(camera.position);
-    this.cloudU.uTint.value.setRGB(1, 1, 1).multiplyScalar(lerp(0.25, 1, s.sky)).lerp(s.hor, 0.15);
+    this.cloudU.uTint.value.setRGB(1, 1, 1).multiplyScalar(lerp(0.25, 1, skyLit)).lerp(hor, 0.15 + storm * 0.4);
     this.clouds.position.x = camera.position.x;
     this.clouds.position.z = camera.position.z;
+    this.clouds.position.y = lerp(52, 38, storm);
   }
 }

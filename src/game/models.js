@@ -436,6 +436,62 @@ export function createDragonModel() {
   return { root, scale, body, head, wings, legs, mat, baseScale: s };
 }
 
+// ------------------------------------------------------------------ מפלצת ים (גאות ארקייד)
+export function createSeaBeastModel(big = false) {
+  const skin = new Skin(64, 48, 616);
+  const teal = ['#2a8a9a', '#1e7080', '#3aa0b0', '#186070', '#48b0c0'];
+  const Bd = skin.boxNoise(0, 0, 14, 8, 18, teal);
+  const [fx, fy] = Bd.front;
+  skin.rect(fx + 3, fy + 2, 3, 3, '#081820');
+  skin.rect(fx + 8, fy + 2, 3, 3, '#081820');
+  skin.px(fx + 4, fy + 3, '#80ffe0');
+  skin.px(fx + 9, fy + 3, '#80ffe0');
+  skin.rect(fx + 4, fy + 5, 6, 2, '#102028');
+  skin.px(fx + 5, fy + 5, '#e8fff0');
+  skin.boxNoise(40, 0, 6, 6, 4, ['#186070', '#104858']); // head
+  skin.boxNoise(0, 24, 10, 6, 4, ['#1e7080', '#2a8a9a']); // tail
+  const tex = skin.texture();
+  const mat = entityMaterial(tex);
+  const root = new THREE.Group();
+  root.name = big ? 'leviathan' : 'seaBeast';
+  const scale = new THREE.Group(); scale.name = 'scale'; root.add(scale);
+  const body = part('body', scale, mat, skin, { size: [14, 8, 18], uv: [0, 0], at: [0, 5, 0] });
+  const head = part('head', scale, mat, skin, { size: [6, 6, 4], uv: [40, 0], at: [0, 7, 10], off: [-3, -3, -2] });
+  const tail = part('tail', scale, mat, skin, { size: [10, 6, 4], uv: [0, 24], at: [0, 5, -10], off: [-5, -3, -2] });
+  const s = big ? 2.1 : 1.55;
+  scale.scale.setScalar(s);
+  return { root, scale, body, head, tail, mat, baseScale: s };
+}
+
+// ------------------------------------------------------------------ דינו (עדר ארקייד מהחוף)
+export function createDinoModel() {
+  const skin = new Skin(64, 48, 818);
+  const green = ['#6ab04c', '#5a9a3c', '#7ac05c', '#4a8a30'];
+  const Bd = skin.boxNoise(0, 0, 10, 10, 16, green);
+  const [fx, fy] = Bd.front;
+  skin.rect(fx + 2, fy + 3, 2, 2, '#101808');
+  skin.rect(fx + 6, fy + 3, 2, 2, '#101808');
+  skin.px(fx + 2, fy + 3, '#ffe080');
+  skin.px(fx + 6, fy + 3, '#ffe080');
+  skin.rect(fx + 3, fy + 6, 4, 2, '#203010');
+  skin.boxNoise(40, 0, 6, 6, 6, ['#5a9a3c', '#4a8a30']); // head
+  skin.boxNoise(0, 24, 4, 8, 4, ['#4a8a30', '#3a7020']); // legs
+  const tex = skin.texture();
+  const mat = entityMaterial(tex);
+  const root = new THREE.Group();
+  root.name = 'dino';
+  const scale = new THREE.Group(); scale.name = 'scale'; root.add(scale);
+  const body = part('body', scale, mat, skin, { size: [10, 10, 16], uv: [0, 0], at: [0, 8, 0] });
+  const head = part('head', scale, mat, skin, { size: [6, 6, 6], uv: [40, 0], at: [0, 12, 8], off: [-3, -3, -3] });
+  const legs = [];
+  for (const [i, x, z] of [[0, -3, 4], [1, 3, 4], [2, -3, -4], [3, 3, -4]]) {
+    legs.push(part('leg' + i, scale, mat, skin, { size: [4, 8, 4], uv: [0, 24], at: [x, 8, z], off: [-2, -8, -2] }));
+  }
+  const s = 1.35;
+  scale.scale.setScalar(s);
+  return { root, scale, body, head, legs, mat, baseScale: s };
+}
+
 // ------------------------------------------------------------------ ブタ
 export function createPigModel() {
   const skin = new Skin(64, 32, 404);

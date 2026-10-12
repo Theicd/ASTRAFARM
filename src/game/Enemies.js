@@ -5,12 +5,13 @@ import { t } from '../core/i18n.js';
 import {
   createGolemModel, createThiefModel, createDragonModel,
   createChomperModel, createHopperModel,
+  createSeaBeastModel, createDinoModel,
 } from './models.js';
 import { findPath } from './nav.js';
 import { moveBody, applyGravity } from './physics.js';
 import { damp, dampAngle } from '../core/math.js';
 import { setEntityLight } from './world/materials.js';
-import { LAYOUT, GY, WX } from './world/World.js';
+import { LAYOUT, GY, WX, SEA } from './world/World.js';
 import { HOUSE_IN } from './Robot.js';
 
 const houseCell = (i) => {
@@ -847,4 +848,230 @@ export class Dragon {
     if (this.carrying) this.dropRobot(false);
     this.game.scene.remove(this.root);
   }
+}
+
+// ───────────────────────────────────────────────────────────────── Sea beast (arcade tide)
+export class SeaBeast {
+  constructor(game, x, z, { big = false } = {}) {
+    this.game = game;
+    this.kind = big ? 'leviathan' : 'sea';
+    this.big = big;
+    this.model = createSeaBeastModel(big);
+    this.root = this.model.root;
+    game.scene.add(this.root);
+    const s = this.model.baseScale;
+    this.body = {
+      pos: new THREE.Vector3(x, SEA - 0.5, z),
+      vel: new THREE.Vector3(), hw: 0.55 * s, h: 0.9 * s, onGround: false, step: 1.2, inWater: true,
+    };
+    this.hp = big ? 28 : 16;
+    this.maxHp = this.hp;
+    this.speed = big ? 2.1 : 2.6;
+    this.state = 'emerge';
+    this.afterEmerge = 'hunt';
+    this.stateT = 0;
+    this.yaw = Math.atan2(LAYOUT.center[0] - x, LAYOUT.center[1] - z);
+    this.repathT = 0;
+    this.path = null;
+    this.target = null;
+    this.hurt = 0;
+    this.stun = 0;
+    this.phase = Math.random() * 6;
+    this.t = 0;
+    this.dead = false;
+    this.bites = 0;
+    this.maxBites = big ? 8 : 5;
+    this.eatT = 0;
+    this.root.position.copy(this.body.pos);
+  }
+
+  get pos() { return this.body.pos; }
+  get center() { return new THREE.Vector3(this.body.pos.x, this.body.pos.y + this.body.h * 0.5, this.body.pos.z); }
+  leave() { if (!this.dead && this.state !== 'leave' && this.state !== 'retreat') { this.state = 'retreat'; this.stateT = 0; } }
+  hit(dmg, from, knock = 1) { return commonHit(this, dmg, from, knock, this.big ? 4 : 6); }
+
+  update(dt) {
+    const g = this.game;
+    this.t += dt; this.stateT += dt;
+    this.hurt = Math.max(0, this.hurt - dt);
+    this.stun = Math.max(0, this.stun - dt);
+    if (this.netPuppet) {
+      this.root.position.copy(this.body.pos);
+      this.animate(dt, !!this._netMoving);
+      return;
+    }
+    if (emergeLeave(this, dt, g)) { this.animate(dt, false); return; }
+
+    const p = this.body.pos;
+
+    if (this.state === 'retreat') {
+      // Slide back into the southern sea
+      const tz = 1.5;
+      chaseAlong(this, dt, p.x, tz, this.speed * 1.3);
+      applyGravity(this.body, dt);
+      moveBody(g.world, this.body, dt);
+      if (p.z < 4 || this.stateT > 10) {
+        this.state = 'leave';
+        this.stateT = 0;
+      }
+      this.root.position.copy(p);
+      this.animate(dt, true);
+      return;
+    }
+
+    let moving = false;
+    if (this.state === 'eat') {
+      this.body.vel.x = damp(this.body.vel.x, 0, 8, dt);
+      this.body.vel.z = damp(this.body.vel.z, 0, 8, dt);
+      this.eatT += dt;
+      if (this.eatT >= 0.65) {
+        this.eatT = 0;
+        if (this.target) g.munchCrop(this.target.x, this.target.z, this);
+        this.bites++;
+        g.particles.burst(p.x, p.y + 0.3, p.z, 0x4a90c8, 8, 1.2);
+        g.audio.sfx('harvest', { pos: p, pitch: 0.5 });
+        if (this.bites >= this.maxBites) this.leave();
+        else { this.state = 'hunt'; this.stateT = 0; this.target = null; }
+      }
+    } else if (this.state === 'hunt' && this.stun <= 0) {
+      this.repathT -= dt;
+      if (this.repathT <= 0) {
+        this.repathT = 0.55;
+        const crop = g.nearestCrop?.(p) || null;
+        if (crop) {
+          this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5) };
+          const r = findPath(g.world, p.x, p.z, this.target.pos.x, this.target.pos.z, { near: 0, maxNodes: 2400, blocked: houseCell });
+          this.path = r.path; this.pathI = 0;
+        } else {
+          this.target = { x: LAYOUT.farmZone.x0 + 4, z: LAYOUT.farmZone.z0 + 2, pos: new THREE.Vector3(LAYOUT.farmZone.x0 + 4.5, GY + 1, LAYOUT.farmZone.z0 + 2.5) };
+          this.path = null;
+        }
+      }
+      if (this.target) {
+        const dist = Math.hypot(this.target.pos.x - p.x, this.target.pos.z - p.z);
+        if (dist < 1.1) { this.state = 'eat'; this.eatT = 0; this.stateT = 0; }
+        else { chaseAlong(this, dt, this.target.pos.x, this.target.pos.z, this.speed); moving = true; }
+      }
+    }
+
+    if (this.stun > 0) {
+      this.body.vel.x *= Math.exp(-2 * dt);
+      this.body.vel.z *= Math.exp(-2 * dt);
+    }
+    applyGravity(this.body, dt);
+    if (this.body.inWater) this.body.vel.y = Math.max(this.body.vel.y, 1.5);
+    const r = moveBody(g.world, this.body, dt);
+    if ((r.hitX || r.hitZ) && this.body.onGround && moving) this.body.vel.y = 8;
+    this.root.position.copy(p);
+    this.animate(dt, moving);
+  }
+
+  animate(dt, moving) {
+    const M = this.model;
+    this.phase += dt * (moving ? 8 : 3);
+    const und = Math.sin(this.phase) * 0.12;
+    if (M.tail) M.tail.rotation.y = und * 2;
+    if (M.head) M.head.rotation.x = Math.sin(this.t * 4) * 0.08;
+    M.scale.scale.setScalar(M.baseScale * (1 + Math.sin(this.t * 5) * 0.03));
+    this.root.rotation.y = this.yaw;
+    lightRoot(this);
+  }
+
+  dispose() { this.game.scene.remove(this.root); }
+}
+
+// ───────────────────────────────────────────────────────────────── Dino stampede
+export class Dino {
+  constructor(game, x, z) {
+    this.game = game;
+    this.kind = 'dino';
+    this.big = false;
+    this.model = createDinoModel();
+    this.root = this.model.root;
+    game.scene.add(this.root);
+    const s = this.model.baseScale;
+    const floor = game.world.floor[Math.floor(x) + Math.floor(z) * WX] || GY + 1;
+    this.body = {
+      pos: new THREE.Vector3(x, floor, z),
+      vel: new THREE.Vector3(), hw: 0.45 * s, h: 1.1 * s, onGround: false, step: 1.15, inWater: false,
+    };
+    this.hp = 8; this.maxHp = 8;
+    this.speed = 4.2;
+    this.state = 'emerge';
+    this.afterEmerge = 'charge';
+    this.stateT = 0;
+    this.yaw = Math.atan2(LAYOUT.center[0] - x, LAYOUT.farmZone.z0 - z);
+    this.hurt = 0;
+    this.stun = 0;
+    this.phase = Math.random() * 6;
+    this.t = 0;
+    this.dead = false;
+    this.stomps = 0;
+    this.maxStomps = 4;
+    this.stompT = 0;
+    this.root.position.copy(this.body.pos);
+  }
+
+  get pos() { return this.body.pos; }
+  get center() { return new THREE.Vector3(this.body.pos.x, this.body.pos.y + this.body.h * 0.5, this.body.pos.z); }
+  leave() { if (!this.dead && this.state !== 'leave') { this.state = 'leave'; this.stateT = 0; } }
+  hit(dmg, from, knock = 1) { return commonHit(this, dmg, from, knock, 8); }
+
+  update(dt) {
+    const g = this.game;
+    this.t += dt; this.stateT += dt;
+    this.hurt = Math.max(0, this.hurt - dt);
+    this.stun = Math.max(0, this.stun - dt);
+    if (this.netPuppet) {
+      this.root.position.copy(this.body.pos);
+      this.animate(dt, !!this._netMoving);
+      return;
+    }
+    if (emergeLeave(this, dt, g)) { this.animate(dt, false); return; }
+
+    const p = this.body.pos;
+    let moving = false;
+
+    if (this.state === 'charge' && this.stun <= 0) {
+      // Sprint toward farm center / fields
+      const tx = LAYOUT.center[0] + Math.sin(this.t * 0.7) * 6;
+      const tz = LAYOUT.farmZone.z0 + 3 + (this.t % 5);
+      chaseAlong(this, dt, tx, tz, this.speed);
+      moving = true;
+      this.stompT -= dt;
+      if (this.stompT <= 0) {
+        this.stompT = 0.55;
+        const cx = Math.floor(p.x), cz = Math.floor(p.z);
+        if (g.munchCrop(cx, cz, this) > 0 || g.munchCrop(cx + 1, cz, this) > 0) {
+          this.stomps++;
+          g.shake = Math.max(g.shake || 0, 0.18);
+        }
+        if (this.stomps >= this.maxStomps || this.stateT > 22) this.leave();
+      }
+    }
+
+    if (this.stun > 0) {
+      this.body.vel.x *= Math.exp(-2 * dt);
+      this.body.vel.z *= Math.exp(-2 * dt);
+    }
+    applyGravity(this.body, dt);
+    const r = moveBody(g.world, this.body, dt);
+    if ((r.hitX || r.hitZ) && this.body.onGround && moving) this.body.vel.y = 9;
+    this.root.position.copy(p);
+    this.animate(dt, moving);
+  }
+
+  animate(dt, moving) {
+    const M = this.model;
+    this.phase += dt * (moving ? 14 : 3);
+    const sw = Math.sin(this.phase);
+    if (M.legs) {
+      for (let i = 0; i < M.legs.length; i++) M.legs[i].rotation.x = sw * (i % 2 ? -0.7 : 0.7) * (moving ? 1 : 0.1);
+    }
+    if (M.head) M.head.rotation.x = moving ? -0.25 : Math.sin(this.t * 3) * 0.08;
+    this.root.rotation.y = this.yaw;
+    lightRoot(this);
+  }
+
+  dispose() { this.game.scene.remove(this.root); }
 }

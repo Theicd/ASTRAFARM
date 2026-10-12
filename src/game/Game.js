@@ -29,7 +29,8 @@ import { Turret } from './Turret.js';
 import { PigGates } from './PigGates.js';
 import { ChargeBay } from './ChargeBay.js';
 import { Green, Pig } from './Mobs.js';
-import { Golem, CropThief, Dragon, Chomper, Hopper } from './Enemies.js';
+import { Golem, CropThief, Dragon, Chomper, Hopper, SeaBeast, Dino } from './Enemies.js';
+import { ArcadeEvents } from './ArcadeEvents.js';
 import { Drops } from './items.js';
 import { Particles, FloatTexts, selectionBox } from './fx.js';
 import { Talk } from './talk.js';
@@ -100,6 +101,7 @@ export class Game {
     this.chargeBay = null;
     this.mobs = [];
     this.pigs = [];
+    this.arcade = new ArcadeEvents(this);
     this.drops = new Drops(this);
     this.crops = new Map();
     this.reserved = new Set();
@@ -419,6 +421,8 @@ export class Game {
     if (kind === 'dragon') return new Dragon(this, x, z);
     if (kind === 'chomp') return new Chomper(this, x, z);
     if (kind === 'hop') return new Hopper(this, x, z);
+    if (kind === 'sea' || kind === 'leviathan') return new SeaBeast(this, x, z, { big: big || kind === 'leviathan' });
+    if (kind === 'dino') return new Dino(this, x, z);
     return new Green(this, x, z, { big, night: this.phase === 'night' });
   }
 
@@ -788,6 +792,7 @@ export class Game {
     for (const m of this.mobs) m.dispose();
     this.mobs = [];
     this.schedule = this.buildSchedule(this.cfg, i);
+    this.arcade.planDay(i, this.cfg);
     this.player.reset(LAYOUT.spawn);
     this.talk.reset();
     this.hud.clearChat();
@@ -1117,6 +1122,8 @@ export class Game {
       this.schedule.shift();
       if (this.spawnMob({ big: !!s.big, kind: s.kind || 'boom' })) { alive++; spawned++; }
     }
+    // Arcade set-pieces (hurricane / tide / stampede) — synced with sky & farm damage
+    this.arcade.update(dt);
     // あそびかた（1 日目）
     this.updateTutorial();
     if (k >= this.dayLength) this.endDay();
@@ -1147,6 +1154,7 @@ export class Game {
   }
 
   objectiveText() {
+    if (this.arcade?.outdoorUnsafe) return t('obj.shelter');
     const T = this.tut;
     if (T && T.step >= 0) {
       if (T.step === 0) return t('obj.harvest', { n: Math.min(3, T.harvest), m: 3 });
@@ -1354,8 +1362,8 @@ export class Game {
     // Keep scheduled roles — never silently downgrade to boom (that hid all new pests).
     let role = kind || 'boom';
     if (role === 'dragon' && this.mobs.some((m) => m.kind === 'dragon' && !m.dead)) role = 'thief';
-    // Never spawn a kidnap-dragon while robots are sheltering
-    if (role === 'dragon' && this.isNightish) role = this.pickSwarmKind(() => Math.random());
+    // Never spawn a kidnap-dragon while robots are sheltering (night or hurricane)
+    if (role === 'dragon' && (this.isNightish || this.arcade?.shelter)) role = this.pickSwarmKind(() => Math.random());
 
     const m = this.makeMob(role, best[0], best[1], { big });
     m.netId = this._mobNetSeq++;
@@ -1368,17 +1376,21 @@ export class Game {
       : role === 'dragon' ? 'sys.dragon'
       : role === 'chomp' ? 'sys.chomp'
       : role === 'hop' ? 'sys.hop'
+      : role === 'sea' || role === 'leviathan' ? 'sys.tideRise'
+      : role === 'dino' ? 'sys.stampede'
       : 'sys.mob';
     if (big || role !== 'boom' || (guide && this.time - (this.lastMobMsg ?? -99) > 10)) {
       this.lastMobMsg = this.time;
       this.talk.sys(msgKey, null, 'warn');
     }
-    if (guide || big || role !== 'boom') this.audio.sfx(big || role === 'dragon' ? 'boss_spawn' : 'mob_spawn', { pos: m.pos, refDistance: 8 });
+    if (guide || big || role !== 'boom') this.audio.sfx(big || role === 'dragon' || role === 'leviathan' ? 'boss_spawn' : 'mob_spawn', { pos: m.pos, refDistance: 8 });
     if (big) this.hud.banner(t('banner.boss'), t('banner.bossSub'), 3.2);
     else if (role === 'golem') this.hud.banner(t('banner.golem'), t('banner.golemSub'), 2.6);
     else if (role === 'thief') this.hud.banner(t('banner.thief'), t('banner.thiefSub'), 2.4);
     else if (role === 'chomp') this.hud.banner(t('banner.chomp'), t('banner.chompSub'), 2.2);
     else if (role === 'hop') this.hud.banner(t('banner.hop'), t('banner.hopSub'), 2.2);
+    else if (role === 'sea' || role === 'leviathan') this.hud.banner(t(role === 'leviathan' ? 'banner.leviathan' : 'banner.sea'), t('banner.seaSub'), 2.8);
+    else if (role === 'dino') this.hud.banner(t('banner.stampede'), t('banner.stampedeRage'), 2.4);
     return m;
   }
 
@@ -1816,6 +1828,8 @@ export class Game {
         : m.kind === 'dragon' ? 'sys.dragonKill'
         : m.kind === 'chomp' ? 'sys.chompKill'
         : m.kind === 'hop' ? 'sys.hopKill'
+        : m.kind === 'sea' || m.kind === 'leviathan' ? 'sys.tideClear'
+        : m.kind === 'dino' ? 'sys.stampedeClear'
         : 'sys.kill';
       if (by === 'player') this.talk.sys(killKey);
       const rd = this.robot.body.pos.distanceTo(c);
@@ -2215,12 +2229,13 @@ export class Game {
     }
     this.camera.updateMatrixWorld(true);
     shared.uTime.value = this.time;
-    this.sky.update(this.skyTime, this.camera, dt, this.time);
-    // Fog closer on low/mobile presets (fewer far chunks shaded)
+    const storm = this.arcade?.storm || 0;
+    this.sky.update(this.skyTime, this.camera, dt, this.time, { storm });
+    // Fog closer on low/mobile presets (fewer far chunks shaded); tighter in arcade storms
     const night = 1 - shared.uSky.value;
-    const far = this.fogFar || 105;
-    shared.uFogNear.value = lerp(far * 0.4, far * 0.28, night);
-    shared.uFogFar.value = lerp(far, far * 0.74, night);
+    const far = (this.fogFar || 105) * (1 - storm * 0.42);
+    shared.uFogNear.value = lerp(far * 0.4, far * 0.22, Math.max(night, storm * 0.85));
+    shared.uFogFar.value = lerp(far, far * 0.62, Math.max(night, storm * 0.9));
     if (this.state !== 'paused' && this.state !== 'report' && this.state !== 'ending') {
       this.particles.update(dt);
       this.floats.update(dt);
