@@ -78,7 +78,7 @@ export class Screens {
     this.title = root.querySelector('#title');
     this.modals = { pause: root.querySelector('#m-pause'), settings: root.querySelector('#m-settings'), howto: root.querySelector('#m-howto') };
     this.netStatus = this.title.querySelector('.af-net-status');
-    installAppButton(this.title);
+    installAppButton();
 
     const nameIn = this.title.querySelector('.af-name-input');
     if (nameIn) {

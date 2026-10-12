@@ -1,5 +1,5 @@
 // Astra Farm — network-first shell so deploys show up; cache icons for relaunch.
-const CACHE = 'astra-farm-v1';
+const CACHE = 'astra-farm-v2';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
@@ -31,7 +31,7 @@ self.addEventListener('fetch', (e) => {
 
   const isCode = /\.(js|mjs|css|html)$/i.test(url.pathname)
     || url.pathname.endsWith('/')
-    || url.pathname.endsWith('/sw.js');
+    || /\/sw\.js/i.test(url.pathname);
 
   e.respondWith((async () => {
     try {

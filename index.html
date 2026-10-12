@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#5d93e0" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -16,6 +16,46 @@
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
 <link rel="apple-touch-icon" href="./icons/icon-192.png" />
 <link rel="manifest" href="./manifest.webmanifest" />
+<!-- Capture PWA install early (same as Kart / SOS Quake). If we only listen after
+     the game module boots, beforeinstallprompt is already gone. -->
+<script>
+(function () {
+  var BUILD = '2';
+  window.__astraDeferredInstall = null;
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.__astraDeferredInstall = e;
+  });
+  window.addEventListener('appinstalled', function () {
+    window.__astraDeferredInstall = null;
+  });
+  try {
+    if (localStorage.getItem('astra.farm.build') !== BUILD) {
+      localStorage.setItem('astra.farm.build', BUILD);
+      var bust = Promise.resolve();
+      if (window.caches && caches.keys) {
+        bust = caches.keys().then(function (keys) {
+          return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        });
+      }
+      bust.then(function () {
+        if (!('serviceWorker' in navigator)) return;
+        return navigator.serviceWorker.getRegistrations().then(function (regs) {
+          return Promise.all(regs.map(function (r) { return r.unregister(); }));
+        });
+      }).then(function () {
+        location.reload();
+      }).catch(function () {});
+      return;
+    }
+  } catch (e) { /* ignore */ }
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js?v=' + BUILD).catch(function () {});
+    });
+  }
+})();
+</script>
 </head>
 <body>
 <div id="app"></div>

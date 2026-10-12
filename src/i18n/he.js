@@ -37,8 +37,8 @@ export const he = {
   'install.notNow': 'לא עכשיו',
   'install.gotIt': 'הבנתי',
   'install.already': 'המשחק כבר מותקן במכשיר הזה.',
-  'install.ios': 'ב־Safari לחצו Share ↕ ואז Add to Home Screen.',
-  'install.desktop': 'השתמשו באפשרות Install / הוסף לשולחן העבודה בדפדפן, או באייקון ההורדה כשמופיע.',
+  'install.ios': 'ב־Safari לחצו Share ⬆︎ למטה ואז Add to Home Screen.',
+  'install.desktop': 'לחצו התקן כשהדפדפן מבקש, או בתפריט → Install app / הוסף לשולחן העבודה.',
 
   'pause.title': 'השהיה',
   'pause.resume': 'המשך',

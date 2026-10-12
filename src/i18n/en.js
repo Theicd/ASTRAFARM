@@ -32,8 +32,8 @@ export const en = {
   'install.notNow': 'Not now',
   'install.gotIt': 'Got it',
   'install.already': 'Astra Farm is already installed on this device.',
-  'install.ios': 'Tap Share ↕ in Safari, then Add to Home Screen.',
-  'install.desktop': 'Use the browser Install / Add to desktop option, or the download icon when the prompt appears.',
+  'install.ios': 'Tap Share ⬆︎ at the bottom of Safari, then Add to Home Screen.',
+  'install.desktop': 'Tap Install when the browser asks, or use the menu → Install app / Add to desktop.',
 
   'splash.0': "Potatoes don't explode!",
   'splash.1': 'No chests!',
