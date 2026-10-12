@@ -410,4 +410,28 @@ export const SFX = {
       perc(g.gain, t + dt, 0.1, 0.002, dt ? 0.26 : 0.08);
     }
   },
+  /** Guard tower shot — cute balloon-pop arcade blip. */
+  turret_pop(ctx, out, t, p = {}) {
+    const k = fin(p.pitch, 1);
+    const n = noise(ctx, t, t + 0.14);
+    const bp = filter(ctx, 'bandpass', 1100 * k, 0.85);
+    bp.frequency.setValueAtTime(1600 * k, t);
+    bp.frequency.exponentialRampToValueAtTime(320 * k, t + 0.11);
+    const g = route(ctx, n.connect(bp), out, { rev: 0.12, ...p });
+    perc(g.gain, t, 0.5, 0.002, 0.1);
+    const o = osc(ctx, 'triangle', 980 * k, t, t + 0.14);
+    o.frequency.exponentialRampToValueAtTime(420 * k, t + 0.12);
+    const g2 = route(ctx, o, out, p);
+    perc(g2.gain, t, 0.2, 0.002, 0.1);
+    INSTRUMENTS.pluck(ctx, out, t + 0.03, { f: 1245 * k, vel: 0.38, rev: 0.1 });
+  },
+  /** Tower kill payout — cheerful coin cascade. */
+  turret_coin(ctx, out, t, p = {}) {
+    const k = fin(p.pitch, 1);
+    [[0, 1047], [0.055, 1319], [0.11, 1568], [0.18, 2093]].forEach(([dt, f], i) => {
+      const o = osc(ctx, 'square', f * k, t + dt, t + dt + 0.28);
+      const g = route(ctx, o.connect(filter(ctx, 'lowpass', 7200)), out, { rev: 0.2, ...p });
+      perc(g.gain, t + dt, 0.11 - i * 0.01, 0.002, 0.2);
+    });
+  },
 };

@@ -1,7 +1,8 @@
 // Wooden watchtower: tall post + platform, auto-targets nearby Green Things.
+// Night: warm searchlight glow on the rotating head. Shots = arcade pops; kills = coins.
 import * as THREE from 'three';
 import { GY } from './world/World.js';
-import { solidEntityMaterial, setEntityLight } from './world/materials.js';
+import { solidEntityMaterial, setEntityLight, shared } from './world/materials.js';
 import { netBroadcast } from '../net/SosNet.js';
 
 const COL = {
@@ -13,6 +14,8 @@ const COL = {
   lens: 0xffb060,
 };
 
+const _lensW = new THREE.Vector3();
+
 export class Turret {
   constructor(game, x, z) {
     this.game = game;
@@ -21,6 +24,7 @@ export class Turret {
     this.range = 14;
     this.damage = 1;
     this.scan = 0;
+    this._muzzle = 0;
     this.root = new THREE.Group();
     this.root.name = 'turret';
 
@@ -31,6 +35,7 @@ export class Turret {
     const matRoof = solidEntityMaterial(COL.roof, { shade: 0.8 });
     // Warm lantern glow (matches pen lanterns)
     const matLens = solidEntityMaterial(COL.lens, { shade: 1.35 });
+    this.matLens = matLens;
     this._mats = [matPlank, matLite, matLog, matBrace, matRoof, matLens];
 
     const add = (mat, w, h, d, x0, y0, z0) => {
@@ -80,6 +85,39 @@ export class Turret {
     this.lens = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.16), matLens);
     this.lens.position.set(0, 0.14, 0.36);
     this.head.add(this.lens);
+
+    // Soft additive halo — reads as a lantern while the head turns at night
+    this.glowMat = new THREE.MeshBasicMaterial({
+      color: 0xffc070,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.glow = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), this.glowMat);
+    this.glow.position.copy(this.lens.position);
+    this.glow.renderOrder = 2;
+    this.head.add(this.glow);
+
+    // Soft search cone that sweeps with the head (night only)
+    this.beamMat = new THREE.MeshBasicMaterial({
+      color: 0xffe0a0,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    this.beam = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.2, 8, 1, true), this.beamMat);
+    this.beam.rotation.x = Math.PI / 2;
+    this.beam.position.set(0, 0.14, 1.85);
+    this.beam.renderOrder = 1;
+    this.head.add(this.beam);
+
+    this.lamp = new THREE.PointLight(0xffc070, 0, 14, 2);
+    this.lamp.position.copy(this.lens.position);
+    this.head.add(this.lamp);
+
     this.root.add(this.head);
 
     const standY = game.world.floorAt?.(x, z);
@@ -94,6 +132,7 @@ export class Turret {
   update(dt) {
     const g = this.game;
     this.cool = Math.max(0, this.cool - dt);
+    this._muzzle = Math.max(0, this._muzzle - dt * 5);
     this.scan += dt;
     let best = null, bestD = this.range;
     for (const m of g.mobs) {
@@ -106,8 +145,15 @@ export class Turret {
       this.head.rotation.y = yaw;
       if (this.cool <= 0) {
         this.cool = 0.75;
-        g.particles.sparkle(best.pos.x - 0.3, best.pos.y + 0.4, best.pos.z - 0.3, 5, 0xff8a4a);
-        g.audio.sfx('hit', { pos: best.pos, pitch: 1.3 });
+        this._muzzle = 1;
+        this.lens.getWorldPosition(_lensW);
+        g.particles.sparkle(_lensW.x, _lensW.y, _lensW.z, 6, 0xffe08a);
+        g.particles.sparkle(best.pos.x - 0.2, best.pos.y + 0.45, best.pos.z - 0.2, 5, 0xff8a4a);
+        g.audio.sfx('turret_pop', {
+          pos: _lensW,
+          pitch: 0.92 + Math.random() * 0.2,
+          refDistance: 5,
+        });
         if (g.isNetClient?.() && best.netId != null) {
           netBroadcast({
             t: 'hitMob', id: best.netId, dmg: this.damage, knock: 0.55,
@@ -123,13 +169,33 @@ export class Turret {
       this.head.rotation.y = this.scan * 1.1;
     }
 
+    const sky = shared.uSky?.value ?? 1;
+    const night = sky < 0.55 || !!g.isNightish;
+    const pulse = 0.5 + 0.5 * Math.sin(this.scan * (best ? 10 : 5));
+    const flash = this._muzzle;
+    const lensGlow = (night ? 1.55 + pulse * 0.45 : 1.05) + flash * 1.4;
+    if (this.matLens.uniforms?.uShade) this.matLens.uniforms.uShade.value = lensGlow;
+
+    this.glowMat.opacity = night ? 0.35 + pulse * 0.25 + flash * 0.45 : flash * 0.35;
+    this.glow.scale.setScalar(night ? 1 + pulse * 0.15 + flash * 0.35 : 0.7 + flash * 0.4);
+    this.beamMat.opacity = night ? 0.12 + pulse * 0.08 + flash * 0.2 : flash * 0.1;
+    this.lamp.intensity = night ? 1.6 + pulse * 0.5 + flash * 2.2 : flash * 1.4;
+    this.lamp.distance = night ? 14 : 6;
+    this.lamp.color.setHex(flash > 0.2 ? 0xfff0c0 : 0xffb060);
+
     const [sk, bl] = g.world.lightAt?.(this.x, (this.y | 0) + 2, this.z) || [15, 8];
-    for (const m of this._mats) setEntityLight(m, sk, bl);
+    // Keep the lens a little brighter than the wood at night so it reads as lit
+    for (const m of this._mats) {
+      if (m === this.matLens) setEntityLight(m, Math.max(sk, night ? 10 : sk), Math.max(bl, night ? 8 : bl));
+      else setEntityLight(m, sk, bl);
+    }
   }
 
   dispose() {
     this.game.scene.remove(this.root);
     for (const m of this._mats) m.dispose();
+    this.glowMat.dispose();
+    this.beamMat.dispose();
     this.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
   }
 }

@@ -1549,6 +1549,12 @@ export class Game {
     const c = m.center;
     this.particles.smoke(c.x, c.y - 0.2, c.z, m.big ? 30 : 14, 0.4, Math.max(0.4, this.lightBright(c.x, c.y, c.z)), m.big ? 1.3 : 0.8);
     this.audio.sfx('poof', { pos: c });
+    if (by === 'turret') {
+      // Arcade payout jingle when a tower clears a green
+      this.audio.sfx('turret_coin', { pos: c, pitch: m.big ? 0.85 : 1 });
+      this.floats.add(m.big ? '$$$' : '¢', c.x, c.y + 1.35, c.z, '#ffe25a');
+      this.particles.sparkle(c.x, c.y + 0.5, c.z, m.big ? 16 : 8, 0xffe25a);
+    }
     const n = m.big ? 6 : 1 + (Math.random() < 0.5 ? 1 : 0);
     for (let k = 0; k < n; k++) this.drops.spawn('powder', c.x, c.y, c.z);
     if (m.big) for (let k = 0; k < 10; k++) this.drops.spawn('potato', c.x, c.y + 0.3, c.z, { vy: 5 + Math.random() * 3 });
