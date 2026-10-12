@@ -224,18 +224,27 @@ export class World {
       const edge = x === H.x0 || x === H.x1 || z === H.z0 || z === H.z1;
       if (edge) put(x, GY + 5, z, B.COBBLE);
     }
-    // L-shaped plank stairs (SE) floor → roof — wider run, open shaft
+    // L-shaped plank stairs (SE) floor → roof — wide open shaft for 1.8-tall player
     const sx = H.x1 - 2, sz0 = H.z1 - 5;
     for (let i = 0; i < 3; i++) {
       const sz = sz0 + i;
-      put(sx, GY + 1 + i, sz, B.STAIRS_Z);
-      put(sx - 1, GY + 1 + i, sz, B.STAIRS_Z);
-      for (let y = GY + 2 + i; y <= GY + 4; y++) {
+      const sy = GY + 1 + i;
+      put(sx, sy, sz, B.STAIRS_Z);
+      put(sx - 1, sy, sz, B.STAIRS_Z);
+      // Clear headroom above each tread (through roof + parapet)
+      for (let y = sy + 1; y <= GY + 6; y++) {
         put(sx, y, sz, B.AIR);
         put(sx - 1, y, sz, B.AIR);
       }
     }
-    // Keep parapet open above the shaft so you can climb out
+    // Approach cell — open ceiling so the first step-up isn't a head-bonk
+    for (let y = GY + 2; y <= GY + 5; y++) {
+      put(sx, y, sz0 - 1, B.AIR);
+      put(sx - 1, y, sz0 - 1, B.AIR);
+    }
+    // Hatch out onto the roof
+    put(sx, GY + 4, sz0 + 2, B.AIR);
+    put(sx - 1, GY + 4, sz0 + 2, B.AIR);
     put(sx, GY + 5, sz0 + 2, B.AIR);
     put(sx - 1, GY + 5, sz0 + 2, B.AIR);
     // Roof lantern
