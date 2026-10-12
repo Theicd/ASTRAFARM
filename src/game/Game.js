@@ -17,7 +17,8 @@ import {
   fertilizeStageId, defBySeedTool, emptyBags,
 } from './crops.js';
 import {
-  BUY, MAX_HELPERS, MAX_TURRETS, SEED_RESERVE, PIG_SELL, sellValue,
+  BUY, MAX_HELPERS, MAX_TURRETS, SEED_RESERVE, PIG_SELL, MAX_PIGS,
+  PIG_RESPAWN_MIN, PIG_RESPAWN_MAX, sellValue,
   helperSlots, hoeLevelFromStars,
 } from './economy.js';
 import { shared } from './world/materials.js';
@@ -351,6 +352,7 @@ export class Game {
     else if (ev.t === 'hitMob' && this.isNetHost()) this.applyNetHit(ev);
     else if (ev.t === 'endDay' && this.isNetClient()) this.endDay({ fromNet: true });
     else if (ev.t === 'turretPlaced') this.applyNetTurret(ev);
+    else if (ev.t === 'pigSpawn') this.applyNetPigSpawn(ev);
   }
 
   /** Peer placed a guard tower — mirror without charging coins again. */
@@ -368,6 +370,12 @@ export class Game {
     if (!pig || pig.dead) return;
     pig.dispose();
     this.pigs = this.pigs.filter((x) => x !== pig);
+    if (!this.isNetClient()) {
+      const alive = this.pigs.filter((x) => !x.dead).length;
+      if (alive < MAX_PIGS) {
+        this._pigRespawnT = Math.min(this._pigRespawnT ?? PIG_RESPAWN_MIN, alive === 0 ? 8 : 12);
+      }
+    }
   }
 
   /** Host → clients: day clock + every living green. */
@@ -1022,19 +1030,87 @@ export class Game {
   spawnPigs() {
     for (const p of this.pigs) p.dispose();
     this.pigs = [];
-    let netSeq = 0;
-    const tag = (pig) => { pig.netId = netSeq++; return pig; };
+    this._pigNetSeq = 0;
+    this._pigRespawnT = PIG_RESPAWN_MIN + Math.random() * (PIG_RESPAWN_MAX - PIG_RESPAWN_MIN);
     // Same seed → same pig slots/ids on every peer (needed for pigSell sync).
     const rng = mulberry32((this.world.seed ^ 0x50494753) >>> 0);
     const cells = this.world.pigCells;
     for (let i = 0; i < 4 && cells.length; i++) {
       const c = cells[Math.floor((i + 0.5) / 4 * cells.length + rng() * 20) % cells.length];
-      this.pigs.push(tag(new Pig(this, (c % WX) + 0.5, ((c / WX) | 0) + 0.5)));
+      this.makePig((c % WX) + 0.5, ((c / WX) | 0) + 0.5, {});
     }
     // One already in the sty
     const P = LAYOUT.pigPen;
     const pcx = (P.x0 + P.x1) * 0.5 + 0.5, pcz = (P.z0 + P.z1) * 0.5 + 0.5;
-    this.pigs.push(tag(new Pig(this, pcx + 1.2, pcz - 0.8, { penned: true })));
+    this.makePig(pcx + 1.2, pcz - 0.8, { penned: true });
+  }
+
+  makePig(x, z, { penned = false, netId = null } = {}) {
+    const pig = new Pig(this, x, z, { penned });
+    if (netId != null) {
+      pig.netId = netId | 0;
+      this._pigNetSeq = Math.max(this._pigNetSeq | 0, (netId | 0) + 1);
+    } else {
+      pig.netId = this._pigNetSeq | 0;
+      this._pigNetSeq = (this._pigNetSeq | 0) + 1;
+    }
+    this.pigs.push(pig);
+    return pig;
+  }
+
+  pickPigSpawnCell() {
+    const cells = this.world.pigCells;
+    if (!cells.length) return null;
+    for (let tries = 0; tries < 48; tries++) {
+      const c = cells[Math.floor(Math.random() * cells.length)];
+      const x = (c % WX) + 0.5, z = ((c / WX) | 0) + 0.5;
+      if (this.pigs.some((p) => !p.dead && Math.hypot(p.pos.x - x, p.pos.z - z) < 3.5)) continue;
+      return { x, z, penned: false };
+    }
+    const c = cells[Math.floor(Math.random() * cells.length)];
+    return { x: (c % WX) + 0.5, z: ((c / WX) | 0) + 0.5, penned: false };
+  }
+
+  /** Host/solo: trickle new pigs when below cap so the sty never stays empty. */
+  tickPigRespawn(dt) {
+    if (this.titleMode || this.state === 'title' || this.state === 'intro') return;
+    if (this.isNetClient()) return;
+    const alive = this.pigs.filter((p) => !p.dead).length;
+    if (alive >= MAX_PIGS) return;
+    // Empty island respawns a bit faster so the farm is never pig-less for long.
+    this._pigRespawnT = (this._pigRespawnT ?? PIG_RESPAWN_MIN) - dt * (alive === 0 ? 1.75 : 1);
+    if (this._pigRespawnT > 0) return;
+    this._pigRespawnT = PIG_RESPAWN_MIN + Math.random() * (PIG_RESPAWN_MAX - PIG_RESPAWN_MIN);
+    const penned = this.pigs.filter((p) => !p.dead && p.penned).length;
+    let spot = null;
+    if (penned === 0 && alive <= 1 && Math.random() < 0.5) {
+      const P = LAYOUT.pigPen;
+      spot = {
+        x: (P.x0 + P.x1) * 0.5 + 0.5 + (Math.random() - 0.5) * 2.2,
+        z: (P.z0 + P.z1) * 0.5 + 0.5 + (Math.random() - 0.5) * 2.2,
+        penned: true,
+      };
+    } else {
+      spot = this.pickPigSpawnCell();
+    }
+    if (!spot) return;
+    const pig = this.makePig(spot.x, spot.z, { penned: spot.penned });
+    if (this.online) {
+      netBroadcast({
+        t: 'pigSpawn',
+        id: pig.netId,
+        x: +spot.x.toFixed(2),
+        z: +spot.z.toFixed(2),
+        penned: !!spot.penned,
+      });
+    }
+  }
+
+  applyNetPigSpawn(ev) {
+    if (ev?.id == null) return;
+    const id = ev.id | 0;
+    if (this.pigs.some((p) => p.netId === id)) return;
+    this.makePig(+ev.x || 0, +ev.z || 0, { penned: !!ev.penned, netId: id });
   }
 
   sellPig(pig) {
@@ -1052,6 +1128,11 @@ export class Game {
     this.pigs = this.pigs.filter((x) => x !== pig);
     this.syncHelpers(false);
     if (this.online && netId != null) netBroadcast({ t: 'pigSell', id: netId });
+    // Don't wait a full cycle after a sale when the herd is thin.
+    const alive = this.pigs.filter((x) => !x.dead).length;
+    if (alive < MAX_PIGS) {
+      this._pigRespawnT = Math.min(this._pigRespawnT ?? PIG_RESPAWN_MIN, alive === 0 ? 8 : 12);
+    }
     return true;
   }
 
@@ -1800,6 +1881,7 @@ export class Game {
       if (m.dead && this.mobs.includes(m)) this.removeMob(m);
     }
     for (const p of this.pigs) p.update(dt);
+    this.tickPigRespawn(dt);
     if (!this.titleMode) this.drops.update(dt);
     if (this.online) this.remotes.update(dt, (shared.uSky?.value ?? 1) * 15);
     if (this.isNetHost() && this.state === 'play') {

@@ -18,6 +18,12 @@ export const BUY = {
 /** Coins for selling a penned pig. */
 export const PIG_SELL = 50;
 
+/** Soft cap — island keeps about this many pigs (wild + penned). */
+export const MAX_PIGS = 5;
+/** Seconds between respawns when below cap (measured trickle, not a flood). */
+export const PIG_RESPAWN_MIN = 16;
+export const PIG_RESPAWN_MAX = 34;
+
 /** Extra farm AIs besides the main Astra. Total growers = 1 + helpers ≤ 3. */
 export const MAX_HELPERS = 2;
 export const MAX_GROWERS = 3; // main Astra + helpers
