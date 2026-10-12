@@ -27,6 +27,7 @@ import { Player } from './Player.js';
 import { Robot } from './Robot.js';
 import { Turret } from './Turret.js';
 import { PigGates } from './PigGates.js';
+import { ChargeBay } from './ChargeBay.js';
 import { Green, Pig } from './Mobs.js';
 import { Golem, CropThief, Dragon, Chomper, Hopper } from './Enemies.js';
 import { Drops } from './items.js';
@@ -96,6 +97,7 @@ export class Game {
     this.helpers = [];
     this.turrets = [];
     this.pigGates = null;
+    this.chargeBay = null;
     this.mobs = [];
     this.pigs = [];
     this.drops = new Drops(this);
@@ -232,6 +234,8 @@ export class Game {
     this.world.generate();
     this.rebuildCrops();
     this.mesher.update(999);
+    this.chargeBay?.dispose();
+    this.chargeBay = new ChargeBay(this);
     this.spawnPigs();
     this.robot.reset();
     this.player.reset(LAYOUT.spawn);
@@ -683,6 +687,7 @@ export class Game {
     this.mobs = [];
     this.clearHired();
     if (this.pigGates) { this.pigGates.dispose(); this.pigGates = null; }
+    if (this.chargeBay) { this.chargeBay.dispose(); this.chargeBay = null; }
     this.drops.clear();
     this.particles.clear();
     this.floats.clear();
@@ -693,6 +698,7 @@ export class Game {
     this.robot.reset();
     this.player.reset(LAYOUT.spawn);
     this.pigGates = new PigGates(this);
+    this.chargeBay = new ChargeBay(this);
     this.spawnPigs();
     this.talk.reset();
     this.hud.clearChat();
@@ -2177,6 +2183,7 @@ export class Game {
     for (const h of this.helpers) h.update(dt);
     for (const tr of this.turrets) tr.update(dt);
     this.pigGates?.update(dt);
+    this.chargeBay?.update(dt);
     for (const m of [...this.mobs]) {
       m.update(dt);
       if (m.dead && this.mobs.includes(m)) this.removeMob(m);

@@ -26,11 +26,11 @@ export const LAYOUT = {
     [25 + OX, 21 + OZ], // guest 1
     [25 + OX, 24 + OZ], // guest 2
   ],
-  // Night charging row (standing, east wall) — main + 2 helpers
+  // Night charging row — backs to north wall, faces into the room (main + 2 helpers)
   charge: [
-    [35 + OX, 18 + OZ],
-    [35 + OX, 20 + OZ],
-    [35 + OX, 22 + OZ],
+    [27 + OX, 17 + OZ],
+    [30 + OX, 17 + OZ],
+    [33 + OX, 17 + OZ],
   ],
   box: [38 + OX, 27 + OZ],
   pond: [42.5 + OX, 42.5 + OZ],
@@ -206,8 +206,8 @@ export class World {
     }
     const hx = (H.x0 + H.x1) >> 1;
     // Windows
+    // Windows — keep north wall solid behind the charging bays
     for (const [x, z] of [
-      [hx - 2, H.z0], [hx + 2, H.z0],
       [H.x0, H.z0 + 3], [H.x0, H.z0 + 5], [H.x0, H.z0 + 7],
       [H.x1, H.z0 + 3], [H.x1, H.z0 + 5], [H.x1, H.z0 + 7],
       [hx - 3, H.z1], [hx + 3, H.z1],
@@ -246,13 +246,18 @@ export class World {
       put(bx, GY + 1, bz, B.BED);
       put(bx, GY + 1, bz + 1, B.BED_FOOT);
     }
-    // Charging dock markers (lanterns) on east wall — robots stand here at night
+    // Charging bay floor strips (north wall) — keep clear for dock meshes + robots
     for (const [cx, cz] of (LAYOUT.charge || [])) {
-      put(H.x1, GY + 2, cz, B.LANTERN);
+      put(cx, GY, cz, B.COBBLE);
       put(cx, GY + 1, cz, B.AIR);
+      put(cx, GY + 2, cz, B.AIR);
+      // Solid wall panel cell behind each bay (no glass)
+      put(cx, GY + 1, H.z0, B.PLANKS);
+      put(cx, GY + 2, H.z0, B.PLANKS);
+      put(cx, GY + 3, H.z0, B.PLANKS);
     }
-    put(hx, GY + 1, H.z0 + 1, B.HAY);
-    put(hx + 1, GY + 1, H.z0 + 1, B.HAY);
+    put(hx - 4, GY + 1, H.z0 + 2, B.HAY);
+    put(hx - 3, GY + 1, H.z0 + 2, B.HAY);
     // 家のまわり
     put(LAYOUT.box[0], GY + 1, LAYOUT.box[1], B.BOX);
     put(H.x1 + 2, GY + 1, H.z0 + 2, B.HAY); put(H.x1 + 2, GY + 1, H.z0 + 3, B.HAY); put(H.x1 + 2, GY + 2, H.z0 + 2, B.HAY);

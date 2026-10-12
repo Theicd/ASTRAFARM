@@ -25,14 +25,14 @@ const SPOT = {
   wake: [H.door[0] - 0.4, H.door[1] - 1.6],
 };
 
-/** Night docking bay — stand in a row by the east wall (beds stay free for players). */
+/** Night docking bay — backs flush to north wall, faces into the room. */
 function chargeSpot(robot) {
   const docks = LAYOUT.charge || [];
   let idx = 0;
   if (robot.helper) idx = 1 + Math.max(0, robot.game.helpers.indexOf(robot));
-  const d = docks[idx % Math.max(1, docks.length)] || [H.x1 - 1, H.z0 + 2];
-  // Standing pose against the wall, facing east (+X) toward the chargers
-  return { x: d[0] + 0.5, y: GY + 1, z: d[1] + 0.5, yaw: Math.PI / 2 };
+  const d = docks[idx % Math.max(1, docks.length)] || [H.x0 + 3, H.z0 + 1];
+  // Face +Z into the lodge; stand tight against the wall (inner face ≈ H.z0+1)
+  return { x: d[0] + 0.5, y: GY + 1, z: H.z0 + 1.28, yaw: 0 };
 }
 const SPEED = { work: 1.9, panic: 4.6 };
 
@@ -466,8 +466,8 @@ export class Robot {
         break;
       }
       case 'sleep':
-        // Docked / charging — stand still (not lying on the bed)
-        if (Math.floor(this.stateT / 3) !== Math.floor((this.stateT - dt) / 3)) this.emote.show('zzz', 2.4);
+        // Docked / charging — stand still facing the room
+        if (Math.floor(this.stateT / 2.5) !== Math.floor((this.stateT - dt) / 2.5)) this.emote.show('bolt', 2.2);
         break;
     }
 
@@ -656,12 +656,16 @@ export class Robot {
       face = 'sad';
       antenna = 0x6a7aa0;
     } else if (s === 'sleep') {
-      // Charging dock: eyes dim, antenna pulses — standing upright by the wall
-      face = 'sleep';
-      antenna = (Math.floor(t * 4) % 2) ? 0x5ad0ff : 0x2a6a9a;
-      P.armL.rotation.set(-0.2, 0, 0.35);
-      P.armR.rotation.set(-0.2, 0, -0.35);
+      // Charging dock: standby face, antenna pulses cyan, no cargo
+      face = 'work';
+      antenna = (Math.floor(t * 5) % 2) ? 0x7af0ff : 0x2a8aba;
+      P.armL.rotation.set(0.15, 0, 0.25);
+      P.armR.rotation.set(0.15, 0, -0.25);
+      P.head.rotation.x = 0;
+      this.setHand(null);
+      if (P.sack) P.sack.visible = false;
     }
+    if (s !== 'sleep' && P.sack) P.sack.visible = true;
     // まばたき
     this.blinkT -= dt;
     if (face === 'normal' && this.blinkT < 0.12) face = 'blink';
