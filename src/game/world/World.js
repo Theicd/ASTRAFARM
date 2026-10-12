@@ -18,9 +18,21 @@ export const LAYOUT = {
   fieldA: { x0: 21 + OX, x1: 29 + OX, z0: 30 + OZ, z1: 38 + OZ, water: [25 + OX, 34 + OZ] },
   fieldB: { x0: 31 + OX, x1: 39 + OX, z0: 30 + OZ, z1: 38 + OZ, water: [35 + OX, 34 + OZ] },
   pathX: 30 + OX,
-  house: { x0: 27 + OX, x1: 33 + OX, z0: 19 + OZ, z1: 24 + OZ, door: [30 + OX, 24 + OZ] },
-  bed: [28 + OX, 20 + OZ],
-  box: [34 + OX, 25 + OZ],
+  // Larger lodge: room for charging dock, 3 beds (player + 2 guests), stairs to roof
+  house: { x0: 24 + OX, x1: 36 + OX, z0: 16 + OZ, z1: 26 + OZ, door: [30 + OX, 26 + OZ] },
+  bed: [25 + OX, 18 + OZ], // player bed (head); foot at z+1
+  beds: [
+    [25 + OX, 18 + OZ], // player
+    [25 + OX, 21 + OZ], // guest 1
+    [25 + OX, 24 + OZ], // guest 2
+  ],
+  // Night charging row (standing, east wall) — main + 2 helpers
+  charge: [
+    [35 + OX, 18 + OZ],
+    [35 + OX, 20 + OZ],
+    [35 + OX, 22 + OZ],
+  ],
+  box: [38 + OX, 27 + OZ],
   pond: [42.5 + OX, 42.5 + OZ],
   farmZone: { x0: 19 + OX, x1: 41 + OX, z0: 28 + OZ, z1: 40 + OZ },
   spawn: [30.5 + OX, GY + 1, 27.5 + OZ],
@@ -184,7 +196,7 @@ export class World {
     for (let z = LAYOUT.house.z1 + 1; z <= A.z1 + 1; z++) put(LAYOUT.pathX, GY, z, B.PATH);
     for (let x = A.x0 - 1; x <= Bf.x1 + 1; x++) put(x, GY, A.z0 - 1, B.PATH);
 
-    // 家（アストラの家。チェストは置かない）
+    // Lodge — larger interior, beds for players, charging dock for robots, stairs to roof
     const H = LAYOUT.house;
     for (let z = H.z0; z <= H.z1; z++) for (let x = H.x0; x <= H.x1; x++) {
       put(x, GY, z, B.COBBLE);
@@ -193,29 +205,64 @@ export class World {
       for (let y = GY + 1; y <= GY + 3; y++) put(x, y, z, edge ? (corner ? B.LOG : B.PLANKS) : B.AIR);
     }
     const hx = (H.x0 + H.x1) >> 1;
+    // Windows
     for (const [x, z] of [
-      [hx, H.z0], [H.x0, H.z0 + 2], [H.x0, H.z0 + 3], [H.x1, H.z0 + 2], [H.x1, H.z0 + 3],
-      [hx - 2, H.z1], [hx + 2, H.z1],
+      [hx - 2, H.z0], [hx + 2, H.z0],
+      [H.x0, H.z0 + 3], [H.x0, H.z0 + 5], [H.x0, H.z0 + 7],
+      [H.x1, H.z0 + 3], [H.x1, H.z0 + 5], [H.x1, H.z0 + 7],
+      [hx - 3, H.z1], [hx + 3, H.z1],
     ]) put(x, GY + 2, z, B.GLASS);
+    // Door (farm side)
     put(H.door[0], GY + 1, H.door[1], B.AIR);
     put(H.door[0], GY + 2, H.door[1], B.AIR);
-    for (let k = 0; k < 4; k++) {
-      for (let z = H.z0 - 1 + k; z <= H.z1 + 1 - k; z++) for (let x = H.x0 - 1 + k; x <= H.x1 + 1 - k; x++) put(x, GY + 4 + k, z, k % 2 ? B.PLANKS : B.COBBLE);
+    // Flat walkable roof + low parapet (stair hatch carved below)
+    for (let z = H.z0; z <= H.z1; z++) for (let x = H.x0; x <= H.x1; x++) {
+      put(x, GY + 4, z, B.PLANKS);
+      for (let y = GY + 5; y <= GY + 7; y++) put(x, y, z, B.AIR);
     }
-    put(LAYOUT.bed[0], GY + 1, LAYOUT.bed[1], B.BED);
-    put(LAYOUT.bed[0], GY + 1, LAYOUT.bed[1] + 1, B.BED_FOOT);
-    put(hx + 2, GY + 1, H.z0 + 1, B.LANTERN);
-    put(hx + 2, GY + 1, H.z1 - 1, B.HAY);
+    for (let z = H.z0; z <= H.z1; z++) for (let x = H.x0; x <= H.x1; x++) {
+      const edge = x === H.x0 || x === H.x1 || z === H.z0 || z === H.z1;
+      if (edge) put(x, GY + 5, z, B.COBBLE);
+    }
+    // Stairs (SE) floor → roof deck: 3 treads + open shaft, then step onto roof
+    const sx = H.x1 - 2, sz0 = H.z1 - 5;
+    for (let i = 0; i < 3; i++) {
+      const sz = sz0 + i;
+      put(sx, GY + 1 + i, sz, B.PLANKS);
+      put(sx - 1, GY + 1 + i, sz, B.PLANKS);
+      for (let y = GY + 2 + i; y <= GY + 4; y++) {
+        put(sx, y, sz, B.AIR);
+        put(sx - 1, y, sz, B.AIR);
+      }
+    }
+    // Keep parapet open above the shaft so you can climb out
+    put(sx, GY + 5, sz0 + 2, B.AIR);
+    put(sx - 1, GY + 5, sz0 + 2, B.AIR);
+    // Roof lantern
+    put(hx, GY + 5, (H.z0 + H.z1) >> 1, B.LANTERN);
+
+    // Three beds along west wall (player + 2 guests) — robots do NOT use these
+    for (const [bx, bz] of (LAYOUT.beds || [LAYOUT.bed])) {
+      put(bx, GY + 1, bz, B.BED);
+      put(bx, GY + 1, bz + 1, B.BED_FOOT);
+    }
+    // Charging dock markers (lanterns) on east wall — robots stand here at night
+    for (const [cx, cz] of (LAYOUT.charge || [])) {
+      put(H.x1, GY + 2, cz, B.LANTERN);
+      put(cx, GY + 1, cz, B.AIR);
+    }
+    put(hx, GY + 1, H.z0 + 1, B.HAY);
+    put(hx + 1, GY + 1, H.z0 + 1, B.HAY);
     // 家のまわり
     put(LAYOUT.box[0], GY + 1, LAYOUT.box[1], B.BOX);
     put(H.x1 + 2, GY + 1, H.z0 + 2, B.HAY); put(H.x1 + 2, GY + 1, H.z0 + 3, B.HAY); put(H.x1 + 2, GY + 2, H.z0 + 2, B.HAY);
     put(hx - 1, GY + 1, H.z1 + 1, B.LANTERN); put(hx + 1, GY + 1, H.z1 + 1, B.LANTERN);
     for (const [x, z] of LAYOUT.posts) { put(x, GY + 1, z, B.LOG); put(x, GY + 2, z, B.LANTERN); }
-    // Path from house toward the open southern beach
+    // Path from beach-side wall toward the open southern beach
     for (let z = H.z0 - 1; z >= H.z0 - 10; z--) {
-      if (at(H.door[0], GY, z) === B.GRASS || at(H.door[0], GY, z) === B.DIRT || at(H.door[0], GY, z) === B.SAND) {
-        put(H.door[0], GY, z, B.PATH);
-        put(H.door[0], GY + 1, z, B.AIR);
+      if (at(hx, GY, z) === B.GRASS || at(hx, GY, z) === B.DIRT || at(hx, GY, z) === B.SAND) {
+        put(hx, GY, z, B.PATH);
+        put(hx, GY + 1, z, B.AIR);
       }
     }
 

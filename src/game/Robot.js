@@ -15,18 +15,25 @@ import { entityMaterial, setEntityLight } from './world/materials.js';
 
 const PX = 1 / 16;
 const H = LAYOUT.house;
-const BED = LAYOUT.bed;
 export const HOUSE_IN = { x0: H.x0 + 1, x1: H.x1 - 1, z0: H.z0 + 1, z1: H.z1 - 1 };
 const REPAIR_ZONE = {
   x0: LAYOUT.farmZone.x0 - 5, x1: LAYOUT.farmZone.x1 + 5,
   z0: LAYOUT.house.z0 - 4, z1: LAYOUT.farmZone.z1 + 6,
 };
 const SPOT = {
-  hide: [H.x0 + 4.5, H.z0 + 2.6],
-  bedSide: [BED[0] + 1.5, BED[1] + 1.5],
-  bed: [BED[0] + 0.5, GY + 1 + 9 / 16 + 0.18, BED[1] + 1.45],
+  hide: [H.x0 + 3.5, H.z0 + 3.5],
   wake: [H.door[0] - 0.4, H.door[1] - 1.6],
 };
+
+/** Night docking bay — stand in a row by the east wall (beds stay free for players). */
+function chargeSpot(robot) {
+  const docks = LAYOUT.charge || [];
+  let idx = 0;
+  if (robot.helper) idx = 1 + Math.max(0, robot.game.helpers.indexOf(robot));
+  const d = docks[idx % Math.max(1, docks.length)] || [H.x1 - 1, H.z0 + 2];
+  // Standing pose against the wall, facing east (+X) toward the chargers
+  return { x: d[0] + 0.5, y: GY + 1, z: d[1] + 0.5, yaw: Math.PI / 2 };
+}
 const SPEED = { work: 1.9, panic: 4.6 };
 
 export class Robot {
@@ -316,16 +323,10 @@ export class Robot {
     return true;
   }
 
-  /** Floor spot inside the house for sleeping (main Astra uses the bed). */
+  /** Night charge bay spot (standing). Beds are for players only. */
   sleepSpot() {
-    if (!this.helper) return SPOT.bed;
-    const idx = Math.max(0, this.game.helpers.indexOf(this));
-    const spots = [
-      [H.x0 + 3.4, GY + 1.05, H.z0 + 2.55],
-      [H.x0 + 4.35, GY + 1.05, H.z0 + 3.25],
-      [H.x0 + 2.55, GY + 1.05, H.z0 + 3.55],
-    ];
-    return spots[idx % spots.length];
+    const c = chargeSpot(this);
+    return [c.x, c.y, c.z, c.yaw];
   }
 
   goToBed() {
@@ -333,15 +334,14 @@ export class Robot {
     this.endTask();
     this.setState('toBed');
     this.sleepPos = this.sleepSpot();
-    if (this.helper) this.goTo(this.sleepPos[0], this.sleepPos[2], 0.65);
-    else this.goTo(SPOT.bedSide[0], SPOT.bedSide[1], 0.5);
+    this.goTo(this.sleepPos[0], this.sleepPos[2], 0.55);
   }
 
   wake() {
     this.root.rotation.set(0, 0, 0);
     if (this.helper) {
       const idx = Math.max(0, this.game.helpers.indexOf(this));
-      this.body.pos.set(H.x0 + 1.2 + idx * 0.75, GY + 1, H.z1 + 0.2 + (idx % 2) * 0.4);
+      this.body.pos.set(H.x0 + 2 + idx * 0.9, GY + 1, H.z1 - 1.2);
     } else {
       this.body.pos.set(SPOT.wake[0], GY + 1, SPOT.wake[1]);
     }
@@ -461,10 +461,12 @@ export class Robot {
           this.body.vel.set(0, 0, 0);
           const spot = this.sleepPos || this.sleepSpot();
           p.set(spot[0], spot[1], spot[2]);
+          this.yaw = spot[3] ?? Math.PI / 2;
         }
         break;
       }
       case 'sleep':
+        // Docked / charging — stand still (not lying on the bed)
         if (Math.floor(this.stateT / 3) !== Math.floor((this.stateT - dt) / 3)) this.emote.show('zzz', 2.4);
         break;
     }
@@ -474,6 +476,7 @@ export class Robot {
       const spot = this.sleepPos || this.sleepSpot();
       p.set(spot[0], spot[1], spot[2]);
       this.body.vel.set(0, 0, 0);
+      this.yaw = spot[3] ?? this.yaw;
     } else {
       applyGravity(this.body, dt);
       if (this.body.inWater) this.body.vel.y = Math.max(this.body.vel.y, 2.5);
@@ -653,8 +656,11 @@ export class Robot {
       face = 'sad';
       antenna = 0x6a7aa0;
     } else if (s === 'sleep') {
+      // Charging dock: eyes dim, antenna pulses — standing upright by the wall
       face = 'sleep';
-      antenna = 0x3a5a8a;
+      antenna = (Math.floor(t * 4) % 2) ? 0x5ad0ff : 0x2a6a9a;
+      P.armL.rotation.set(-0.2, 0, 0.35);
+      P.armR.rotation.set(-0.2, 0, -0.35);
     }
     // まばたき
     this.blinkT -= dt;
@@ -665,10 +671,7 @@ export class Robot {
     m.setSack(this.game.stock);
 
     this.root.position.set(p.x + (jitter ? (Math.random() - 0.5) * jitter * 2 : 0), p.y, p.z + (jitter ? (Math.random() - 0.5) * jitter * 2 : 0));
-    if (s === 'sleep') {
-      this.root.rotation.set(-Math.PI / 2, 0, 0, 'YXZ');
-      this.root.rotation.y = 0;
-    } else if (s !== 'flung') {
+    if (s !== 'flung') {
       this.root.rotation.set(0, this.yaw, 0);
     } else this.root.rotation.y = this.yaw;
     // 明るさ

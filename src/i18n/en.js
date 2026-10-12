@@ -70,7 +70,7 @@ export const en = {
 
   'howto.title': 'How to play',
   'howto.body': 'Day: grow and earn. Dusk: prepare. Night: strange pests attack. Morning: repair and grow stronger.',
-  'howto.body2': 'Boom-booms explode. Golems smash towers. Thieves steal crops. Dragons snatch robots — stop them!',
+  'howto.body2': 'Boom-booms explode. Golems smash towers. Thieves steal crops. Dragons snatch robots by day. At night robots charge by the wall — beds are for players. Stairs lead to the roof.',
   'howto.tools': 'Hotbar tools',
   'howto.economy': 'Prices',
   'howto.tool.sword': 'Hit hostiles and harvest ripe crops',
@@ -226,7 +226,7 @@ export const en = {
 
   'banner.day': 'Day {n}',
   'banner.night': 'Night has come',
-  'banner.nightSub': 'Field crew is indoors. Protect the farm',
+  'banner.nightSub': 'Crew is charging. Protect the farm',
 
   'banner.nightSubBoss': '…something big is coming',
   'banner.goal': 'Goal reached!',
@@ -381,8 +381,8 @@ export const en = {
   'astra.talk.4': 'Plots near water grow faster.',
   'astra.talk.5': 'No side quests. Tubers first.',
   'astra.talkHide.0': 'Crew locked inside. Call when greens are gone.',
-  'astra.talkSleep.0': 'Night shelter… counting tubers…',
-  'astra.dusk': 'DUSK ALERT: hostiles multiply at night. Crew to house. Defend the outpost.',
+  'astra.talkSleep.0': 'Charging bay… counting tubers…',
+  'astra.dusk': 'DUSK ALERT: hostiles multiply at night. Crew to charging bay. Defend the outpost.',
   'astra.morning.0': 'Morning brief — Day 1. Night Watch online.',
   'astra.morning.1': 'Morning: holes patched overnight. Push harvest.',
   'astra.morning.2': 'Day 3. Crew rhythm good. Keep it up.',
@@ -402,7 +402,7 @@ export const en = {
   'astra.powder': 'Gunpowder doubles as fertilizer. Sprinkle on crops.',
   'astra.box': 'Shipping box — not a chest. Items leave immediately.',
   'astra.warp': 'Crew teleported out of a hole. Resume nearby.',
-  'astra.bed': 'Crew bunk. Previous bed lost to blast.',
+  'astra.bed': 'Open bunk for rest. Robots charge by the wall at night.',
   'astra.report.good.0': 'Goal hit. Night shipment will be heavy.',
   'astra.report.good.1': 'Harvest clear. Night Watch earned the quiet.',
   'astra.report.good.2': 'Food stocked for boats and crew.',
