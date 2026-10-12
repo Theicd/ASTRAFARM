@@ -281,6 +281,62 @@ export function createGreenModel({ big = false } = {}) {
   return { root, scale, body, legs, mat, baseScale: s, height: 13 * PX * s, width: 10 * PX * s };
 }
 
+// ------------------------------------------------------------------ אוכלן שדות (נחיל כמו בום־בום — אוכל במקום להתפוצץ)
+export function createChomperModel() {
+  const skin = new Skin(64, 32, 808);
+  const orange = ['#f0a040', '#e89030', '#f8b050', '#d87828'];
+  const Bd = skin.boxNoise(0, 0, 12, 10, 10, orange);
+  const [fx, fy] = Bd.front;
+  // עיניים עצומות־שמחות + פה ענק
+  skin.rect(fx + 2, fy + 2, 2, 2, '#201008');
+  skin.rect(fx + 8, fy + 2, 2, 2, '#201008');
+  skin.px(fx + 2, fy + 2, '#fff8c0');
+  skin.px(fx + 8, fy + 2, '#fff8c0');
+  skin.rect(fx + 2, fy + 5, 8, 4, '#301810');
+  for (let i = 0; i < 4; i++) skin.px(fx + 3 + i * 2, fy + 5, '#fff0e0'); // שיניים
+  skin.boxNoise(40, 0, 4, 4, 4, ['#d87828', '#c86820']);
+  const tex = skin.texture();
+  const mat = entityMaterial(tex);
+  const root = new THREE.Group();
+  root.name = 'chomper';
+  const scale = new THREE.Group(); scale.name = 'scale'; root.add(scale);
+  const body = part('body', scale, mat, skin, { size: [12, 10, 10], uv: [0, 0], at: [0, 5, 0] });
+  const legs = [];
+  for (const [i, x, z] of [[0, -3.5, 3], [1, 3.5, 3], [2, -3.5, -3], [3, 3.5, -3]]) {
+    legs.push(part('leg' + i, scale, mat, skin, { size: [4, 4, 4], uv: [40, 0], at: [x, 5, z], off: [-2, -4, -2] }));
+  }
+  const s = 1.45;
+  scale.scale.setScalar(s);
+  return { root, scale, body, legs, mat, baseScale: s };
+}
+
+// ------------------------------------------------------------------ קופצן (חופר בורות קטנים — בלגן כמו בום־בום)
+export function createHopperModel() {
+  const skin = new Skin(64, 32, 909);
+  const blue = ['#48a0e8', '#3890d8', '#58b0f0', '#2880c8'];
+  const Bd = skin.boxNoise(0, 0, 8, 8, 8, blue);
+  const [fx, fy] = Bd.front;
+  skin.rect(fx + 1, fy + 2, 2, 3, '#081018');
+  skin.rect(fx + 5, fy + 2, 2, 3, '#081018');
+  skin.px(fx + 1, fy + 2, '#e0ffff');
+  skin.px(fx + 5, fy + 2, '#e0ffff');
+  skin.rect(fx + 2, fy + 6, 4, 1, '#102030');
+  skin.boxNoise(32, 0, 3, 5, 3, ['#2880c8', '#1868b0']); // spring legs tall
+  const tex = skin.texture();
+  const mat = entityMaterial(tex);
+  const root = new THREE.Group();
+  root.name = 'hopper';
+  const scale = new THREE.Group(); scale.name = 'scale'; root.add(scale);
+  const body = part('body', scale, mat, skin, { size: [8, 8, 8], uv: [0, 0], at: [0, 7, 0] });
+  const legs = [];
+  for (const [i, x] of [[0, -2.5], [1, 2.5]]) {
+    legs.push(part('leg' + i, scale, mat, skin, { size: [3, 5, 3], uv: [32, 0], at: [x, 7, 0], off: [-1.5, -5, -1.5] }));
+  }
+  const s = 1.4;
+  scale.scale.setScalar(s);
+  return { root, scale, body, legs, mat, baseScale: s };
+}
+
 // ------------------------------------------------------------------ איש האבנים (גולם כבד)
 export function createGolemModel() {
   const skin = new Skin(64, 48, 505);

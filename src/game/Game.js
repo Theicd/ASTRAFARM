@@ -28,7 +28,7 @@ import { Robot } from './Robot.js';
 import { Turret } from './Turret.js';
 import { PigGates } from './PigGates.js';
 import { Green, Pig } from './Mobs.js';
-import { Golem, CropThief, Dragon } from './Enemies.js';
+import { Golem, CropThief, Dragon, Chomper, Hopper } from './Enemies.js';
 import { Drops } from './items.js';
 import { Particles, FloatTexts, selectionBox } from './fx.js';
 import { Talk } from './talk.js';
@@ -413,7 +413,18 @@ export class Game {
     if (kind === 'golem') return new Golem(this, x, z);
     if (kind === 'thief') return new CropThief(this, x, z);
     if (kind === 'dragon') return new Dragon(this, x, z);
+    if (kind === 'chomp') return new Chomper(this, x, z);
+    if (kind === 'hop') return new Hopper(this, x, z);
     return new Green(this, x, z, { big, night: this.phase === 'night' });
+  }
+
+  /** Swarm pool — boom-style pests that show up often (not rare events). */
+  pickSwarmKind(rng) {
+    const r = rng();
+    if (r < 0.34) return 'boom';
+    if (r < 0.62) return 'chomp'; // field muncher
+    if (r < 0.88) return 'hop';   // hole digger
+    return 'boom';
   }
 
   /** Peer placed a guard tower — mirror without charging coins again. */
@@ -951,13 +962,15 @@ export class Game {
     const start = i === 0 ? 1e9 : 35, end = cfg.day - 15;
     const daySlots = [];
     for (let k = 0; k < cfg.mobsDay; k++) {
-      daySlots.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / Math.max(1, cfg.mobsDay), kind: 'boom' });
+      // Day 0 first contact stays boom; later day slots mix swarm pests
+      const kind = (i === 0 && k === 0) ? 'boom' : this.pickSwarmKind(rng);
+      daySlots.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / Math.max(1, cfg.mobsDay), kind });
     }
     if (i === 0) for (let k = 0; k < daySlots.length; k++) daySlots[k].t = 130 + k * 15; // day-1 tutorial boom
-    // Day raids (after tutorial day): mix roles so robots still panic home
+    // Day raids (after tutorial day): mix special roles so robots still panic home
     if (i >= 1 && daySlots.length >= 1) {
       const roll = rng();
-      daySlots[0].kind = roll < 0.45 ? 'thief' : roll < 0.8 ? 'golem' : 'boom';
+      daySlots[0].kind = roll < 0.4 ? 'thief' : roll < 0.7 ? 'golem' : this.pickSwarmKind(rng);
     }
     if (i >= 1 && daySlots.length >= 2) {
       daySlots[1].kind = rng() < 0.5 ? 'thief' : 'golem';
@@ -972,13 +985,16 @@ export class Game {
     const ns = cfg.day + DUSK;
     const nightSlots = [];
     for (let k = 0; k < cfg.mobsNight; k++) {
-      nightSlots.push({ t: ns + 3 + ((cfg.night - 14) * (k + rng() * 0.6)) / Math.max(1, cfg.mobsNight), kind: 'boom' });
+      // Fill the swarm with chompers/hoppers/booms so nights aren't all green
+      nightSlots.push({
+        t: ns + 3 + ((cfg.night - 14) * (k + rng() * 0.6)) / Math.max(1, cfg.mobsNight),
+        kind: this.pickSwarmKind(rng),
+      });
     }
-    // Guarantee a mixed night from day 0 — boom / thief / golem when slots allow
+    // Guarantee special roles on top of the swarm mix
     if (nightSlots.length >= 2) nightSlots[1].kind = 'thief';
     if (nightSlots.length >= 3) nightSlots[2].kind = 'golem';
-    // Extra thief/golem on longer nights so they aren't buried under booms
-    if (nightSlots.length >= 5) nightSlots[4].kind = rng() < 0.5 ? 'thief' : 'golem';
+    if (nightSlots.length >= 5) nightSlots[4].kind = rng() < 0.5 ? 'thief' : 'chomp';
     // Dragon every night (the funny sky event)
     list.push({ t: ns + cfg.night * (0.38 + rng() * 0.22), kind: 'dragon' });
     for (const s of nightSlots) list.push(s);
@@ -1019,14 +1035,14 @@ export class Game {
       const u = (k + 0.15 + rng() * 0.7) / Math.max(1, extra);
       // Extra pressure: mix roles so towers attract variety, not just booms
       const roll = rng();
-      const kind = roll < 0.35 ? 'thief' : roll < 0.6 ? 'golem' : 'boom';
+      const kind = roll < 0.25 ? 'thief' : roll < 0.4 ? 'golem' : this.pickSwarmKind(rng);
       this.schedule.push({ t: ns + 5 + u * (nightLen - 18), surge: true, kind });
     }
     // Surprise mid-night cluster when the farm is well defended
     if (towers >= 2 && rng() < 0.65) {
       const waveT = ns + nightLen * (0.38 + rng() * 0.22);
       const n = Math.min(4, 1 + towers);
-      for (let i = 0; i < n; i++) this.schedule.push({ t: waveT + i * (0.9 + rng() * 0.4), surge: true, kind: 'boom' });
+      for (let i = 0; i < n; i++) this.schedule.push({ t: waveT + i * (0.9 + rng() * 0.4), surge: true, kind: this.pickSwarmKind(rng) });
     }
     if (towers >= 1 && !this.schedule.some((s) => s.kind === 'dragon')) {
       this.schedule.push({ t: ns + nightLen * (0.42 + rng() * 0.15), kind: 'dragon' });
@@ -1343,6 +1359,8 @@ export class Game {
       : role === 'golem' ? 'sys.golem'
       : role === 'thief' ? 'sys.thief'
       : role === 'dragon' ? 'sys.dragon'
+      : role === 'chomp' ? 'sys.chomp'
+      : role === 'hop' ? 'sys.hop'
       : 'sys.mob';
     if (big || role !== 'boom' || (guide && this.time - (this.lastMobMsg ?? -99) > 10)) {
       this.lastMobMsg = this.time;
@@ -1352,7 +1370,38 @@ export class Game {
     if (big) this.hud.banner(t('banner.boss'), t('banner.bossSub'), 3.2);
     else if (role === 'golem') this.hud.banner(t('banner.golem'), t('banner.golemSub'), 2.6);
     else if (role === 'thief') this.hud.banner(t('banner.thief'), t('banner.thiefSub'), 2.4);
+    else if (role === 'chomp') this.hud.banner(t('banner.chomp'), t('banner.chompSub'), 2.2);
+    else if (role === 'hop') this.hud.banner(t('banner.hop'), t('banner.hopSub'), 2.2);
     return m;
+  }
+
+  /** Chomper eats a crop in place (stays to binge — unlike the fleeing thief). */
+  munchCrop(x, z, chomper) {
+    const n = this.stealCrop(x, z, chomper);
+    if (n > 0) this.talk.sys('sys.chompEat', null, 'warn');
+    return n;
+  }
+
+  /** Hopper digs a small farm hole on landing. */
+  hopperDig(x, z, hopper) {
+    const w = this.world;
+    if (!this.isFarmCell(x + z * WX) && !inRect(x, z, LAYOUT.farmZone)) return false;
+    const y = GY;
+    const above = w.get(x, y + 1, z);
+    if (isCrop(above)) {
+      this.crops.delete(w.idx(x, y + 1, z));
+      this.today.lost++;
+      w.set(x, y + 1, z, B.AIR);
+    }
+    // Punch a shallow hole like a mini boom
+    if (BLOCKS[w.get(x, y, z)]?.solid || isFarm(w.get(x, y, z))) {
+      w.set(x, y, z, B.AIR);
+      this.particles.burst(x, y, z, 0x7a5539, 10, 1.1);
+      this.floats.add('!', x + 0.5, y + 1.3, z + 0.5, '#80c0ff');
+      this.today.lost++;
+      return true;
+    }
+    return false;
   }
 
   /** Thief clears a ripe (or any) crop without rewarding the farm. */
@@ -1758,6 +1807,8 @@ export class Game {
         : m.kind === 'golem' ? 'sys.golemKill'
         : m.kind === 'thief' ? 'sys.thiefKill'
         : m.kind === 'dragon' ? 'sys.dragonKill'
+        : m.kind === 'chomp' ? 'sys.chompKill'
+        : m.kind === 'hop' ? 'sys.hopKill'
         : 'sys.kill';
       if (by === 'player') this.talk.sys(killKey);
       const rd = this.robot.body.pos.distanceTo(c);

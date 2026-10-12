@@ -2,7 +2,10 @@
 // Same duck-typed surface as Green: pos, center, dead, state, hit, update, dispose, kind.
 import * as THREE from 'three';
 import { t } from '../core/i18n.js';
-import { createGolemModel, createThiefModel, createDragonModel } from './models.js';
+import {
+  createGolemModel, createThiefModel, createDragonModel,
+  createChomperModel, createHopperModel,
+} from './models.js';
 import { findPath } from './nav.js';
 import { moveBody, applyGravity } from './physics.js';
 import { damp, dampAngle } from '../core/math.js';
@@ -69,6 +72,247 @@ function lightRoot(self) {
   const [sk, bl] = self.game.world.lightAt(p.x, p.y + 0.5, p.z);
   setEntityLight(self.model.mat, sk, bl);
   if (self.model.mat.uniforms?.uHurt) self.model.mat.uniforms.uHurt.value = self.hurt > 0 ? 1 : 0;
+}
+
+// ───────────────────────────────────────────────────────────────── Chomper (swarm eater)
+export class Chomper {
+  constructor(game, x, z) {
+    this.game = game;
+    this.kind = 'chomp';
+    this.big = false;
+    this.model = createChomperModel();
+    this.root = this.model.root;
+    game.scene.add(this.root);
+    const s = this.model.baseScale;
+    this.body = {
+      pos: new THREE.Vector3(x, game.world.floor[Math.floor(x) + Math.floor(z) * WX] || GY + 1, z),
+      vel: new THREE.Vector3(), hw: 0.4 * s, h: 0.7 * s, onGround: false, step: 1.05, inWater: false,
+    };
+    this.hp = 3; this.maxHp = 3;
+    this.speed = 2.35;
+    this.fuse = 0;
+    this.state = 'emerge';
+    this.afterEmerge = 'hunt';
+    this.stateT = 0;
+    this.yaw = Math.atan2(LAYOUT.center[0] - x, LAYOUT.center[1] - z);
+    this.repathT = 0;
+    this.path = null;
+    this.target = null;
+    this.hurt = 0;
+    this.stun = 0;
+    this.phase = Math.random() * 6;
+    this.t = 0;
+    this.dead = false;
+    this.bites = 0;
+    this.maxBites = 3 + Math.floor(Math.random() * 2);
+    this.eatT = 0;
+    this.root.position.copy(this.body.pos);
+  }
+
+  get pos() { return this.body.pos; }
+  get center() { return new THREE.Vector3(this.body.pos.x, this.body.pos.y + this.body.h * 0.45, this.body.pos.z); }
+  leave() { if (!this.dead && this.state !== 'leave') { this.state = 'leave'; this.stateT = 0; } }
+  hit(dmg, from, knock = 1) { return commonHit(this, dmg, from, knock, 7); }
+
+  update(dt) {
+    const g = this.game;
+    this.t += dt; this.stateT += dt;
+    this.hurt = Math.max(0, this.hurt - dt);
+    this.stun = Math.max(0, this.stun - dt);
+    if (this.netPuppet) {
+      this.root.position.copy(this.body.pos);
+      this.animate(dt, !!this._netMoving);
+      return;
+    }
+    if (emergeLeave(this, dt, g)) { this.animate(dt, false); return; }
+
+    const p = this.body.pos;
+    let moving = false;
+
+    if (this.state === 'eat') {
+      this.body.vel.x = damp(this.body.vel.x, 0, 10, dt);
+      this.body.vel.z = damp(this.body.vel.z, 0, 10, dt);
+      this.eatT += dt;
+      if (this.eatT >= 0.55) {
+        this.eatT = 0;
+        if (this.target) g.munchCrop(this.target.x, this.target.z, this);
+        this.bites++;
+        g.particles.burst(p.x - 0.3, p.y + 0.2, p.z - 0.3, 0xf0a040, 6, 1);
+        g.audio.sfx('harvest', { pos: p, pitch: 0.7 + Math.random() * 0.2 });
+        if (this.bites >= this.maxBites) {
+          this.leave();
+        } else {
+          this.state = 'hunt';
+          this.stateT = 0;
+          this.target = null;
+          this.repathT = 0;
+        }
+      }
+    } else if (this.state === 'hunt' && this.stun <= 0) {
+      this.repathT -= dt;
+      if (this.repathT <= 0) {
+        this.repathT = 0.5;
+        const crop = g.nearestCrop(p);
+        if (crop) {
+          this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5) };
+          const r = findPath(g.world, p.x, p.z, this.target.pos.x, this.target.pos.z, { near: 0, maxNodes: 2200, blocked: houseCell });
+          this.path = r.path; this.pathI = 0;
+        } else {
+          this.target = {
+            x: LAYOUT.fieldA.water[0] + 2, z: LAYOUT.fieldA.water[1] + 2,
+            pos: new THREE.Vector3(LAYOUT.fieldA.water[0] + 2.5, GY + 1, LAYOUT.fieldA.water[1] + 2.5),
+          };
+          this.path = null;
+        }
+      }
+      const t = this.target;
+      if (t) {
+        const dist = Math.hypot(t.pos.x - p.x, t.pos.z - p.z);
+        if (dist < 0.9) {
+          this.state = 'eat';
+          this.stateT = 0;
+          this.eatT = 0;
+        } else {
+          chaseAlong(this, dt, t.pos.x, t.pos.z, this.speed);
+          moving = true;
+        }
+      }
+    }
+
+    if (this.stun > 0) {
+      this.body.vel.x *= Math.exp(-2.5 * dt);
+      this.body.vel.z *= Math.exp(-2.5 * dt);
+    }
+    applyGravity(this.body, dt);
+    if (this.body.inWater) this.body.vel.y = Math.max(this.body.vel.y, 2);
+    const r = moveBody(g.world, this.body, dt);
+    if ((r.hitX || r.hitZ) && this.body.onGround && moving) this.body.vel.y = 7.5;
+    this.root.position.copy(p);
+    this.animate(dt, moving);
+  }
+
+  animate(dt, moving) {
+    const M = this.model;
+    this.phase += dt * (this.state === 'eat' ? 18 : moving ? 10 : 2);
+    const sw = Math.sin(this.phase);
+    if (M.legs) {
+      const amp = this.state === 'eat' ? 0.15 : moving ? 0.55 : 0.06;
+      M.legs[0].rotation.x = sw * amp; M.legs[3].rotation.x = sw * amp;
+      M.legs[1].rotation.x = -sw * amp; M.legs[2].rotation.x = -sw * amp;
+    }
+    const chew = this.state === 'eat' ? 1 + Math.abs(Math.sin(this.phase)) * 0.18 : 1;
+    M.scale.scale.set(M.baseScale * chew, M.baseScale * (2 - chew * 0.15), M.baseScale * chew);
+    this.root.rotation.y = this.yaw;
+    lightRoot(this);
+  }
+
+  dispose() { this.game.scene.remove(this.root); }
+}
+
+// ───────────────────────────────────────────────────────────────── Hopper (swarm digger)
+export class Hopper {
+  constructor(game, x, z) {
+    this.game = game;
+    this.kind = 'hop';
+    this.big = false;
+    this.model = createHopperModel();
+    this.root = this.model.root;
+    game.scene.add(this.root);
+    const s = this.model.baseScale;
+    this.body = {
+      pos: new THREE.Vector3(x, game.world.floor[Math.floor(x) + Math.floor(z) * WX] || GY + 1, z),
+      vel: new THREE.Vector3(), hw: 0.32 * s, h: 0.85 * s, onGround: false, step: 1.2, inWater: false,
+    };
+    this.hp = 3; this.maxHp = 3;
+    this.speed = 2.8;
+    this.fuse = 0;
+    this.state = 'emerge';
+    this.afterEmerge = 'bounce';
+    this.stateT = 0;
+    this.yaw = Math.atan2(LAYOUT.center[0] - x, LAYOUT.center[1] - z);
+    this.hurt = 0;
+    this.stun = 0;
+    this.phase = Math.random() * 6;
+    this.t = 0;
+    this.dead = false;
+    this.digs = 0;
+    this.maxDigs = 2 + Math.floor(Math.random() * 2);
+    this.hopCool = 0.4;
+    this.root.position.copy(this.body.pos);
+  }
+
+  get pos() { return this.body.pos; }
+  get center() { return new THREE.Vector3(this.body.pos.x, this.body.pos.y + this.body.h * 0.5, this.body.pos.z); }
+  leave() { if (!this.dead && this.state !== 'leave') { this.state = 'leave'; this.stateT = 0; } }
+  hit(dmg, from, knock = 1) { return commonHit(this, dmg, from, knock, 8); }
+
+  update(dt) {
+    const g = this.game;
+    this.t += dt; this.stateT += dt;
+    this.hurt = Math.max(0, this.hurt - dt);
+    this.stun = Math.max(0, this.stun - dt);
+    this.hopCool = Math.max(0, this.hopCool - dt);
+    if (this.netPuppet) {
+      this.root.position.copy(this.body.pos);
+      this.animate(dt, !!this._netMoving);
+      return;
+    }
+    if (emergeLeave(this, dt, g)) { this.animate(dt, false); return; }
+
+    const p = this.body.pos;
+    // Bounce toward farm, dig on landing
+    if (this.state === 'bounce' && this.stun <= 0) {
+      const tx = LAYOUT.center[0] + (Math.random() - 0.5) * 10;
+      const tz = LAYOUT.center[1] + (Math.random() - 0.5) * 10;
+      if (this.body.onGround && this.hopCool <= 0) {
+        // Dig underfoot when on farm
+        if (g.hopperDig(Math.floor(p.x), Math.floor(p.z), this)) {
+          this.digs++;
+          g.audio.sfx('place', { pos: p, pitch: 0.6 });
+          if (this.digs >= this.maxDigs) { this.leave(); return; }
+        }
+        const dx = tx - p.x, dz = tz - p.z;
+        const d = Math.hypot(dx, dz) || 1;
+        this.body.vel.x = (dx / d) * this.speed * 1.4;
+        this.body.vel.z = (dz / d) * this.speed * 1.4;
+        this.body.vel.y = 7.2;
+        this.body.onGround = false;
+        this.hopCool = 0.85 + Math.random() * 0.35;
+        this.yaw = Math.atan2(dx, dz);
+      } else if (!this.body.onGround) {
+        // slight air steer
+        const dx = LAYOUT.center[0] - p.x, dz = LAYOUT.center[1] - p.z;
+        const d = Math.hypot(dx, dz) || 1;
+        this.body.vel.x = damp(this.body.vel.x, (dx / d) * this.speed, 3, dt);
+        this.body.vel.z = damp(this.body.vel.z, (dz / d) * this.speed, 3, dt);
+      }
+    }
+
+    if (this.stun > 0) {
+      this.body.vel.x *= Math.exp(-2 * dt);
+      this.body.vel.z *= Math.exp(-2 * dt);
+    }
+    applyGravity(this.body, dt);
+    if (this.body.inWater) this.body.vel.y = Math.max(this.body.vel.y, 3);
+    moveBody(g.world, this.body, dt);
+    this.root.position.copy(p);
+    this.animate(dt, !this.body.onGround);
+  }
+
+  animate(dt, airborne) {
+    const M = this.model;
+    this.phase += dt * (airborne ? 14 : 4);
+    const squash = airborne ? 0.85 : 1 + Math.sin(this.phase) * 0.08;
+    M.scale.scale.set(M.baseScale / squash, M.baseScale * squash, M.baseScale / squash);
+    if (M.legs?.[0]) {
+      M.legs[0].rotation.x = airborne ? -0.8 : Math.sin(this.phase) * 0.3;
+      M.legs[1].rotation.x = airborne ? -0.8 : -Math.sin(this.phase) * 0.3;
+    }
+    this.root.rotation.y = this.yaw;
+    lightRoot(this);
+  }
+
+  dispose() { this.game.scene.remove(this.root); }
 }
 
 // ───────────────────────────────────────────────────────────────── Golem
