@@ -1,5 +1,5 @@
-// Astra Farm — network-first shell so deploys show up; cache icons for relaunch.
-const CACHE = 'astra-farm-v2';
+// Spud Farm — network-first shell so deploys show up; cache icons for relaunch.
+const CACHE = 'spud-farm-v3';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();

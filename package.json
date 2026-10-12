@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Astra Farm — grow crops, sell produce, hire AI helpers, defend the farm",
-  "author": "Astra Farm",
+  "description": "Spud Farm / חוות הפקעות — grow crops, sell produce, hire AI helpers, defend the farm",
+  "author": "Spud Farm",
   "license": "MIT",
   "scripts": {
     "dev": "vite",

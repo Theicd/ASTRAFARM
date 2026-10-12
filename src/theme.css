@@ -9,8 +9,22 @@
   --font: 'DotGothic16', 'Hiragino Maru Gothic ProN', 'M PLUS Rounded 1c', system-ui, sans-serif;
 }
 html, body { background: #000; color: var(--ink); font: 16px/1.5 var(--font); }
-#loading { background: #3b2a1c url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' fill='%23593f2a'/%3E%3Crect x='4' y='6' width='4' height='4' fill='%236e4c33'/%3E%3Crect x='20' y='14' width='4' height='4' fill='%234b3423'/%3E%3Crect x='10' y='24' width='4' height='4' fill='%236e4c33'/%3E%3Crect x='26' y='2' width='4' height='4' fill='%234b3423'/%3E%3C/svg%3E") repeat;
-  image-rendering: pixelated; color: #fff; text-shadow: 2px 2px 0 #000; }
+#loading {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(60, 140, 160, 0.35), transparent 55%),
+    linear-gradient(180deg, #1a3a4a 0%, #243018 55%, #3b2a1c 100%);
+  image-rendering: pixelated; color: #fff; text-shadow: 2px 2px 0 #000;
+}
+#loading .ld-box { display: grid; justify-items: center; gap: 0.55em; padding: 1em; }
+#loading .ld-icon {
+  width: 96px; height: 96px; border-radius: 18px; image-rendering: auto;
+  box-shadow: 0 0 0 3px rgba(255, 226, 90, 0.35), 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+#loading .ld-title {
+  font-size: clamp(22px, 5vw, 34px); color: var(--potato); letter-spacing: 0.04em;
+  text-shadow: 3px 3px 0 #4a2f14;
+}
+#loading .ld-text { font-size: 15px; color: #d8e8f0; opacity: 0.9; }
 
 /* 石のボタン：明るい上と左、暗い下と右（立体のふち）。選んでいるときは白いふち */
 button { font: inherit; color: #fff; text-shadow: 2px 2px 0 #3a3a3a; background: #7a7a7a; border: 2px solid #000; border-radius: 0;

@@ -39,7 +39,7 @@ export class Screens {
     <button data-act="settings" data-i18n="title.settings">${t('title.settings')}</button>
   </div>
   <p class="best"></p>
-  <footer class="copyright">© 2026 Astra Farm</footer>
+  <footer class="copyright">© 2026 <span data-i18n="game.title">${t('game.title')}</span></footer>
 </section>
 <section id="m-pause" class="modal hidden"><div class="card">
   <h2 data-i18n="pause.title">${t('pause.title')}</h2>

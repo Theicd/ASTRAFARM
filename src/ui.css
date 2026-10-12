@@ -19,6 +19,7 @@ html, body { margin: 0; height: 100%; overflow: hidden;
 
 #loading { position: fixed; inset: 0; display: grid; place-items: center; z-index: 50; transition: opacity 0.5s; }
 #loading.done { opacity: 0; pointer-events: none; }
+#loading .ld-box { pointer-events: none; }
 
 /* 撮影ツールは CSS のアニメーションを止められず、途中の色で写るので、選択の色の切り替えにはアニメーションを付けない */
 .gp-focus { outline-offset: 3px; }

@@ -32,9 +32,9 @@ export class GameHud {
       </div>
       <div class="wh-stock"></div>
     </div>
+    <div class="chat" aria-live="polite"></div>
   </div>
   <div class="robot"><canvas width="16" height="12"></canvas><div class="rtext"><b data-i18n="name.astra">${t('name.astra')}</b><span class="rstate"></span></div></div>
-  <div class="chat"></div>
   <div class="bottom">
     <div class="hearts">${Array.from({ length: 10 }, () => `<img alt="" src="${icon('heart_full')}">`).join('')}</div>
     <div class="slotname"></div>
@@ -210,10 +210,14 @@ export class GameHud {
   chat(text, kind = 'astra', name = '') {
     const div = document.createElement('div');
     div.className = 'line ' + kind;
-    div.innerHTML = kind === 'astra' ? `<span class="who">&lt;${esc(name)}&gt;</span> ${esc(text)}` : esc(text);
+    const who = name || t('name.astra');
+    div.innerHTML = kind === 'astra'
+      ? `<span class="who">${esc(who)}</span> ${esc(text)}`
+      : esc(text);
     this.$.chat.appendChild(div);
     this.lines.push({ div, t: 0 });
-    while (this.lines.length > 6) { const l = this.lines.shift(); l.div.remove(); }
+    const cap = document.documentElement.dataset.device === 'touch' ? 3 : 5;
+    while (this.lines.length > cap) { const l = this.lines.shift(); l.div.remove(); }
   }
   clearChat() { for (const l of this.lines) l.div.remove(); this.lines = []; }
 
