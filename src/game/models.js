@@ -122,29 +122,63 @@ export function drawFace(g, kind, t = 0) {
   if (kind === 'scared') { g.fillStyle = '#9fd8ff'; g.fillRect(14, 2 + (Math.floor(t * 8) % 3), 1, 2); }
 }
 
-export function createAstraModel() {
-  const skin = new Skin(64, 64, 101);
-  const white = ['#eeeae0', '#e6e2d8', '#f2efe6', '#e9e5db'];
-  const gray = ['#b9bcc4', '#aeb1b9', '#c2c5cc'];
+/** Multiply a #rrggbb (or short) color by an RGB tint (0–1 each). */
+function mixHex(hex, tr, tg, tb) {
+  const h = String(hex).replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  const r = Math.min(255, Math.round(((n >> 16) & 255) * tr));
+  const g = Math.min(255, Math.round(((n >> 8) & 255) * tg));
+  const b = Math.min(255, Math.round((n & 255) * tb));
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+}
+
+/** Distinct non-white body tints for online farmers (same Astra/helper shape). */
+export const NET_ROBOT_COLORS = [0x3db8ff, 0xff6b4a, 0x5adf7a, 0xffc44d, 0xc86bff, 0xff7eb6];
+
+export function netColorForKey(key) {
+  const s = String(key || '');
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return NET_ROBOT_COLORS[(h >>> 0) % NET_ROBOT_COLORS.length];
+}
+
+/**
+ * Astra / helper robot mesh.
+ * @param {{ tint?: number, seed?: number }} [opts] tint = body multiply color (hex), e.g. net players
+ */
+export function createAstraModel({ tint = 0xffffff, seed = 101 } = {}) {
+  const skin = new Skin(64, 64, seed);
+  const tc = new THREE.Color(tint);
+  const tr = tc.r, tg = tc.g, tb = tc.b;
+  const plain = tr > 0.97 && tg > 0.97 && tb > 0.97;
+  const white = plain
+    ? ['#eeeae0', '#e6e2d8', '#f2efe6', '#e9e5db']
+    : ['#eeeae0', '#e6e2d8', '#f2efe6', '#e9e5db'].map((h) => mixHex(h, tr, tg, tb));
+  const gray = plain
+    ? ['#b9bcc4', '#aeb1b9', '#c2c5cc']
+    : ['#b9bcc4', '#aeb1b9', '#c2c5cc'].map((h) => mixHex(h, Math.min(1, tr + 0.08), Math.min(1, tg + 0.08), Math.min(1, tb + 0.08)));
+  const panel = plain ? '#d8d4ca' : mixHex('#d8d4ca', tr, tg, tb);
+  const seam = plain ? '#c8c4ba' : mixHex('#c8c4ba', tr * 0.9, tg * 0.9, tb * 0.9);
   // 頭 10×8×8 at (0,0)
   const H = skin.boxNoise(0, 0, 10, 8, 8, white);
-  skin.rect(...H.front, '#d8d4ca');
-  skin.rect(H.front[0], H.front[1] + 7, 10, 1, '#c8c4ba');
+  skin.rect(...H.front, panel);
+  skin.rect(H.front[0], H.front[1] + 7, 10, 1, seam);
   for (const k of ['left', 'right']) { skin.rect(H[k][0] + 3, H[k][1] + 3, 2, 2, '#ff9a4d'); skin.px(H[k][0] + 3, H[k][1] + 3, '#ffc08a'); }
-  skin.rect(H.back[0] + 2, H.back[1] + 2, 6, 1, '#c8c4ba'); skin.rect(H.back[0] + 2, H.back[1] + 4, 6, 1, '#c8c4ba');
+  skin.rect(H.back[0] + 2, H.back[1] + 2, 6, 1, seam); skin.rect(H.back[0] + 2, H.back[1] + 4, 6, 1, seam);
   // アンテナ 1×4×1 at (40,0)、玉 2×2×2 at (44,0)
   skin.boxNoise(40, 0, 1, 4, 1, gray);
-  skin.boxNoise(44, 0, 2, 2, 2, ['#ffffff']);
+  skin.boxNoise(44, 0, 2, 2, 2, [plain ? '#ffffff' : mixHex('#ffffff', tr, tg, tb)]);
   // 胴 8×7×5 at (0,16)
   const Bd = skin.boxNoise(0, 16, 8, 7, 5, white);
   skin.rect(Bd.front[0] + 2, Bd.front[1] + 2, 4, 3, '#2a3550');
   skin.px(Bd.front[0] + 3, Bd.front[1] + 3, '#ffcf6a'); skin.px(Bd.front[0] + 4, Bd.front[1] + 3, '#d6ad62');
-  skin.rect(Bd.front[0], Bd.front[1] + 6, 8, 1, '#c8c4ba');
+  skin.rect(Bd.front[0], Bd.front[1] + 6, 8, 1, seam);
   // 腕 2×6×2 at (28,16)
   const Ar = skin.boxNoise(28, 16, 2, 6, 2, white);
-  for (const k of ['front', 'back', 'left', 'right']) skin.rect(Ar[k][0], Ar[k][1] + 5, Ar[k][2], 1, '#9aa0aa');
+  for (const k of ['front', 'back', 'left', 'right']) skin.rect(Ar[k][0], Ar[k][1] + 5, Ar[k][2], 1, plain ? '#9aa0aa' : mixHex('#9aa0aa', tr, tg, tb));
   // 足 3×3×3 at (40,16)
-  skin.boxNoise(40, 16, 3, 3, 3, ['#8a8f9a', '#7e838e', '#959aa4']);
+  skin.boxNoise(40, 16, 3, 3, 3, plain ? ['#8a8f9a', '#7e838e', '#959aa4'] : ['#8a8f9a', '#7e838e', '#959aa4'].map((h) => mixHex(h, tr * 0.85, tg * 0.85, tb * 0.85)));
   // 背中の袋（じゃがいも入り）9×9×5 at (0,32)
   const burlap = ['#d8b880', '#cdae74', '#e0c28c', '#c4a46a'];
   const S = skin.boxNoise(0, 32, 9, 9, 5, burlap);
@@ -174,7 +208,7 @@ export function createAstraModel() {
   const sack = part('sack', torso, mat, skin, { size: [9, 9, 5], uv: [0, 32], at: [0, 1, -2.5], off: [-4.5, 0, -5] });
   const head = part('head', torso, mat, skin, { size: [10, 8, 8], uv: [0, 0], at: [0, 7, 0] });
   const antenna = part('antenna', head, mat, skin, { size: [1, 4, 1], uv: [40, 0], at: [1.5, 8, -1] });
-  const ballMat = new THREE.MeshBasicMaterial({ color: 0x6ff0ff, toneMapped: false });
+  const ballMat = new THREE.MeshBasicMaterial({ color: plain ? 0x6ff0ff : tint, toneMapped: false });
   const ball = new THREE.Mesh(new THREE.BoxGeometry(2.2 * PX, 2.2 * PX, 2.2 * PX), ballMat);
   ball.name = 'antennaBall';
   ball.position.y = 5 * PX;

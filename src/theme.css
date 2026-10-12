@@ -23,7 +23,7 @@ input[type="range"] { width: 10em; accent-color: #7d88c4; }
 select { font: inherit; padding: 0.15em 0.4em; border-radius: 0; border: 2px solid #3a3a3a; background: #e8e8e8; color: #222; }
 
 /* タイトル */
-#title { gap: 0.3em; }
+#title { position: relative; gap: 0.3em; }
 #title::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 80%; transform: translateY(-58%);
   background: radial-gradient(ellipse at center, rgba(10, 20, 40, 0.35), rgba(10, 20, 40, 0) 70%); pointer-events: none; }
 #title .logo { position: relative; margin-bottom: 0.1em; }

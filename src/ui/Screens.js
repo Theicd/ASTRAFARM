@@ -7,6 +7,7 @@
 import { t, applyDom, LANGS } from '../core/i18n.js';
 import { settings, QUALITIES, PAD_TYPES, MOB_GUIDES } from '../core/settings.js';
 import { names, NAME_MAX } from '../net/names.js';
+import { installAppButton } from './Install.js';
 
 const opt = (v, key) => `<option value="${v}" data-i18n="${key}">${t(key)}</option>`;
 const slider = (k) => `<label class="row"><span data-i18n="settings.${k}">${t('settings.' + k)}</span>
@@ -77,6 +78,7 @@ export class Screens {
     this.title = root.querySelector('#title');
     this.modals = { pause: root.querySelector('#m-pause'), settings: root.querySelector('#m-settings'), howto: root.querySelector('#m-howto') };
     this.netStatus = this.title.querySelector('.af-net-status');
+    installAppButton(this.title);
 
     const nameIn = this.title.querySelector('.af-name-input');
     if (nameIn) {

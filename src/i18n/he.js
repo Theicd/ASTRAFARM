@@ -1,4 +1,4 @@
-// Hebrew UI + dialogue (falls back to English for any missing key via i18n.js)
+﻿// Hebrew UI + dialogue (falls back to English for any missing key via i18n.js)
 import { en } from './en.js';
 
 export const he = {
@@ -25,6 +25,20 @@ export const he = {
   'net.welcome': '{name} נכנס לחווה',
   'net.joined': '{name} הצטרף',
   'net.left': 'חקלאי עזב',
+
+  'install.btn': 'התקן משחק',
+  'install.title': 'התקנת חוות אסטרה',
+  'install.body': 'הוסיפו את המשחק למכשיר ופתחו מהמסך הראשי או משולחן העבודה.',
+  'install.perk0': 'מסך מלא בלי שורת דפדפן',
+  'install.perk1': 'נפתח מהר יותר',
+  'install.perk2': 'לחיצה אחת מהמסך הראשי או מהמחשב',
+  'install.confirm': 'לחצו התקן לאישור.',
+  'install.ok': 'התקן',
+  'install.notNow': 'לא עכשיו',
+  'install.gotIt': 'הבנתי',
+  'install.already': 'המשחק כבר מותקן במכשיר הזה.',
+  'install.ios': 'ב־Safari לחצו Share ↕ ואז Add to Home Screen.',
+  'install.desktop': 'השתמשו באפשרות Install / הוסף לשולחן העבודה בדפדפן, או באייקון ההורדה כשמופיע.',
 
   'pause.title': 'השהיה',
   'pause.resume': 'המשך',

@@ -89,6 +89,8 @@ export const netHooks = {
   onRemotePose: null,
   /** peer joined/left roster updates */
   onRoster: null,
+  /** shared farm events (pig sold, …) */
+  onGame: null,
   /** spawn index for local player (0 = host) */
   myIdx: 0,
 };
@@ -425,6 +427,17 @@ class SosNet {
     if (peer.ctl?.readyState === 'open') peer.ctl.send(JSON.stringify(m));
   }
 
+  /** Reliable room-wide game event (star: client→host→all, or host→all). */
+  broadcastGame(msg) {
+    if (!msg || typeof msg.t !== 'string') return;
+    const m = { ...msg, t: 'game', g: msg.t };
+    if (this.role === 'host') {
+      for (const p of this.peers.values()) if (p.open) this.send(p, m);
+      return;
+    }
+    if (this.host) this.send(this.host, m);
+  }
+
   humans() {
     if (this.role === 'client') return Math.max(2, this.roster.size + (this.roster.has(this.pk) ? 0 : 1));
     let n = 1;
@@ -478,10 +491,20 @@ class SosNet {
         netHooks.onRoster?.(m.pk, '', false);
       } else if (m.t === 'wait' && typeof m.text === 'string') {
         this.setStatus(m.text);
+      } else if (m.t === 'game' && typeof m.g === 'string') {
+        netHooks.onGame?.({ t: m.g, id: m.id, from: peer.pk });
       }
       return;
     }
     if (this.role !== 'host') return;
+    if (m.t === 'game' && typeof m.g === 'string') {
+      // Host applies locally then relays to every client (including echo for sender)
+      netHooks.onGame?.({ t: m.g, id: m.id, from: peer.pk });
+      for (const p of this.peers.values()) {
+        if (p.open && p !== peer) this.send(p, m);
+      }
+      return;
+    }
     if (m.t === 'ready') {
       peer.name = cleanName(m.nm) || 'Farmer';
       if (peer.idx < 0) peer.idx = this.freeIdx();
@@ -682,4 +705,9 @@ export function stopNet() {
 
 export function getNet() {
   return instance;
+}
+
+/** Send a shared game event to the room (pig sold, etc.). */
+export function netBroadcast(msg) {
+  instance?.broadcastGame(msg);
 }

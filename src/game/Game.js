@@ -7,6 +7,7 @@ import { t } from '../core/i18n.js';
 import { events } from '../core/events.js';
 import { createStore } from '../core/save.js';
 import { clamp, damp, lerp } from '../core/math.js';
+import { mulberry32 } from '../core/rng.js';
 import { buildAtlas } from './world/atlas.js';
 import { World, LAYOUT, GY, WX, WZ, inRect } from './world/World.js';
 import { Mesher } from './world/Mesher.js';
@@ -33,7 +34,7 @@ import { drawFace } from './models.js';
 import { GameHud } from '../ui/GameHud.js';
 import { addGameModals, fillReport, fillEnding, fillEndless } from '../ui/GameModals.js';
 import { settings } from '../core/settings.js';
-import { startNet, stopNet, netSupported, netHooks } from '../net/SosNet.js';
+import { startNet, stopNet, netSupported, netHooks, netBroadcast } from '../net/SosNet.js';
 import { RemotePlayers } from '../net/RemotePlayers.js';
 import { names } from '../net/names.js';
 
@@ -332,7 +333,21 @@ export class Game {
         this.hud.chat(t('net.left'), 'sys');
       }
     };
+    netHooks.onGame = (ev) => this.onNetGame(ev);
     netHooks.beginFarm = () => this.beginOnlineFarm();
+  }
+
+  onNetGame(ev) {
+    if (!ev || !this.online) return;
+    if (ev.t === 'pigSell' && ev.id != null) this.removePigNet(ev.id);
+  }
+
+  /** Remove a pig mirrored from another peer (no payout). */
+  removePigNet(id) {
+    const pig = this.pigs.find((p) => p.netId === id);
+    if (!pig || pig.dead) return;
+    pig.dispose();
+    this.pigs = this.pigs.filter((x) => x !== pig);
   }
 
   beginOnlineFarm() {
@@ -846,20 +861,25 @@ export class Game {
   spawnPigs() {
     for (const p of this.pigs) p.dispose();
     this.pigs = [];
+    let netSeq = 0;
+    const tag = (pig) => { pig.netId = netSeq++; return pig; };
+    // Same seed → same pig slots/ids on every peer (needed for pigSell sync).
+    const rng = mulberry32((this.world.seed ^ 0x50494753) >>> 0);
     const cells = this.world.pigCells;
     for (let i = 0; i < 4 && cells.length; i++) {
-      const c = cells[Math.floor((i + 0.5) / 4 * cells.length + Math.random() * 20) % cells.length];
-      this.pigs.push(new Pig(this, (c % WX) + 0.5, ((c / WX) | 0) + 0.5));
+      const c = cells[Math.floor((i + 0.5) / 4 * cells.length + rng() * 20) % cells.length];
+      this.pigs.push(tag(new Pig(this, (c % WX) + 0.5, ((c / WX) | 0) + 0.5)));
     }
     // One already in the sty
     const P = LAYOUT.pigPen;
     const pcx = (P.x0 + P.x1) * 0.5 + 0.5, pcz = (P.z0 + P.z1) * 0.5 + 0.5;
-    this.pigs.push(new Pig(this, pcx + 1.2, pcz - 0.8, { penned: true }));
+    this.pigs.push(tag(new Pig(this, pcx + 1.2, pcz - 0.8, { penned: true })));
   }
 
   sellPig(pig) {
     if (!pig || pig.dead || !pig.penned) return false;
     const pay = PIG_SELL;
+    const netId = pig.netId;
     this.money += pay;
     this.lifetimeCoins += pay;
     const p = pig.pos;
@@ -870,6 +890,7 @@ export class Game {
     pig.dispose();
     this.pigs = this.pigs.filter((x) => x !== pig);
     this.syncHelpers(false);
+    if (this.online && netId != null) netBroadcast({ t: 'pigSell', id: netId });
     return true;
   }
 

@@ -1,9 +1,9 @@
-// Other humans in the room — Astra models + name tags, driven by net poses.
+// Other humans — same Astra/helper robot shape, distinct body tint + name tag.
 import * as THREE from 'three';
-import { createAstraModel } from '../game/models.js';
+import { createAstraModel, netColorForKey } from '../game/models.js';
 import { cleanName } from './names.js';
 
-function nameSprite(text) {
+function nameSprite(text, colorHex) {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 64;
   const g = c.getContext('2d');
@@ -11,8 +11,12 @@ function nameSprite(text) {
   g.font = 'bold 28px system-ui,Segoe UI,sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillStyle = 'rgba(0,0,0,0.45)';
+  g.fillStyle = 'rgba(0,0,0,0.5)';
   g.fillRect(16, 12, 224, 40);
+  const col = '#' + (colorHex >>> 0).toString(16).padStart(6, '0');
+  g.strokeStyle = col;
+  g.lineWidth = 3;
+  g.strokeRect(18, 14, 220, 36);
   g.fillStyle = '#fff6d8';
   g.fillText(text.slice(0, 14), 128, 34);
   const tex = new THREE.CanvasTexture(c);
@@ -22,7 +26,7 @@ function nameSprite(text) {
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
   const spr = new THREE.Sprite(mat);
   spr.scale.set(1.8, 0.45, 1);
-  spr.position.y = 2.35;
+  spr.position.y = 2.2;
   return spr;
 }
 
@@ -37,21 +41,28 @@ export class RemotePlayers {
     if (r) {
       if (name && name !== r.name) {
         r.name = cleanName(name) || r.name;
-        this.scene.remove(r.label);
-        r.label = nameSprite(r.name);
+        r.root.remove(r.label);
+        r.label.material.map?.dispose();
+        r.label.material.dispose();
+        r.label = nameSprite(r.name, r.color);
         r.root.add(r.label);
       }
       return r;
     }
-    const model = createAstraModel();
+    const color = netColorForKey(pk);
+    const model = createAstraModel({ tint: color, seed: 120 + (color & 31) });
     model.setFace('normal');
+    model.setAntenna(color);
     const root = model.root;
     root.name = 'remote:' + pk.slice(0, 8);
-    const label = nameSprite(cleanName(name) || 'Farmer');
+    // Match hired AI helpers — slightly smaller than main Astra
+    root.scale.setScalar(0.92);
+    const label = nameSprite(cleanName(name) || 'Farmer', color);
     root.add(label);
     this.scene.add(root);
     r = {
       pk,
+      color,
       name: cleanName(name) || 'Farmer',
       model,
       root,
@@ -71,6 +82,8 @@ export class RemotePlayers {
     const r = this.byPk.get(pk);
     if (!r) return;
     this.scene.remove(r.root);
+    r.label.material.map?.dispose();
+    r.label.material.dispose();
     this.byPk.delete(pk);
   }
 
