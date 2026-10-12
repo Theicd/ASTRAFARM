@@ -316,24 +316,34 @@ export class CropThief {
         this.repathT = 0.45;
         const crop = g.nearestCrop(p);
         if (crop) {
-          this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5) };
+          this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5), crop: true };
           const r = findPath(g.world, p.x, p.z, this.target.pos.x, this.target.pos.z, { near: 0, maxNodes: 2200, blocked: houseCell });
           this.path = r.path; this.pathI = 0;
         } else {
-          // Nothing to steal — bail
-          this.beginFlee();
+          // Empty field — still raid the plots so the thief is visible
+          const fx = LAYOUT.fieldA.water[0] + 2 + Math.floor(Math.random() * 4);
+          const fz = LAYOUT.fieldA.water[1] + 2 + Math.floor(Math.random() * 4);
+          this.target = { x: fx, z: fz, pos: new THREE.Vector3(fx + 0.5, GY + 1, fz + 0.5), crop: false };
+          this.path = null;
         }
       }
       const t = this.target;
       if (t && this.stun <= 0) {
         const dist = Math.hypot(t.pos.x - p.x, t.pos.z - p.z);
         if (dist < 0.85) {
-          const stole = g.stealCrop(t.x, t.z, this);
+          const stole = t.crop ? g.stealCrop(t.x, t.z, this) : 0;
           if (stole > 0) {
             this.loot += stole;
             if (this.model.sack) this.model.sack.visible = true;
             g.talk.sys('sys.thiefSteal', { n: stole }, 'warn');
             g.audio.sfx('harvest', { pos: p, pitch: 1.4 });
+          } else {
+            // Snatch a couple coins when plots are bare
+            this.loot += 1;
+            if (this.model.sack) this.model.sack.visible = true;
+            g.money = Math.max(0, (g.money | 0) - 3);
+            g.talk.sys('sys.thiefSteal', { n: 1 }, 'warn');
+            g.floats.add('-3¢', p.x, p.y + 1.2, p.z, '#ff8080');
           }
           this.beginFlee();
         } else {

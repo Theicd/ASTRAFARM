@@ -954,19 +954,18 @@ export class Game {
       daySlots.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / Math.max(1, cfg.mobsDay), kind: 'boom' });
     }
     if (i === 0) for (let k = 0; k < daySlots.length; k++) daySlots[k].t = 130 + k * 15; // day-1 tutorial boom
-    // Day raids too — robots panic home; mix roles after the first day
+    // Day raids (after tutorial day): mix roles so robots still panic home
     if (i >= 1 && daySlots.length >= 1) {
       const roll = rng();
-      daySlots[0].kind = roll < 0.4 ? 'thief' : roll < 0.7 ? 'golem' : 'boom';
+      daySlots[0].kind = roll < 0.45 ? 'thief' : roll < 0.8 ? 'golem' : 'boom';
     }
-    if (i >= 2 && daySlots.length >= 2) {
+    if (i >= 1 && daySlots.length >= 2) {
       daySlots[1].kind = rng() < 0.5 ? 'thief' : 'golem';
     }
-    // Occasional daytime dragon swoop (robots flee indoors)
-    if (i >= 2 && cfg.mobsDay >= 1 && rng() < 0.4) {
-      daySlots.push({ t: start + (end - start) * (0.35 + rng() * 0.45), kind: 'dragon' });
-    } else if (i >= 1 && rng() < 0.22) {
-      daySlots.push({ t: start + (end - start) * (0.45 + rng() * 0.35), kind: 'dragon' });
+    // Daytime dragon swoop — common enough to notice
+    if (i >= 1 && rng() < 0.55) {
+      const tDay = i === 0 ? 145 : start + (end - start) * (0.35 + rng() * 0.45);
+      daySlots.push({ t: tDay, kind: 'dragon' });
     }
     for (const s of daySlots) list.push(s);
 
@@ -975,17 +974,13 @@ export class Game {
     for (let k = 0; k < cfg.mobsNight; k++) {
       nightSlots.push({ t: ns + 3 + ((cfg.night - 14) * (k + rng() * 0.6)) / Math.max(1, cfg.mobsNight), kind: 'boom' });
     }
-    // Mix special roles into the night (after day 0 tutorial boom)
-    if (i >= 1 && nightSlots.length >= 2) {
-      nightSlots[Math.min(1, nightSlots.length - 1)].kind = 'thief';
-    }
-    if (i >= 2 && nightSlots.length >= 3) {
-      nightSlots[Math.min(2, nightSlots.length - 1)].kind = 'golem';
-    }
-    // Dragon = surprise event mid-night from day 2 (or when farm has helpers/towers)
-    if (i >= 2 || (i >= 1 && rng() < 0.45)) {
-      list.push({ t: ns + cfg.night * (0.4 + rng() * 0.2), kind: 'dragon' });
-    }
+    // Guarantee a mixed night from day 0 — boom / thief / golem when slots allow
+    if (nightSlots.length >= 2) nightSlots[1].kind = 'thief';
+    if (nightSlots.length >= 3) nightSlots[2].kind = 'golem';
+    // Extra thief/golem on longer nights so they aren't buried under booms
+    if (nightSlots.length >= 5) nightSlots[4].kind = rng() < 0.5 ? 'thief' : 'golem';
+    // Dragon every night (the funny sky event)
+    list.push({ t: ns + cfg.night * (0.38 + rng() * 0.22), kind: 'dragon' });
     for (const s of nightSlots) list.push(s);
     if (cfg.boss) list.push({ t: ns + cfg.night * 0.35, big: true, kind: 'boom' });
     return list.sort((a, b) => a.t - b.t);
@@ -1335,11 +1330,9 @@ export class Game {
     }
     if (!best) return null;
     if (this.isNetClient()) return null; // host spawns; clients receive via sim
-    // Role gates — don't spawn pointless specialists
+    // Keep scheduled roles — never silently downgrade to boom (that hid all new pests).
     let role = kind || 'boom';
-    if (role === 'golem' && !this.turrets.some((tr) => !tr.dead)) role = 'boom';
-    if (role === 'thief' && this.crops.size === 0) role = 'boom';
-    if (role === 'dragon' && this.mobs.some((m) => m.kind === 'dragon' && !m.dead)) return null;
+    if (role === 'dragon' && this.mobs.some((m) => m.kind === 'dragon' && !m.dead)) role = 'thief';
 
     const m = this.makeMob(role, best[0], best[1], { big });
     m.netId = this._mobNetSeq++;
