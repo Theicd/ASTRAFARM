@@ -1,0 +1,23 @@
+{
+  "name": "astra-potato-farm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Astra Farm — grow crops, sell produce, hire AI helpers, defend the farm",
+  "author": "Astra Farm",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
