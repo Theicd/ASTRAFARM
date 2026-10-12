@@ -192,8 +192,10 @@ export class World {
     put(A.water[0], GY, A.water[1], B.WATER);
     put(A.water[0], GY + 1, A.water[1], B.AIR);
     put(Bf.water[0], GY, Bf.water[1], B.WATER);
-    // 小道（家から畑のあいだへ）
-    for (let z = LAYOUT.house.z1 + 1; z <= A.z1 + 1; z++) put(LAYOUT.pathX, GY, z, B.PATH);
+    // 小道（家から畑のあいだへ）— 3 wide to match the door
+    for (let z = LAYOUT.house.z1 + 1; z <= A.z1 + 1; z++) {
+      for (let dx = -1; dx <= 1; dx++) put(LAYOUT.pathX + dx, GY, z, B.PATH);
+    }
     for (let x = A.x0 - 1; x <= Bf.x1 + 1; x++) put(x, GY, A.z0 - 1, B.PATH);
 
     // Lodge — larger interior, beds for players, charging dock for robots, stairs to roof
@@ -212,9 +214,10 @@ export class World {
       [H.x1, H.z0 + 3], [H.x1, H.z0 + 5], [H.x1, H.z0 + 7],
       [hx - 3, H.z1], [hx + 3, H.z1],
     ]) put(x, GY + 2, z, B.GLASS);
-    // Door (farm side)
-    put(H.door[0], GY + 1, H.door[1], B.AIR);
-    put(H.door[0], GY + 2, H.door[1], B.AIR);
+    // Door (farm side) — 3 wide × 3 tall
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let y = GY + 1; y <= GY + 3; y++) put(H.door[0] + dx, y, H.door[1], B.AIR);
+    }
     // Flat walkable roof + low parapet (stair hatch carved below)
     for (let z = H.z0; z <= H.z1; z++) for (let x = H.x0; x <= H.x1; x++) {
       put(x, GY + 4, z, B.PLANKS);
@@ -270,7 +273,8 @@ export class World {
     // 家のまわり
     put(LAYOUT.box[0], GY + 1, LAYOUT.box[1], B.BOX);
     put(H.x1 + 2, GY + 1, H.z0 + 2, B.HAY); put(H.x1 + 2, GY + 1, H.z0 + 3, B.HAY); put(H.x1 + 2, GY + 2, H.z0 + 2, B.HAY);
-    put(hx - 1, GY + 1, H.z1 + 1, B.LANTERN); put(hx + 1, GY + 1, H.z1 + 1, B.LANTERN);
+    // Lanterns flanking the wider doorway
+    put(hx - 2, GY + 1, H.z1 + 1, B.LANTERN); put(hx + 2, GY + 1, H.z1 + 1, B.LANTERN);
     for (const [x, z] of LAYOUT.posts) { put(x, GY + 1, z, B.LOG); put(x, GY + 2, z, B.LANTERN); }
     // Path from beach-side wall toward the open southern beach
     for (let z = H.z0 - 1; z >= H.z0 - 10; z--) {
