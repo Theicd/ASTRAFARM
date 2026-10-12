@@ -101,6 +101,7 @@ export class Mesher {
       const b = BLOCKS[id];
       switch (b.shape) {
         case 'cube': case 'low': case 'half': this.cube(b.cutout ? bufs.cutout : bufs.opaque, x, y, z, id, b); break;
+        case 'stairs': this.stairs(bufs.opaque, x, y, z, b); break;
         case 'cross': this.cross(bufs.cutout, x, y, z, b); break;
         case 'crop': this.crop(bufs.cutout, x, y, z, b); break;
         case 'lantern': this.lantern(bufs.cutout, x, y, z, b); break;
@@ -212,6 +213,34 @@ export class Mesher {
       buf.quad([[x + o, yo, z], [x + o, yo, z + 1], [x + o, yo + 1, z + 1], [x + o, yo + 1, z]], uv, L);
       buf.quad([[x, yo, z + o], [x + 1, yo, z + o], [x + 1, yo + 1, z + o], [x, yo + 1, z + o]], uv, L);
     }
+  }
+
+  /**
+   * Minecraft-style L stairs. Bottom slab (full footprint) + upper tread on half the cell.
+   * stair '+z' = upper tread on the +Z half; '+x' = upper tread on the +X half.
+   */
+  stairs(buf, x, y, z, b) {
+    const [u0, v0, u1, v1] = this.tileUV(typeof b.tex === 'string' ? b.tex : 'planks');
+    const own = this.lightCell(x, y, z);
+    const lit = (sh) => {
+      const s = own[2] ? own[0] / 15 : 1, k = own[2] ? own[1] / 15 : 0;
+      return [[sh, s, k], [sh, s, k], [sh, s, k], [sh, s, k]];
+    };
+    const uv = [[u0 + INSET, v0 + INSET], [u1 - INSET, v0 + INSET], [u1 - INSET, v1 - INSET], [u0 + INSET, v1 - INSET]];
+    const box = (x0, y0, z0, x1, y1, z1) => {
+      // +Z -Z +X -X top bottom
+      buf.quad([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], uv, lit(0.85));
+      buf.quad([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], uv, lit(0.7));
+      buf.quad([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], uv, lit(0.6));
+      buf.quad([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], uv, lit(0.6));
+      buf.quad([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], uv, lit(1));
+      buf.quad([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], uv, lit(0.5));
+    };
+    // Bottom tread — full cell, half height
+    box(x, y, z, x + 1, y + 0.5, z + 1);
+    // Upper tread — half cell
+    if (b.stair === '+x') box(x + 0.5, y + 0.5, z, x + 1, y + 1, z + 1);
+    else box(x, y + 0.5, z + 0.5, x + 1, y + 1, z + 1); // default '+z'
   }
 
   lantern(buf, x, y, z) {

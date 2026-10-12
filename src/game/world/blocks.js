@@ -1,6 +1,6 @@
 // ブロックの種類。1 マスに 1 個。見た目（shape）と性質（opaque / solid / blast…）をここで決める。
-//   shape：cube（ふつうの立方体）／low（15/16 の高さ：畑・小道）／half（ベッド）／cross（草・花・サトウキビ）／
-//          crop（作物：# の形）／water／lantern（小さな箱）
+//   shape：cube（ふつうの立方体）／low（15/16 の高さ：畑・小道）／half（ベッド）／stairs（L字の階段）／
+//          cross（草・花・サトウキビ）／crop（作物：# の形）／water／lantern（小さな箱）
 //   full：隣が隠れるか　opaque：光を通さないか　solid：歩けるか（h で背の低いもの）
 //   blast：爆発で消えるか　green：アストラがこわがる緑のもの　light：明るさ（0〜15）
 
@@ -14,6 +14,9 @@ export const B = {
   CARROT0: 34, CARROT1: 35, CARROT2: 36, CARROT3: 37,
   CORN0: 38, CORN1: 39, CORN2: 40, CORN3: 41,
   APPLE: 42, // bait plant in the pig pen (cross)
+  // Wooden stairs (L-shape). stair = climb direction of the upper tread.
+  STAIRS_Z: 43, // ascends toward +Z
+  STAIRS_X: 44, // ascends toward +X
 };
 
 const cube = (tex, o = {}) => ({ shape: 'cube', tex, full: true, opaque: true, solid: true, blast: true, ...o });
@@ -71,6 +74,16 @@ BLOCKS[B.CORN2] = crop('corn', 2, 'corn2', 0x4f9a2e);
 BLOCKS[B.CORN3] = crop('corn', 3, 'corn3', 0xf0d040);
 
 BLOCKS[B.APPLE] = plant('apple', { particle: 0xd23a3a, apple: true });
+
+// L-shaped stairs (planks). solid h=1 for reliable climbing; mesh is the stair silhouette.
+BLOCKS[B.STAIRS_Z] = {
+  shape: 'stairs', tex: 'planks', full: false, opaque: false, solid: true, blast: false,
+  h: 1, stair: '+z', particle: 0xa47d4c,
+};
+BLOCKS[B.STAIRS_X] = {
+  shape: 'stairs', tex: 'planks', full: false, opaque: false, solid: true, blast: false,
+  h: 1, stair: '+x', particle: 0xa47d4c,
+};
 
 for (const d of BLOCKS) {
   if (!d) continue;

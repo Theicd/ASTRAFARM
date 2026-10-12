@@ -224,12 +224,12 @@ export class World {
       const edge = x === H.x0 || x === H.x1 || z === H.z0 || z === H.z1;
       if (edge) put(x, GY + 5, z, B.COBBLE);
     }
-    // Stairs (SE) floor → roof deck: 3 treads + open shaft, then step onto roof
+    // L-shaped plank stairs (SE) floor → roof — wider run, open shaft
     const sx = H.x1 - 2, sz0 = H.z1 - 5;
     for (let i = 0; i < 3; i++) {
       const sz = sz0 + i;
-      put(sx, GY + 1 + i, sz, B.PLANKS);
-      put(sx - 1, GY + 1 + i, sz, B.PLANKS);
+      put(sx, GY + 1 + i, sz, B.STAIRS_Z);
+      put(sx - 1, GY + 1 + i, sz, B.STAIRS_Z);
       for (let y = GY + 2 + i; y <= GY + 4; y++) {
         put(sx, y, sz, B.AIR);
         put(sx - 1, y, sz, B.AIR);

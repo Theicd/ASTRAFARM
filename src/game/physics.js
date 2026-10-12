@@ -6,15 +6,31 @@ import { WX, WZ } from './world/World.js';
 
 const EPS = 1e-4;
 
+/** Top Y of a solid block under a sample point (stairs have a lower/upper tread). */
+function solidTop(b, x, y, z, px, pz) {
+  if (b.stair === '+z') {
+    const lz = pz - z;
+    return y + (lz >= 0.5 ? 1 : 0.5);
+  }
+  if (b.stair === '+x') {
+    const lx = px - x;
+    return y + (lx >= 0.5 ? 1 : 0.5);
+  }
+  return y + b.h;
+}
+
 /** 箱に重なっているブロックを cb(x, y, z, top) で返す。 */
 function overlaps(world, x0, y0, z0, x1, y1, z1, cb) {
   const bx0 = Math.floor(x0), bx1 = Math.floor(x1 - EPS);
   const by0 = Math.floor(y0) - 1, by1 = Math.floor(y1 - EPS);
   const bz0 = Math.floor(z0), bz1 = Math.floor(z1 - EPS);
+  const mx = (x0 + x1) * 0.5, mz = (z0 + z1) * 0.5;
   for (let y = by0; y <= by1; y++) for (let z = bz0; z <= bz1; z++) for (let x = bx0; x <= bx1; x++) {
     const b = BLOCKS[world.get(x, y, z)];
     if (!b.solid) continue;
-    const top = y + b.h;
+    const top = solidTop(b, x, y, z, mx, mz);
+    // Stairs: also ignore collision with the empty half of the upper tread cell for XZ sides
+    if (b.stair && y0 + EPS >= top) continue;
     if (top > y0 + EPS && y < y1 - EPS) cb(x, y, z, top);
   }
 }
