@@ -350,6 +350,16 @@ export class Game {
     else if (ev.t === 'boom' && this.isNetClient()) this.applyNetBoom(ev);
     else if (ev.t === 'hitMob' && this.isNetHost()) this.applyNetHit(ev);
     else if (ev.t === 'endDay' && this.isNetClient()) this.endDay({ fromNet: true });
+    else if (ev.t === 'turretPlaced') this.applyNetTurret(ev);
+  }
+
+  /** Peer placed a guard tower — mirror without charging coins again. */
+  applyNetTurret(ev) {
+    const x = ev.x | 0, z = ev.z | 0;
+    for (const tr of this.turrets) {
+      if (Math.hypot(tr.x - x, tr.z - z) < 1.2) return;
+    }
+    this.spawnTurretAt(x, z, true);
   }
 
   /** Remove a pig mirrored from another peer (no payout). */
@@ -452,6 +462,20 @@ export class Game {
     const x = +ev.x || 0, y = +ev.y || 0, z = +ev.z || 0;
     const big = !!ev.big;
     const c = new THREE.Vector3(x, y, z);
+    // Host sends exact cleared voxel indices (blast is random — cannot rebuild locally).
+    if (Array.isArray(ev.cells)) {
+      const w = this.world;
+      const plane = WX * WZ;
+      const n = w.data.length;
+      for (const raw of ev.cells) {
+        const i = raw | 0;
+        if (i < 0 || i >= n) continue;
+        const bx = i % WX;
+        const bz = ((i / WX) | 0) % WZ;
+        const by = (i / plane) | 0;
+        w.set(bx, by, bz, B.AIR);
+      }
+    }
     const lb = this.lightBright(x, y + 1, z);
     this.particles.smoke(x, y, z, big ? 60 : 36, big ? 2 : 1.2, Math.max(0.35, lb), big ? 1.8 : 1.2);
     this.audio.sfx('explode', { pos: c, refDistance: 6, big, dur: big ? 1.8 : 1.2 });
@@ -805,7 +829,9 @@ export class Game {
     if (this.money < BUY.turret) { this.talk.sys('sys.noMoney'); return false; }
     if (!this.canPlaceTurret(x, z)) { this.talk.sys('sys.turretBlocked'); return false; }
     this.money -= BUY.turret;
-    return !!this.spawnTurretAt(x, z, false);
+    const ok = !!this.spawnTurretAt(x, z, false);
+    if (ok && this.online) netBroadcast({ t: 'turretPlaced', x: x | 0, z: z | 0 });
+    return ok;
   }
 
   /** 朝のアストラのひとこと（ストーリーは日ごと、エンドレスの 6 日目からは日数に合わせて）。 */
@@ -1321,6 +1347,7 @@ export class Game {
     const r = m.radius;
     const R = Math.ceil(r + 1);
     const removed = [];
+    const cleared = [];
     let lost = 0;
     const cx = Math.floor(c.x), cy = Math.floor(c.y), cz = Math.floor(c.z);
     for (let dy = -R; dy <= R; dy++) for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++) {
@@ -1339,6 +1366,7 @@ export class Game {
         if (isRipe(id) || Math.random() < 0.35) this.drops.spawn(kind, x + 0.5, y + 0.5, z + 0.5, { vy: 5 + Math.random() * 3 });
       }
       w.set(x, y, z, B.AIR);
+      cleared.push(w.idx(x, y, z));
     }
     // 支えがなくなった草・作物も消える
     for (const [x, y, z] of removed) {
@@ -1347,6 +1375,7 @@ export class Game {
         if (!needsSupport(up)) break;
         if (isCrop(up)) lost++;
         w.set(x, yy, z, B.AIR);
+        cleared.push(w.idx(x, yy, z));
       }
     }
     const lb = this.lightBright(c.x, c.y + 1, c.z);
@@ -1375,7 +1404,9 @@ export class Game {
     this.today.booms++;
     this.totals.booms++;
     this.today.lost += lost;
-    if (this.isNetHost()) netBroadcast({ t: 'boom', x: c.x, y: c.y, z: c.z, big: !!m.big });
+    if (this.isNetHost()) {
+      netBroadcast({ t: 'boom', x: c.x, y: c.y, z: c.z, big: !!m.big, cells: cleared });
+    }
     m.dead = true;
     this.removeMob(m);
     if (this.isNetHost()) this.pushNetSim(true);
