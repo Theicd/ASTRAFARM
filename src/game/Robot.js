@@ -396,7 +396,16 @@ export class Robot {
       this.checkT = 0.25;
       if (['work', 'scare'].includes(this.state) && g.robotCanPanic) {
         const m = g.nearestMob(p, true);
-        if (m && (m.dist < 8 || (m.mob.state === 'fuse' && m.dist < 12))) this.panic(m.mob);
+        if (m) {
+          const kind = m.mob.kind || 'boom';
+          const spook =
+            m.dist < 8 ||
+            (m.mob.state === 'fuse' && m.dist < 12) ||
+            (kind === 'dragon' && m.dist < 16) ||
+            (kind === 'thief' && m.dist < 10) ||
+            (kind === 'golem' && (m.mob.state === 'windup' || m.mob.state === 'smash') && m.dist < 14);
+          if (spook) this.panic(m.mob);
+        }
       }
     }
 

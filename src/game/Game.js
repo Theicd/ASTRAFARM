@@ -949,8 +949,27 @@ export class Game {
     const rng = mulberry32(((this.world?.seed || 1) ^ (i * 9973) ^ 0x5ced01) >>> 0);
     const list = [];
     const start = i === 0 ? 1e9 : 35, end = cfg.day - 15;
-    for (let k = 0; k < cfg.mobsDay; k++) list.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / cfg.mobsDay, kind: 'boom' });
-    if (i === 0) for (let k = 0; k < cfg.mobsDay; k++) list[k].t = 130 + k * 15; // 1 日目：あそびかたが済んでいなくても、ここで 1 体
+    const daySlots = [];
+    for (let k = 0; k < cfg.mobsDay; k++) {
+      daySlots.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / Math.max(1, cfg.mobsDay), kind: 'boom' });
+    }
+    if (i === 0) for (let k = 0; k < daySlots.length; k++) daySlots[k].t = 130 + k * 15; // day-1 tutorial boom
+    // Day raids too — robots panic home; mix roles after the first day
+    if (i >= 1 && daySlots.length >= 1) {
+      const roll = rng();
+      daySlots[0].kind = roll < 0.4 ? 'thief' : roll < 0.7 ? 'golem' : 'boom';
+    }
+    if (i >= 2 && daySlots.length >= 2) {
+      daySlots[1].kind = rng() < 0.5 ? 'thief' : 'golem';
+    }
+    // Occasional daytime dragon swoop (robots flee indoors)
+    if (i >= 2 && cfg.mobsDay >= 1 && rng() < 0.4) {
+      daySlots.push({ t: start + (end - start) * (0.35 + rng() * 0.45), kind: 'dragon' });
+    } else if (i >= 1 && rng() < 0.22) {
+      daySlots.push({ t: start + (end - start) * (0.45 + rng() * 0.35), kind: 'dragon' });
+    }
+    for (const s of daySlots) list.push(s);
+
     const ns = cfg.day + DUSK;
     const nightSlots = [];
     for (let k = 0; k < cfg.mobsNight; k++) {
