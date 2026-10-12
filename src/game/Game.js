@@ -33,6 +33,9 @@ import { drawFace } from './models.js';
 import { GameHud } from '../ui/GameHud.js';
 import { addGameModals, fillReport, fillEnding, fillEndless } from '../ui/GameModals.js';
 import { settings } from '../core/settings.js';
+import { startNet, stopNet, netSupported, netHooks } from '../net/SosNet.js';
+import { RemotePlayers } from '../net/RemotePlayers.js';
+import { names } from '../net/names.js';
 
 // 1 日ごとの設定：目標（収穫する数）、昼と夜の長さ（秒）、出てくる緑のアレの数
 export const DAYS = [
@@ -99,6 +102,8 @@ export class Game {
     this.lifetimeCoins = 0;
     this._alarmLit = false;
     this.seedCursor = 0;
+    this.online = false;
+    this.remotes = new RemotePlayers(scene);
 
     this.hud = new GameHud(ui, {
       atlas: this.atlas,
@@ -266,8 +271,31 @@ export class Game {
   enter_paused() { this.audio.sfx('pause'); }
   enter_dead() { this.deadT = 0; this.hud.setDead(true); this.audio.sfx('hurt', { big: true }); }
 
-  /** はじめから（あらすじを見せてから 1 日目）。 */
+  /** PLAY — online quick-play like Kart / Quake (name + matchmake + farm together). */
   start() {
+    if (this._netStarting) return;
+    if (!netSupported()) {
+      this.startSolo();
+      return;
+    }
+    if (!names.player) names.setPlayer('Farmer');
+    this._netStarting = true;
+    this.screens.setPlayBusy(true);
+    this.screens.setNetStatus(t('net.looking'));
+    this.wireNetHooks();
+    const net = startNet();
+    if (!net) {
+      this._netStarting = false;
+      this.screens.setPlayBusy(false);
+      this.startSolo();
+    }
+  }
+
+  /** Offline story start (intro → day 1). Used when net is unavailable or ?solo=1. */
+  startSolo() {
+    this.online = false;
+    stopNet();
+    this.remotes.clear();
     this.mode = 'story';
     this.tool = 'sword';
     this.player.setTool('sword');
@@ -282,10 +310,66 @@ export class Game {
     this.setState('intro');
   }
 
+  wireNetHooks() {
+    netHooks.setStatus = (text) => this.screens.setNetStatus(text);
+    netHooks.getPose = () => {
+      const p = this.player;
+      if (!p) return null;
+      const v = p.body.vel;
+      const moving = Math.hypot(v.x, v.z) > 0.4 ? 1 : 0;
+      return { x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, flags: moving };
+    };
+    netHooks.onRemotePose = (pk, x, y, z, yaw, flags) => {
+      this.remotes.upsert(pk);
+      this.remotes.applyPose(pk, x, y, z, yaw, flags);
+    };
+    netHooks.onRoster = (pk, nm, join) => {
+      if (join) {
+        this.remotes.upsert(pk, nm);
+        this.hud.chat(t('net.joined', { name: nm || 'Farmer' }), 'sys');
+      } else {
+        this.remotes.remove(pk);
+        this.hud.chat(t('net.left'), 'sys');
+      }
+    };
+    netHooks.beginFarm = () => this.beginOnlineFarm();
+  }
+
+  beginOnlineFarm() {
+    this._netStarting = false;
+    this.screens.setPlayBusy(false);
+    this.online = true;
+    netHooks.booted = true;
+    const idx = netHooks.myIdx | 0;
+    this.mode = 'story';
+    this.tool = 'sword';
+    this.player.setTool('sword');
+    this.save.data.run = null;
+    this.save.save();
+    this.newWorld();
+    this.bags = emptyBags({ potato: 6, wheat: 4, carrot: 4, corn: 3 });
+    this.money = 20; this.lifetimeCoins = 0;
+    this.powder = 0; this.green = 0;
+    this.totals = { harvest: 0, kills: 0, booms: 0, stars: 0, green: 0, wheat: 0, carrot: 0, corn: 0 };
+    this.tut = null;
+    const sp = LAYOUT.spawn;
+    const ox = (idx % 2) * 1.4 - (idx > 0 ? 0.7 : 0);
+    const oz = Math.floor(idx / 2) * 1.2;
+    this.player.reset([sp[0] + ox, sp[1], sp[2] + oz]);
+    this.startDay(0);
+    this.setState('play');
+    this.lockPointer?.();
+    this.screens.setNetStatus('');
+    this.hud.chat(t('net.welcome', { name: names.player || 'Farmer' }), 'sys');
+  }
+
   /** つづきから（その日の朝から）。 */
   continueGame() {
+    this.online = false;
+    stopNet();
+    this.remotes.clear();
     const r = this.save.data.run;
-    if (!r) { this.start(); return; }
+    if (!r) { this.startSolo(); return; }
     this.mode = 'story';
     this.loadRun(r);
     this.startDay(r.day, { fromSave: true });
@@ -319,6 +403,13 @@ export class Game {
 
   reset() {
     // タイトルへ戻るとき：世界を作り直して、タイトルの景色にする
+    this.online = false;
+    this._netStarting = false;
+    netHooks.booted = false;
+    stopNet();
+    this.remotes.clear();
+    this.screens.setPlayBusy(false);
+    this.screens.setNetStatus('');
     this.newWorld();
     this.titleMode = true;
     this.hud.clearChat();
@@ -1512,6 +1603,7 @@ export class Game {
     }
     for (const p of this.pigs) p.update(dt);
     if (!this.titleMode) this.drops.update(dt);
+    if (this.online) this.remotes.update(dt, (shared.uSky?.value ?? 1) * 15);
     this.mesher.update(this.meshBudget | 0 || 4);
   }
 

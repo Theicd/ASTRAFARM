@@ -11,12 +11,20 @@ export const he = {
 
   'title.continue': 'המשך',
   'title.start': 'התחל',
+  'title.play': 'PLAY',
+  'title.name': 'שם',
+  'title.namePh': 'השם שלך',
   'title.newGame': 'משחק חדש',
   'title.howto': 'איך משחקים',
   'title.settings': 'הגדרות',
   'title.best': 'שיא קציר: {n} יבולים',
   'title.endless': 'עונת החוף',
   'title.bestEndless': 'חוף: יום {d}, {n} יבולים',
+
+  'net.looking': 'מחפש חדר…',
+  'net.welcome': '{name} נכנס לחווה',
+  'net.joined': '{name} הצטרף',
+  'net.left': 'חקלאי עזב',
 
   'pause.title': 'השהיה',
   'pause.resume': 'המשך',

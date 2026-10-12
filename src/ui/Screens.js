@@ -6,6 +6,7 @@
 //   screens.addModal('report', html)   作品の画面を足す（data-act のボタンは onAction(act) に届く）
 import { t, applyDom, LANGS } from '../core/i18n.js';
 import { settings, QUALITIES, PAD_TYPES, MOB_GUIDES } from '../core/settings.js';
+import { names, NAME_MAX } from '../net/names.js';
 
 const opt = (v, key) => `<option value="${v}" data-i18n="${key}">${t(key)}</option>`;
 const slider = (k) => `<label class="row"><span data-i18n="settings.${k}">${t('settings.' + k)}</span>
@@ -26,7 +27,13 @@ export class Screens {
   <p class="tagline" data-i18n="game.tagline">${t('game.tagline')}</p>
   <div class="menu">
     <button data-act="continue" class="continue hidden" data-i18n="title.continue">${t('title.continue')}</button>
-    <button data-act="start" class="start" data-i18n="title.start">${t('title.start')}</button>
+    <label class="af-name">
+      <span data-i18n="title.name">${t('title.name')}</span>
+      <input class="af-name-input" type="text" maxlength="${NAME_MAX}" autocomplete="off" spellcheck="false"
+        placeholder="${t('title.namePh')}" value="${names.player.replace(/"/g, '&quot;')}">
+    </label>
+    <button data-act="start" class="start" data-i18n="title.play">${t('title.play')}</button>
+    <p class="af-net-status" aria-live="polite"></p>
     <button data-act="howto" data-i18n="title.howto">${t('title.howto')}</button>
     <button data-act="settings" data-i18n="title.settings">${t('title.settings')}</button>
   </div>
@@ -69,13 +76,32 @@ export class Screens {
 </div></section>`);
     this.title = root.querySelector('#title');
     this.modals = { pause: root.querySelector('#m-pause'), settings: root.querySelector('#m-settings'), howto: root.querySelector('#m-howto') };
+    this.netStatus = this.title.querySelector('.af-net-status');
+
+    const nameIn = this.title.querySelector('.af-name-input');
+    if (nameIn) {
+      nameIn.value = names.player;
+      nameIn.addEventListener('input', () => names.setPlayer(nameIn.value));
+      nameIn.addEventListener('blur', () => { nameIn.value = names.player; });
+      for (const ev of ['pointerdown', 'click', 'touchstart', 'keyup']) {
+        nameIn.addEventListener(ev, (e) => e.stopPropagation());
+      }
+      nameIn.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter' || e.key === 'Escape') nameIn.blur();
+      });
+    }
 
     root.addEventListener('click', (e) => {
       const b = e.target.closest('[data-act]');
       if (!b) return;
       const act = b.dataset.act;
       cb.onClick?.(act);
-      if (act === 'start') cb.onStart?.();
+      if (act === 'start') {
+        const v = root.querySelector('.af-name-input')?.value;
+        if (v != null) names.setPlayer(v);
+        cb.onStart?.();
+      }
       else if (act === 'continue') cb.onContinue?.();
       else if (act === 'howto') this.open('howto');
       else if (act === 'settings') this.open('settings');
@@ -114,12 +140,24 @@ export class Screens {
 
   showTitle(on) { this.title.classList.toggle('hidden', !on); }
 
+  setNetStatus(text) {
+    if (!this.netStatus) return;
+    this.netStatus.textContent = text || '';
+    this.netStatus.classList.toggle('on', !!text);
+  }
+
+  setPlayBusy(on) {
+    const st = this.title.querySelector('.start');
+    if (st) st.disabled = !!on;
+  }
+
   /** タイトルの「つづきから」を出すか（セーブのある作品で。main.js の onContinue とつなぐ）。 */
   setContinue(on) {
     this.title.querySelector('.continue')?.classList.toggle('hidden', !on);
     const st = this.title.querySelector('.start');
-    st.dataset.i18n = on ? 'title.newGame' : 'title.start';
-    st.textContent = t(st.dataset.i18n);
+    // PLAY always means online quick-play (Kart / Quake style). Continue = solo save.
+    st.dataset.i18n = 'title.play';
+    st.textContent = t('title.play');
   }
 
   /** タイトルの「エンドレスじゃがいモード」を出すか（5 日間をクリアしたら）。 */

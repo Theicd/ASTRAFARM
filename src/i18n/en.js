@@ -8,10 +8,18 @@ export const en = {
 
   'title.continue': 'Continue',
   'title.start': 'Start',
+  'title.play': 'PLAY',
+  'title.name': 'Name',
+  'title.namePh': 'Your name',
   'title.newGame': 'New game',
   'title.howto': 'How to play',
   'title.settings': 'Settings',
   'title.best': 'Best harvest: {n} crops',
+
+  'net.looking': 'Looking for a room…',
+  'net.welcome': '{name} entered the farm',
+  'net.joined': '{name} joined',
+  'net.left': 'A farmer left',
 
   'splash.0': "Potatoes don't explode!",
   'splash.1': 'No chests!',
