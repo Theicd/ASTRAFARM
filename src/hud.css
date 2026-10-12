@@ -57,10 +57,12 @@
 #hud .alarm.on .kozak { animation: kozakFlash 0.7s ease-in-out infinite; }
 @keyframes kozakFlash { 0%,100% { box-shadow: 0 0 0 3px #333, 0 0 14px rgba(255,40,40,0.4); } 50% { box-shadow: 0 0 0 3px #555, 0 0 28px rgba(60,200,255,0.75); } }
 
-/* Astra status — opposite side from the info panel (avoids RTL overlap) */
+/* Control-center face + status (player-count lamp docks on .net-slot) */
 #hud .robot { position: absolute; top: calc(10px + var(--safe-t)); inset-inline-end: calc(12px + var(--safe-r)); display: flex; align-items: center; gap: 0.5em;
   background: rgba(0, 0, 0, 0.45); padding: 0.3em 0.7em 0.3em 0.35em; }
-#hud .robot canvas { width: 48px; height: 36px; image-rendering: pixelated; border: 3px solid #e9e5db; background: #152038; }
+#hud .robot .rface { position: relative; flex: none; line-height: 0; }
+#hud .robot .net-slot { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+#hud .robot canvas { width: 48px; height: 36px; image-rendering: pixelated; border: 3px solid #e9e5db; background: #152038; display: block; }
 #hud .robot .rtext { display: grid; line-height: 1.25; }
 #hud .robot b { font-weight: 400; color: #8ff4ff; }
 #hud .robot .rstate { font-size: 0.85em; }
@@ -138,7 +140,7 @@
 [data-device="touch"] #hud .hearts img { width: 18px; height: 18px; }
 [data-device="touch"] #hud .robot {
   top: calc(10px + var(--safe-t));
-  left: calc(48px + var(--safe-l));
+  left: calc(12px + var(--safe-l));
   right: auto;
   inset-inline-end: auto;
 }
@@ -151,10 +153,6 @@
 }
 [data-device="touch"] #hud .chat .line { font-size: 11px; max-width: 100%; }
 [data-device="touch"] #hud { font-size: 13px; }
-[data-device="touch"] .af-net-lamp {
-  left: calc(12px + var(--safe-l));
-  right: auto;
-}
 @media (orientation: landscape) and (max-height: 500px) {
   [data-device="touch"] #hud .bottom { bottom: calc(8px + var(--safe-b)); }
   [data-device="touch"] #hud .robot {

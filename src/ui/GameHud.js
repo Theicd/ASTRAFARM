@@ -1,6 +1,7 @@
-// In-game HUD: crosshair, prompts, day/goal, warehouse (money + tower), Astra face, chat, hearts, hotbar, alarm.
+// In-game HUD: crosshair, prompts, day/goal, warehouse (money + tower), control face, chat, hearts, hotbar, alarm.
 import { t, onLangChange, applyDom } from '../core/i18n.js';
 import { glyph } from './glyphs.js';
+import { getNet } from '../net/SosNet.js';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class GameHud {
@@ -34,7 +35,7 @@ export class GameHud {
     </div>
     <div class="chat" aria-live="polite"></div>
   </div>
-  <div class="robot"><canvas width="16" height="12"></canvas><div class="rtext"><b data-i18n="name.astra">${t('name.astra')}</b><span class="rstate"></span></div></div>
+  <div class="robot"><div class="rface"><canvas width="16" height="12"></canvas><span class="net-slot" aria-hidden="true"></span></div><div class="rtext"><b data-i18n="name.astra">${t('name.astra')}</b><span class="rstate"></span></div></div>
   <div class="bottom">
     <div class="hearts">${Array.from({ length: 10 }, () => `<img alt="" src="${icon('heart_full')}">`).join('')}</div>
     <div class="slotname"></div>
@@ -83,7 +84,11 @@ export class GameHud {
     onLangChange(() => { this.prev = {}; applyDom(this.el); });
   }
 
-  show(on) { this.el.classList.toggle('hidden', !on); }
+  show(on) {
+    this.el.classList.toggle('hidden', !on);
+    // Dock / undock the online player-count badge onto the control face.
+    try { getNet()?.dockBadge?.(); } catch { /* net optional */ }
+  }
 
   _set(key, v, fn) { if (this.prev[key] !== v) { this.prev[key] = v; fn(v); } }
 

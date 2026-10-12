@@ -73,9 +73,18 @@ const LAMP_CSS = `
 .af-net-lamp.show { display: flex; }
 .af-net-lamp.on { background: #38d86b; box-shadow: 0 0 12px #38d86b; animation: none; }
 @keyframes af-lamp { 50% { opacity: 0.35; } }
-[data-device="touch"] .af-net-lamp {
-  left: calc(env(safe-area-inset-left, 0px) + 12px);
-  right: auto;
+/* Docked on control-center face — badge corner, not a second floating lamp */
+.af-net-lamp.docked {
+  position: absolute; z-index: 2;
+  top: auto; right: auto; left: auto; bottom: auto;
+  inset-inline-end: -7px; inset-block-end: -7px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  font-size: 11px; border: 2px solid #152038;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 0 8px rgba(58,160,255,0.55);
+  animation: none;
+}
+.af-net-lamp.docked.on {
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 0 8px rgba(56,216,107,0.65);
 }
 `;
 
@@ -176,11 +185,24 @@ class SosNet {
     netHooks.setStatus?.(text);
   }
 
+  /** Prefer the HUD face slot so the player count is a badge, not a second lamp. */
+  dockBadge() {
+    const slot = document.querySelector('#hud:not(.hidden) .robot .net-slot');
+    if (slot) {
+      if (this.badge.parentElement !== slot) slot.appendChild(this.badge);
+      this.badge.classList.add('docked');
+      return;
+    }
+    if (this.badge.parentElement !== document.body) document.body.appendChild(this.badge);
+    this.badge.classList.remove('docked');
+  }
+
   setLamp(on) {
     const n = this.role === 'host' ? this.humans() : this.role === 'client' ? Math.max(2, this.roster.size + 1) : 1;
     this.badge.classList.toggle('on', !!on || n > 1);
     this.badge.classList.add('show');
     this.badge.textContent = n > 1 ? String(n) : '·';
+    this.dockBadge();
   }
 
   convKey(pk) {
