@@ -85,6 +85,21 @@ export class Green {
     this.stateT += dt;
     this.hurt = Math.max(0, this.hurt - dt);
     this.stun = Math.max(0, this.stun - dt);
+    // Online clients: host drives AI; we only show the mirrored pose/state.
+    if (this.netPuppet) {
+      const p = this.body.pos;
+      if (this.state === 'emerge') {
+        const k = Math.min(1, this.stateT / 1.0);
+        this.root.position.set(p.x, p.y - (1 - k) * this.body.h * 1.1, p.z);
+      } else if (this.state === 'leave') {
+        const k = Math.min(1, this.stateT / 1.2);
+        this.root.position.set(p.x, p.y - k * this.body.h * 1.2, p.z);
+      } else {
+        this.root.position.copy(p);
+      }
+      this.animate(dt, !!this._netMoving);
+      return;
+    }
     const p = this.body.pos;
     let moving = false;
     if (this.state === 'emerge') {

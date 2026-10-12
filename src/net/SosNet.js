@@ -492,14 +492,16 @@ class SosNet {
       } else if (m.t === 'wait' && typeof m.text === 'string') {
         this.setStatus(m.text);
       } else if (m.t === 'game' && typeof m.g === 'string') {
-        netHooks.onGame?.({ t: m.g, id: m.id, from: peer.pk });
+        const { t: _t, g, ...rest } = m;
+        netHooks.onGame?.({ t: g, from: peer.pk, ...rest });
       }
       return;
     }
     if (this.role !== 'host') return;
     if (m.t === 'game' && typeof m.g === 'string') {
-      // Host applies locally then relays to every client (including echo for sender)
-      netHooks.onGame?.({ t: m.g, id: m.id, from: peer.pk });
+      // Host applies locally then relays to every other client
+      const { t: _t, g, ...rest } = m;
+      netHooks.onGame?.({ t: g, from: peer.pk, ...rest });
       for (const p of this.peers.values()) {
         if (p.open && p !== peer) this.send(p, m);
       }
@@ -707,7 +709,13 @@ export function getNet() {
   return instance;
 }
 
-/** Send a shared game event to the room (pig sold, etc.). */
+/** 'host' | 'client' | null */
+export function netRole() {
+  const r = instance?.role;
+  return r === 'host' || r === 'client' ? r : null;
+}
+
+/** Send a shared game event to the room (pig sold, sim, etc.). */
 export function netBroadcast(msg) {
   instance?.broadcastGame(msg);
 }

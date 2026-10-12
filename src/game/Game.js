@@ -34,7 +34,7 @@ import { drawFace } from './models.js';
 import { GameHud } from '../ui/GameHud.js';
 import { addGameModals, fillReport, fillEnding, fillEndless } from '../ui/GameModals.js';
 import { settings } from '../core/settings.js';
-import { startNet, stopNet, netSupported, netHooks, netBroadcast } from '../net/SosNet.js';
+import { startNet, stopNet, netSupported, netHooks, netBroadcast, netRole } from '../net/SosNet.js';
 import { RemotePlayers } from '../net/RemotePlayers.js';
 import { names } from '../net/names.js';
 
@@ -105,6 +105,9 @@ export class Game {
     this.seedCursor = 0;
     this.online = false;
     this.remotes = new RemotePlayers(scene);
+    this._mobNetSeq = 1;
+    this._netSyncT = 0;
+    this._netPhase = null;
 
     this.hud = new GameHud(ui, {
       atlas: this.atlas,
@@ -337,9 +340,16 @@ export class Game {
     netHooks.beginFarm = () => this.beginOnlineFarm();
   }
 
+  isNetHost() { return this.online && netRole() === 'host'; }
+  isNetClient() { return this.online && netRole() === 'client'; }
+
   onNetGame(ev) {
     if (!ev || !this.online) return;
     if (ev.t === 'pigSell' && ev.id != null) this.removePigNet(ev.id);
+    else if (ev.t === 'sim' && this.isNetClient()) this.applyNetSim(ev);
+    else if (ev.t === 'boom' && this.isNetClient()) this.applyNetBoom(ev);
+    else if (ev.t === 'hitMob' && this.isNetHost()) this.applyNetHit(ev);
+    else if (ev.t === 'endDay' && this.isNetClient()) this.endDay({ fromNet: true });
   }
 
   /** Remove a pig mirrored from another peer (no payout). */
@@ -348,6 +358,124 @@ export class Game {
     if (!pig || pig.dead) return;
     pig.dispose();
     this.pigs = this.pigs.filter((x) => x !== pig);
+  }
+
+  /** Host → clients: day clock + every living green. */
+  pushNetSim(force = false) {
+    if (!this.isNetHost() || this.state === 'title') return;
+    this._netSyncT = 0;
+    const mobs = this.mobs.filter((m) => !m.dead).map((m) => ({
+      id: m.netId,
+      x: +m.pos.x.toFixed(2),
+      y: +m.pos.y.toFixed(2),
+      z: +m.pos.z.toFixed(2),
+      yaw: +m.yaw.toFixed(2),
+      big: !!m.big,
+      st: m.state,
+      fuse: +(m.fuse || 0).toFixed(2),
+      hp: m.hp | 0,
+      mv: Math.hypot(m.body.vel.x, m.body.vel.z) > 0.35 ? 1 : 0,
+    }));
+    netBroadcast({
+      t: 'sim',
+      clock: +this.clock.toFixed(2),
+      phase: this.phase,
+      day: this.dayIndex | 0,
+      mobs,
+    });
+  }
+
+  applyNetSim(ev) {
+    if (typeof ev.clock === 'number') this.clock = ev.clock;
+    if (Number.isInteger(ev.day) && ev.day !== this.dayIndex && this.cfg) {
+      // Late joiner / desync — stay on current day board; clock still applies.
+    }
+    if (typeof ev.phase === 'string' && ev.phase !== this.phase) {
+      this.applyNetPhase(ev.phase);
+    }
+    const list = Array.isArray(ev.mobs) ? ev.mobs : [];
+    const seen = new Set();
+    for (const d of list) {
+      if (d == null || d.id == null) continue;
+      seen.add(d.id);
+      let m = this.mobs.find((x) => x.netId === d.id);
+      if (!m) {
+        m = new Green(this, d.x, d.z, { big: !!d.big, night: this.phase === 'night' });
+        m.netId = d.id;
+        m.netPuppet = true;
+        this.mobs.push(m);
+      }
+      m.netPuppet = true;
+      m.big = !!d.big;
+      m.body.pos.set(d.x, d.y, d.z);
+      m.yaw = d.yaw;
+      if (d.st && d.st !== m.state) {
+        m.state = d.st;
+        m.stateT = 0;
+      }
+      m.fuse = d.fuse || 0;
+      if (typeof d.hp === 'number') m.hp = d.hp;
+      m._netMoving = !!d.mv;
+      m.dead = false;
+    }
+    for (const m of [...this.mobs]) {
+      if (m.netPuppet && !seen.has(m.netId)) this.removeMob(m);
+    }
+  }
+
+  applyNetPhase(phase) {
+    const prev = this.phase;
+    this.phase = phase;
+    this._netPhase = phase;
+    if (phase === prev) return;
+    const c = this.cfg;
+    if (phase === 'dusk') {
+      this.talk.sys('sys.dusk');
+      this.talk.say('astra.dusk', { cool: 0 });
+      this.sendCrewToBed();
+    } else if (phase === 'night') {
+      this.hud.banner(t('banner.night'), t(c?.boss ? 'banner.nightSubBoss' : 'banner.nightSub'), 3.2);
+      this.audio.sfx('night');
+      this.updateMusic();
+      this.sendCrewToBed();
+    } else if (phase === 'dawn') {
+      this.talk.sys('sys.dawn');
+      this.audio.sfx('morning');
+      this.updateMusic();
+      this.wakeCrew();
+    } else if (phase === 'day' && (prev === 'dawn' || prev === 'night')) {
+      this.updateMusic();
+    }
+  }
+
+  applyNetBoom(ev) {
+    const x = +ev.x || 0, y = +ev.y || 0, z = +ev.z || 0;
+    const big = !!ev.big;
+    const c = new THREE.Vector3(x, y, z);
+    const lb = this.lightBright(x, y + 1, z);
+    this.particles.smoke(x, y, z, big ? 60 : 36, big ? 2 : 1.2, Math.max(0.35, lb), big ? 1.8 : 1.2);
+    this.audio.sfx('explode', { pos: c, refDistance: 6, big, dur: big ? 1.8 : 1.2 });
+    const pd = this.player.pos.distanceTo(c);
+    this.shake = Math.max(this.shake, Math.max(0, 1 - pd / (big ? 28 : 18)) * (big ? 1.6 : 1));
+    this.flash = Math.max(this.flash, Math.max(0, 1 - pd / 14) * 0.55);
+    const r = big ? 4.3 : 2.9;
+    const pc = this.player.pos.clone(); pc.y += 0.9;
+    const dd = pc.distanceTo(c);
+    const dmg = Math.round(Math.max(0, 1 - dd / (r * 1.9)) * (big ? 24 : 15));
+    if (dmg > 0 && this.state === 'play') {
+      this.player.damage(dmg, c);
+      this.hud.hurt(Math.min(1, 0.4 + dmg / 15));
+      this.audio.sfx('hurt');
+    }
+  }
+
+  applyNetHit(ev) {
+    const m = this.mobs.find((x) => x.netId === ev.id);
+    if (!m || m.dead) return;
+    const dmg = Math.max(1, ev.dmg | 0);
+    const from = new THREE.Vector3(+ev.x || m.pos.x, m.pos.y, +ev.z || m.pos.z);
+    m.hit(dmg, from, ev.knock || 1);
+    if (m.dead) this.onMobKilled(m, 'player');
   }
 
   beginOnlineFarm() {
@@ -701,12 +829,14 @@ export class Game {
   }
 
   buildSchedule(cfg, i) {
+    // Seeded so host/client would match if both simulated — host is authoritative online.
+    const rng = mulberry32(((this.world?.seed || 1) ^ (i * 9973) ^ 0x5ced01) >>> 0);
     const list = [];
     const start = i === 0 ? 1e9 : 35, end = cfg.day - 15;
-    for (let k = 0; k < cfg.mobsDay; k++) list.push({ t: start + ((end - start) * (k + 0.3 + Math.random() * 0.4)) / cfg.mobsDay });
+    for (let k = 0; k < cfg.mobsDay; k++) list.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / cfg.mobsDay });
     if (i === 0) for (let k = 0; k < cfg.mobsDay; k++) list[k].t = 130 + k * 15; // 1 日目：あそびかたが済んでいなくても、ここで 1 体
     const ns = cfg.day + DUSK;
-    for (let k = 0; k < cfg.mobsNight; k++) list.push({ t: ns + 3 + ((cfg.night - 14) * (k + Math.random() * 0.6)) / cfg.mobsNight });
+    for (let k = 0; k < cfg.mobsNight; k++) list.push({ t: ns + 3 + ((cfg.night - 14) * (k + rng() * 0.6)) / cfg.mobsNight });
     if (cfg.boss) list.push({ t: ns + cfg.night * 0.35, big: true });
     return list.sort((a, b) => a.t - b.t);
   }
@@ -726,6 +856,8 @@ export class Game {
   }
 
   updateDay(dt) {
+    // Clients follow the host clock/mobs — do not simulate a parallel day.
+    if (this.isNetClient()) return;
     const c = this.cfg;
     this.clock += dt;
     const k = this.clock;
@@ -748,6 +880,7 @@ export class Game {
         this.updateMusic();
         this.wakeCrew();
       }
+      if (this.isNetHost()) this.pushNetSim(true);
     }
     // 緑のアレ
     let alive = this.mobs.filter((m) => !m.dead && m.state !== 'leave').length;
@@ -804,7 +937,9 @@ export class Game {
     return this.today.goalDone ? t('obj.done') : '';
   }
 
-  endDay() {
+  endDay({ fromNet = false } = {}) {
+    if (this.isNetHost() && !fromNet) netBroadcast({ t: 'endDay' });
+    if (this.isNetClient() && !fromNet) return;
     const c = this.cfg;
     const ok = this.today.harvest >= c.goal;
     for (const m of this.mobs) m.dispose();
@@ -911,8 +1046,11 @@ export class Game {
       break;
     }
     if (!best) return null;
+    if (this.isNetClient()) return null; // host spawns; clients receive via sim
     const m = new Green(this, best[0], best[1], { big, night: this.phase === 'night' });
+    m.netId = this._mobNetSeq++;
     this.mobs.push(m);
+    if (this.isNetHost()) this.pushNetSim(true);
     // お知らせは続けて出さない（夜にまとめて来ると、チャット欄が埋まるので）
     // ガイドなし（設定）：お知らせと出てくる音を出さない（大きいのはイベントなので出す）
     const guide = settings.mobGuide !== 'off';
@@ -1237,8 +1375,10 @@ export class Game {
     this.today.booms++;
     this.totals.booms++;
     this.today.lost += lost;
+    if (this.isNetHost()) netBroadcast({ t: 'boom', x: c.x, y: c.y, z: c.z, big: !!m.big });
     m.dead = true;
     this.removeMob(m);
+    if (this.isNetHost()) this.pushNetSim(true);
     if (lost > 0 && !this.robot.state.match(/sleep|flung/)) this.talk.say('astra.farmHit', { random: true, delay: 1.6, cool: 12 });
     events.emit('explode', { lost });
   }
@@ -1526,11 +1666,17 @@ export class Game {
       const m = this.targetMob;
       const crit = pl.body.vel.y < -1 && !pl.body.onGround;
       const dmg = crit ? 2 : 1;
-      // 剣だと大きくはじき飛ばせる（ほかの持ちものでも、たたくことはできる）
-      m.hit(dmg, pl.pos, (pl.sprinting ? 1.5 : 1) * (this.tool === 'sword' ? 1 : 0.6));
+      const knock = (pl.sprinting ? 1.5 : 1) * (this.tool === 'sword' ? 1 : 0.6);
       this.audio.sfx('hit', { pos: m.pos, crit });
       const c = m.center;
       this.particles.burst(c.x - 0.3, c.y - 0.2, c.z - 0.3, crit ? 0xffffff : 0x5aa83e, crit ? 10 : 6, 1, 0.6);
+      // Online: host owns HP — clients report hits so everyone sees the same greens.
+      if (this.isNetClient() && m.netId != null) {
+        netBroadcast({ t: 'hitMob', id: m.netId, dmg, knock, x: pl.pos.x, z: pl.pos.z });
+        m.hurt = 0.35;
+        return;
+      }
+      m.hit(dmg, pl.pos, knock);
       if (m.dead) this.onMobKilled(m, 'player');
       return;
     }
@@ -1625,6 +1771,10 @@ export class Game {
     for (const p of this.pigs) p.update(dt);
     if (!this.titleMode) this.drops.update(dt);
     if (this.online) this.remotes.update(dt, (shared.uSky?.value ?? 1) * 15);
+    if (this.isNetHost() && this.state === 'play') {
+      this._netSyncT = (this._netSyncT || 0) + dt;
+      if (this._netSyncT >= 0.12) this.pushNetSim();
+    }
     this.mesher.update(this.meshBudget | 0 || 4);
   }
 

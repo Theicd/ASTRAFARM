@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { GY } from './world/World.js';
 import { solidEntityMaterial, setEntityLight } from './world/materials.js';
+import { netBroadcast } from '../net/SosNet.js';
 
 const COL = {
   plank: 0xa47d4c,
@@ -105,10 +106,18 @@ export class Turret {
       this.head.rotation.y = yaw;
       if (this.cool <= 0) {
         this.cool = 0.75;
-        best.hit(this.damage, this.root.position, 0.55);
         g.particles.sparkle(best.pos.x - 0.3, best.pos.y + 0.4, best.pos.z - 0.3, 5, 0xff8a4a);
         g.audio.sfx('hit', { pos: best.pos, pitch: 1.3 });
-        if (best.dead) g.onMobKilled(best, 'turret');
+        if (g.isNetClient?.() && best.netId != null) {
+          netBroadcast({
+            t: 'hitMob', id: best.netId, dmg: this.damage, knock: 0.55,
+            x: this.root.position.x, z: this.root.position.z,
+          });
+          best.hurt = 0.35;
+        } else {
+          best.hit(this.damage, this.root.position, 0.55);
+          if (best.dead) g.onMobKilled(best, 'turret');
+        }
       }
     } else {
       this.head.rotation.y = this.scan * 1.1;
