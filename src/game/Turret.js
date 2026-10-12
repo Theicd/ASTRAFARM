@@ -99,21 +99,6 @@ export class Turret {
     this.glow.renderOrder = 2;
     this.head.add(this.glow);
 
-    // Soft search cone that sweeps with the head (night only)
-    this.beamMat = new THREE.MeshBasicMaterial({
-      color: 0xffe0a0,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-    });
-    this.beam = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.2, 8, 1, true), this.beamMat);
-    this.beam.rotation.x = Math.PI / 2;
-    this.beam.position.set(0, 0.14, 1.85);
-    this.beam.renderOrder = 1;
-    this.head.add(this.beam);
-
     this.lamp = new THREE.PointLight(0xffc070, 0, 14, 2);
     this.lamp.position.copy(this.lens.position);
     this.head.add(this.lamp);
@@ -178,7 +163,6 @@ export class Turret {
 
     this.glowMat.opacity = night ? 0.35 + pulse * 0.25 + flash * 0.45 : flash * 0.35;
     this.glow.scale.setScalar(night ? 1 + pulse * 0.15 + flash * 0.35 : 0.7 + flash * 0.4);
-    this.beamMat.opacity = night ? 0.12 + pulse * 0.08 + flash * 0.2 : flash * 0.1;
     this.lamp.intensity = night ? 1.6 + pulse * 0.5 + flash * 2.2 : flash * 1.4;
     this.lamp.distance = night ? 14 : 6;
     this.lamp.color.setHex(flash > 0.2 ? 0xfff0c0 : 0xffb060);
@@ -195,7 +179,6 @@ export class Turret {
     this.game.scene.remove(this.root);
     for (const m of this._mats) m.dispose();
     this.glowMat.dispose();
-    this.beamMat.dispose();
     this.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
   }
 }
