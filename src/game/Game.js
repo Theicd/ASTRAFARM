@@ -28,6 +28,7 @@ import { Robot } from './Robot.js';
 import { Turret } from './Turret.js';
 import { PigGates } from './PigGates.js';
 import { Green, Pig } from './Mobs.js';
+import { Golem, CropThief, Dragon } from './Enemies.js';
 import { Drops } from './items.js';
 import { Particles, FloatTexts, selectionBox } from './fx.js';
 import { Talk } from './talk.js';
@@ -218,7 +219,12 @@ export class Game {
 
   say(key, opts) { return this.titleMode ? false : this.talk.say(key, opts); }
 
-  freshToday() { return { harvest: 0, kills: 0, booms: 0, lost: 0, goalDone: false }; }
+  freshToday() {
+    return {
+      harvest: 0, kills: 0, booms: 0, lost: 0, goalDone: false,
+      stolen: 0, turretsLost: 0, kidnapped: 0, rescued: 0,
+    };
+  }
 
   /** 読み込み：世界を作って、最初の形を作る。 */
   async init() {
@@ -352,6 +358,10 @@ export class Game {
     else if (ev.t === 'hitMob' && this.isNetHost()) this.applyNetHit(ev);
     else if (ev.t === 'endDay' && this.isNetClient()) this.endDay({ fromNet: true });
     else if (ev.t === 'turretPlaced') this.applyNetTurret(ev);
+    else if (ev.t === 'turretDown' && this.isNetClient()) {
+      const tr = this.turrets.find((x) => Math.hypot(x.x - (ev.x | 0), x.z - (ev.z | 0)) < 1.2);
+      if (tr && !tr.dead) this.onTurretDestroyed(tr);
+    }
     else if (ev.t === 'pigSpawn') this.applyNetPigSpawn(ev);
     else if (ev.t === 'world') this.applyNetWorld(ev);
   }
@@ -399,6 +409,13 @@ export class Game {
     }
   }
 
+  makeMob(kind, x, z, { big = false } = {}) {
+    if (kind === 'golem') return new Golem(this, x, z);
+    if (kind === 'thief') return new CropThief(this, x, z);
+    if (kind === 'dragon') return new Dragon(this, x, z);
+    return new Green(this, x, z, { big, night: this.phase === 'night' });
+  }
+
   /** Peer placed a guard tower — mirror without charging coins again. */
   applyNetTurret(ev) {
     const x = ev.x | 0, z = ev.z | 0;
@@ -433,10 +450,11 @@ export class Game {
       z: +m.pos.z.toFixed(2),
       yaw: +m.yaw.toFixed(2),
       big: !!m.big,
+      kind: m.kind || 'boom',
       st: m.state,
       fuse: +(m.fuse || 0).toFixed(2),
       hp: m.hp | 0,
-      mv: Math.hypot(m.body.vel.x, m.body.vel.z) > 0.35 ? 1 : 0,
+      mv: Math.hypot(m.body?.vel?.x || 0, m.body?.vel?.z || 0) > 0.35 ? 1 : 0,
     }));
     netBroadcast({
       t: 'sim',
@@ -462,13 +480,14 @@ export class Game {
       seen.add(d.id);
       let m = this.mobs.find((x) => x.netId === d.id);
       if (!m) {
-        m = new Green(this, d.x, d.z, { big: !!d.big, night: this.phase === 'night' });
+        m = this.makeMob(d.kind || 'boom', d.x, d.z, { big: !!d.big });
         m.netId = d.id;
         m.netPuppet = true;
         this.mobs.push(m);
       }
       m.netPuppet = true;
       m.big = !!d.big;
+      m.kind = d.kind || m.kind || 'boom';
       m.body.pos.set(d.x, d.y, d.z);
       m.yaw = d.yaw;
       if (d.st && d.st !== m.state) {
@@ -773,13 +792,24 @@ export class Game {
   }
 
   sendCrewToBed() {
-    this.robot.goToBed();
-    for (const h of this.helpers) h.goToBed();
+    for (const r of [this.robot, ...this.helpers]) {
+      if (r.captive || r.state === 'kidnapped') continue;
+      r.goToBed();
+    }
   }
 
   wakeCrew() {
-    this.robot.wake();
-    for (const h of this.helpers) h.wake();
+    for (const r of [this.robot, ...this.helpers]) {
+      if (r.captive || r.state === 'kidnapped') {
+        r.returnFromCaptivity();
+        continue;
+      }
+      r.wake();
+    }
+    // Mend cracked towers overnight
+    for (const tr of this.turrets) {
+      if (!tr.dead && tr.hp < tr.maxHp) tr.mend(4);
+    }
   }
 
   hoeLevel() { return hoeLevelFromStars(this.totals.stars | 0); }
@@ -919,11 +949,26 @@ export class Game {
     const rng = mulberry32(((this.world?.seed || 1) ^ (i * 9973) ^ 0x5ced01) >>> 0);
     const list = [];
     const start = i === 0 ? 1e9 : 35, end = cfg.day - 15;
-    for (let k = 0; k < cfg.mobsDay; k++) list.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / cfg.mobsDay });
+    for (let k = 0; k < cfg.mobsDay; k++) list.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / cfg.mobsDay, kind: 'boom' });
     if (i === 0) for (let k = 0; k < cfg.mobsDay; k++) list[k].t = 130 + k * 15; // 1 日目：あそびかたが済んでいなくても、ここで 1 体
     const ns = cfg.day + DUSK;
-    for (let k = 0; k < cfg.mobsNight; k++) list.push({ t: ns + 3 + ((cfg.night - 14) * (k + rng() * 0.6)) / cfg.mobsNight });
-    if (cfg.boss) list.push({ t: ns + cfg.night * 0.35, big: true });
+    const nightSlots = [];
+    for (let k = 0; k < cfg.mobsNight; k++) {
+      nightSlots.push({ t: ns + 3 + ((cfg.night - 14) * (k + rng() * 0.6)) / Math.max(1, cfg.mobsNight), kind: 'boom' });
+    }
+    // Mix special roles into the night (after day 0 tutorial boom)
+    if (i >= 1 && nightSlots.length >= 2) {
+      nightSlots[Math.min(1, nightSlots.length - 1)].kind = 'thief';
+    }
+    if (i >= 2 && nightSlots.length >= 3) {
+      nightSlots[Math.min(2, nightSlots.length - 1)].kind = 'golem';
+    }
+    // Dragon = surprise event mid-night from day 2 (or when farm has helpers/towers)
+    if (i >= 2 || (i >= 1 && rng() < 0.45)) {
+      list.push({ t: ns + cfg.night * (0.4 + rng() * 0.2), kind: 'dragon' });
+    }
+    for (const s of nightSlots) list.push(s);
+    if (cfg.boss) list.push({ t: ns + cfg.night * 0.35, big: true, kind: 'boom' });
     return list.sort((a, b) => a.t - b.t);
   }
 
@@ -958,13 +1003,19 @@ export class Game {
     }
     for (let k = 0; k < extra; k++) {
       const u = (k + 0.15 + rng() * 0.7) / Math.max(1, extra);
-      this.schedule.push({ t: ns + 5 + u * (nightLen - 18), surge: true });
+      // Extra pressure: mix roles so towers attract variety, not just booms
+      const roll = rng();
+      const kind = roll < 0.35 ? 'thief' : roll < 0.6 ? 'golem' : 'boom';
+      this.schedule.push({ t: ns + 5 + u * (nightLen - 18), surge: true, kind });
     }
     // Surprise mid-night cluster when the farm is well defended
     if (towers >= 2 && rng() < 0.65) {
       const waveT = ns + nightLen * (0.38 + rng() * 0.22);
       const n = Math.min(4, 1 + towers);
-      for (let i = 0; i < n; i++) this.schedule.push({ t: waveT + i * (0.9 + rng() * 0.4), surge: true });
+      for (let i = 0; i < n; i++) this.schedule.push({ t: waveT + i * (0.9 + rng() * 0.4), surge: true, kind: 'boom' });
+    }
+    if (towers >= 1 && !this.schedule.some((s) => s.kind === 'dragon')) {
+      this.schedule.push({ t: ns + nightLen * (0.42 + rng() * 0.15), kind: 'dragon' });
     }
     this.schedule.sort((a, b) => a.t - b.t);
     this.talk.sys('sys.turretThreat', { n: towers, mobs: targetMobs });
@@ -1029,7 +1080,7 @@ export class Game {
       // 一度に出すのは 1 体まで。多すぎるときは少し待たせる
       if ((alive >= cap && !s.big) || spawned >= 1) { s.t = Math.max(s.t, k) + (spawned ? 1.5 : 4); this.schedule.sort((a, b) => a.t - b.t); break; }
       this.schedule.shift();
-      if (this.spawnMob({ big: !!s.big })) { alive++; spawned++; }
+      if (this.spawnMob({ big: !!s.big, kind: s.kind || 'boom' })) { alive++; spawned++; }
     }
     // あそびかた（1 日目）
     this.updateTutorial();
@@ -1086,7 +1137,15 @@ export class Game {
       const b = this.save.data.endlessBest || { day: 0, harvest: 0 };
       this.save.data.endlessBest = { day: Math.max(b.day, this.dayIndex + 1), harvest: Math.max(b.harvest, this.totals.harvest) };
     }
-    const line = t(`astra.report.${ok ? 'good' : 'ok'}.${Math.floor(Math.random() * 3)}`);
+    let line = t(`astra.report.${ok ? 'good' : 'ok'}.${Math.floor(Math.random() * 3)}`);
+    if (this.today.stolen || this.today.turretsLost || this.today.kidnapped || this.today.rescued) {
+      line = t('astra.report.night', {
+        stolen: this.today.stolen | 0,
+        towers: this.today.turretsLost | 0,
+        taken: this.today.kidnapped | 0,
+        saved: this.today.rescued | 0,
+      });
+    }
     fillReport(this.screens, { day: this.dayIndex + 1, harvest: this.today.harvest, kills: this.today.kills, booms: this.today.booms, goal: c.goal, line, last, endless: this.mode === 'endless' });
     // Overnight hole fill — host broadcasts the patch so clients match
     this.syncFarm(() => this.repairAll());
@@ -1239,7 +1298,7 @@ export class Game {
     return true;
   }
 
-  spawnMob({ big = false, near = false } = {}) {
+  spawnMob({ big = false, near = false, kind = 'boom' } = {}) {
     const w = this.world;
     const pl = this.player.pos, rb = this.robot.body.pos;
     let best = null;
@@ -1257,17 +1316,79 @@ export class Game {
     }
     if (!best) return null;
     if (this.isNetClient()) return null; // host spawns; clients receive via sim
-    const m = new Green(this, best[0], best[1], { big, night: this.phase === 'night' });
+    // Role gates — don't spawn pointless specialists
+    let role = kind || 'boom';
+    if (role === 'golem' && !this.turrets.some((tr) => !tr.dead)) role = 'boom';
+    if (role === 'thief' && this.crops.size === 0) role = 'boom';
+    if (role === 'dragon' && this.mobs.some((m) => m.kind === 'dragon' && !m.dead)) return null;
+
+    const m = this.makeMob(role, best[0], best[1], { big });
     m.netId = this._mobNetSeq++;
     this.mobs.push(m);
     if (this.isNetHost()) this.pushNetSim(true);
-    // お知らせは続けて出さない（夜にまとめて来ると、チャット欄が埋まるので）
-    // ガイドなし（設定）：お知らせと出てくる音を出さない（大きいのはイベントなので出す）
     const guide = settings.mobGuide !== 'off';
-    if (big || (guide && this.time - (this.lastMobMsg ?? -99) > 10)) { this.lastMobMsg = this.time; this.talk.sys(big ? 'sys.boss' : 'sys.mob', null, 'warn'); }
-    if (guide || big) this.audio.sfx(big ? 'boss_spawn' : 'mob_spawn', { pos: m.pos, refDistance: 8 });
+    const msgKey = big ? 'sys.boss'
+      : role === 'golem' ? 'sys.golem'
+      : role === 'thief' ? 'sys.thief'
+      : role === 'dragon' ? 'sys.dragon'
+      : 'sys.mob';
+    if (big || role !== 'boom' || (guide && this.time - (this.lastMobMsg ?? -99) > 10)) {
+      this.lastMobMsg = this.time;
+      this.talk.sys(msgKey, null, 'warn');
+    }
+    if (guide || big || role !== 'boom') this.audio.sfx(big || role === 'dragon' ? 'boss_spawn' : 'mob_spawn', { pos: m.pos, refDistance: 8 });
     if (big) this.hud.banner(t('banner.boss'), t('banner.bossSub'), 3.2);
+    else if (role === 'golem') this.hud.banner(t('banner.golem'), t('banner.golemSub'), 2.6);
+    else if (role === 'thief') this.hud.banner(t('banner.thief'), t('banner.thiefSub'), 2.4);
     return m;
+  }
+
+  /** Thief clears a ripe (or any) crop without rewarding the farm. */
+  stealCrop(x, z, thief) {
+    const w = this.world;
+    const y = GY + 1;
+    const id = w.get(x, y, z);
+    if (!isCrop(id)) return 0;
+    w.set(x, y, z, B.AIR);
+    this.crops.delete(w.idx(x, y, z));
+    this.today.stolen++;
+    this.today.lost++;
+    this.particles.burst(x, y, z, 0xc4a060, 8, 1);
+    this.floats.add('-1', x + 0.5, y + 1.2, z + 0.5, '#ff8080');
+    return 1;
+  }
+
+  onThiefEscaped(thief) {
+    if (thief.loot > 0) {
+      this.talk.sys('sys.thiefEscaped', { n: thief.loot }, 'warn');
+      this.audio.sfx('hurt', { pitch: 1.4 });
+    }
+  }
+
+  onThiefDropped(thief) {
+    const n = thief.loot | 0;
+    if (n <= 0) return;
+    this.money += n * 2;
+    this.lifetimeCoins = (this.lifetimeCoins | 0) + n * 2;
+    this.floats.add('+' + (n * 2), thief.pos.x, thief.pos.y + 1.4, thief.pos.z, '#ffe080');
+    this.talk.sys('sys.thiefCaught', { n: n * 2 });
+    thief.loot = 0;
+  }
+
+  onTurretDestroyed(tr) {
+    this.today.turretsLost++;
+    this.particles.smoke(tr.root.position.x, tr.y + 1.5, tr.root.position.z, 16, 0.7);
+    this.audio.sfx('explode', { pos: tr.root.position, pitch: 0.7, dur: 0.7 });
+    this.talk.sys('sys.turretDown', null, 'warn');
+    tr.dispose();
+    this.turrets = this.turrets.filter((x) => x !== tr);
+    if (this.isNetHost()) netBroadcast({ t: 'turretDown', x: tr.x, z: tr.z });
+  }
+
+  onDragonEscaped(dragon) {
+    this.today.kidnapped++;
+    this.talk.sys('sys.dragonEscaped', null, 'warn');
+    this.audio.sfx('hurt', { pitch: 0.7 });
   }
 
   nearestMob(pos) {
@@ -1620,10 +1741,15 @@ export class Game {
     this.today.kills++;
     this.totals.kills++;
     this.removeMob(m);
-    if (by === 'player') {
-      this.talk.sys(m.big ? 'sys.bossKill' : 'sys.kill');
+    if (by === 'player' || by === 'turret') {
+      const killKey = m.big ? 'sys.bossKill'
+        : m.kind === 'golem' ? 'sys.golemKill'
+        : m.kind === 'thief' ? 'sys.thiefKill'
+        : m.kind === 'dragon' ? 'sys.dragonKill'
+        : 'sys.kill';
+      if (by === 'player') this.talk.sys(killKey);
       const rd = this.robot.body.pos.distanceTo(c);
-      if (rd < 16 && !['sleep', 'flung', 'sulk', 'toBed'].includes(this.robot.state) && (this.thankCool ?? 0) <= this.time) {
+      if (by === 'player' && rd < 16 && !['sleep', 'flung', 'sulk', 'toBed', 'kidnapped'].includes(this.robot.state) && (this.thankCool ?? 0) <= this.time) {
         this.thankCool = this.time + 25;
         this.talk.say(m.big ? 'astra.bossThanks' : 'astra.thanks', { random: !m.big, delay: 0.8, cool: 0 });
         this.stock += 1;
@@ -1716,7 +1842,7 @@ export class Game {
         if (a < ba) { ba = a; best = m; }
       }
     }
-    this.targetMob = best instanceof Green ? best : null;
+    this.targetMob = best && typeof best.hit === 'function' && !(best instanceof Pig) ? best : null;
     this.targetPig = best instanceof Pig ? best : null;
     this.targetRobot = best === this.robot;
     if (best) this.target = null;

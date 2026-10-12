@@ -18,6 +18,7 @@ const houseCell = (i) => { const x = i % WX, z = (i / WX) | 0; return x >= HOUSE
 export class Green {
   constructor(game, x, z, { big = false, night = false } = {}) {
     this.game = game;
+    this.kind = 'boom';
     this.big = big;
     this.model = createGreenModel({ big });
     this.root = this.model.root;

@@ -281,6 +281,105 @@ export function createGreenModel({ big = false } = {}) {
   return { root, scale, body, legs, mat, baseScale: s, height: 13 * PX * s, width: 10 * PX * s };
 }
 
+// ------------------------------------------------------------------ איש האבנים (גולם כבד)
+export function createGolemModel() {
+  const skin = new Skin(64, 48, 505);
+  const rock = ['#8a8680', '#7a7670', '#9a9690', '#6e6a64', '#a8a49c'];
+  const Bd = skin.boxNoise(0, 0, 14, 16, 10, rock);
+  const [fx, fy] = Bd.front;
+  // עיניים זוהרות מצחיקות
+  skin.rect(fx + 3, fy + 5, 3, 3, '#1a1208');
+  skin.rect(fx + 8, fy + 5, 3, 3, '#1a1208');
+  skin.px(fx + 4, fy + 6, '#ffd060');
+  skin.px(fx + 9, fy + 6, '#ffd060');
+  skin.rect(fx + 5, fy + 11, 4, 2, '#3a342c'); // פה קטן
+  skin.boxNoise(40, 0, 6, 8, 6, ['#6e6a64', '#8a8680']);
+  skin.boxNoise(0, 28, 5, 6, 5, rock);
+  const tex = skin.texture();
+  const mat = entityMaterial(tex);
+  const root = new THREE.Group();
+  root.name = 'golem';
+  const scale = new THREE.Group(); scale.name = 'scale'; root.add(scale);
+  const body = part('body', scale, mat, skin, { size: [14, 16, 10], uv: [0, 0], at: [0, 8, 0] });
+  const arms = [];
+  for (const [i, x] of [[0, -9], [1, 9]]) {
+    arms.push(part('arm' + i, scale, mat, skin, { size: [6, 8, 6], uv: [40, 0], at: [x, 12, 0], off: [-3, -6, -3] }));
+  }
+  const legs = [];
+  for (const [i, x] of [[0, -4], [1, 4]]) {
+    legs.push(part('leg' + i, scale, mat, skin, { size: [5, 6, 5], uv: [0, 28], at: [x, 8, 0], off: [-2.5, -6, -2.5] }));
+  }
+  const s = 1.85;
+  scale.scale.setScalar(s);
+  return { root, scale, body, arms, legs, mat, baseScale: s };
+}
+
+// ------------------------------------------------------------------ גנב הגידולים (רזה + שק)
+export function createThiefModel() {
+  const skin = new Skin(64, 32, 606);
+  const purp = ['#7a4ab0', '#6a3a9a', '#8a5ac0', '#5a2a8a'];
+  const Bd = skin.boxNoise(0, 0, 8, 10, 6, purp);
+  const [fx, fy] = Bd.front;
+  skin.rect(fx + 1, fy + 2, 2, 3, '#101018');
+  skin.rect(fx + 5, fy + 2, 2, 3, '#101018');
+  skin.px(fx + 1, fy + 2, '#fff8a0');
+  skin.px(fx + 5, fy + 2, '#fff8a0');
+  skin.rect(fx + 2, fy + 7, 4, 1, '#201028'); // חיוך ערמומי
+  skin.boxNoise(32, 0, 4, 5, 4, ['#5a2a8a', '#4a1a7a']);
+  skin.boxNoise(48, 0, 6, 6, 6, ['#c4a060', '#b09050', '#d4b070']); // sack
+  const tex = skin.texture();
+  const mat = entityMaterial(tex);
+  const root = new THREE.Group();
+  root.name = 'thief';
+  const scale = new THREE.Group(); scale.name = 'scale'; root.add(scale);
+  const body = part('body', scale, mat, skin, { size: [8, 10, 6], uv: [0, 0], at: [0, 5, 0] });
+  const legs = [];
+  for (const [i, x] of [[0, -2.5], [1, 2.5]]) {
+    legs.push(part('leg' + i, scale, mat, skin, { size: [4, 5, 4], uv: [32, 0], at: [x, 5, 0], off: [-2, -5, -2] }));
+  }
+  const sack = part('sack', scale, mat, skin, { size: [6, 6, 6], uv: [48, 0], at: [0, 8, -5], off: [-3, -3, -3] });
+  sack.visible = false;
+  const s = 1.35;
+  scale.scale.setScalar(s);
+  return { root, scale, body, legs, sack, mat, baseScale: s };
+}
+
+// ------------------------------------------------------------------ דרקון גנב (כנפיים גדולות מדי)
+export function createDragonModel() {
+  const skin = new Skin(64, 48, 707);
+  const reds = ['#e85848', '#d04838', '#f06858', '#c03830'];
+  const Bd = skin.boxNoise(0, 0, 10, 8, 12, reds);
+  const [fx, fy] = Bd.front;
+  skin.rect(fx + 2, fy + 2, 2, 2, '#101010');
+  skin.rect(fx + 6, fy + 2, 2, 2, '#101010');
+  skin.px(fx + 2, fy + 2, '#ffe080');
+  skin.px(fx + 6, fy + 2, '#ffe080');
+  skin.rect(fx + 3, fy + 5, 4, 2, '#301010'); // חיוך שובב
+  skin.px(fx + 4, fy + 5, '#fff0a0'); // שן אחת
+  skin.boxNoise(40, 0, 4, 4, 4, ['#c03830', '#a02820']);
+  skin.boxNoise(0, 24, 14, 10, 2, ['#f08870', '#e07058', '#d06048']); // wing membrane
+  const tex = skin.texture();
+  const mat = entityMaterial(tex);
+  const root = new THREE.Group();
+  root.name = 'dragon';
+  const scale = new THREE.Group(); scale.name = 'scale'; root.add(scale);
+  const body = part('body', scale, mat, skin, { size: [10, 8, 12], uv: [0, 0], at: [0, 6, 0] });
+  const head = part('head', scale, mat, skin, { size: [8, 7, 6], uv: [0, 0], at: [0, 10, 7], off: [-4, -3, -3] });
+  const wings = [];
+  for (const [i, x, yaw] of [[0, -8, 0.4], [1, 8, -0.4]]) {
+    const w = part('wing' + i, scale, mat, skin, { size: [14, 10, 2], uv: [0, 24], at: [x, 10, 0], off: [i === 0 ? -14 : 0, -5, -1] });
+    w.rotation.z = yaw;
+    wings.push(w);
+  }
+  const legs = [];
+  for (const [i, x] of [[0, -3], [1, 3]]) {
+    legs.push(part('leg' + i, scale, mat, skin, { size: [4, 4, 4], uv: [40, 0], at: [x, 6, -2], off: [-2, -4, -2] }));
+  }
+  const s = 1.55;
+  scale.scale.setScalar(s);
+  return { root, scale, body, head, wings, legs, mat, baseScale: s };
+}
+
 // ------------------------------------------------------------------ ブタ
 export function createPigModel() {
   const skin = new Skin(64, 32, 404);

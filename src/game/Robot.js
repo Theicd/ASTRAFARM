@@ -94,12 +94,53 @@ export class Robot {
   }
   get inHouse() { const p = this.body.pos; return inRect(Math.floor(p.x), Math.floor(p.z), HOUSE_IN); }
   /** 緑のアレに狙われる場所にいるか（家の中・寝ているときは狙われない）。 */
-  get exposed() { return !this.inHouse && this.state !== 'sleep'; }
+  get exposed() { return !this.inHouse && this.state !== 'sleep' && this.state !== 'kidnapped' && !this.captive; }
 
   setState(s) {
     this.state = s;
     this.stateT = 0;
     if (s !== 'work') { this.task = null; this.setHand(null); }
+  }
+
+  /** Dragon snatch — ride along until dropped or dawn. */
+  kidnapBy(dragon) {
+    this.endTask();
+    this.setState('kidnapped');
+    this.captor = dragon;
+    this.captive = false;
+    this.root.visible = true;
+    this.emote.show('!', 2);
+    this.game.say(this.helper ? 'astra.kidnapHelper' : 'astra.kidnap', { cool: 0 });
+  }
+
+  releaseKidnap(pos, rescued) {
+    this.captor = null;
+    this.captive = false;
+    this.root.visible = true;
+    if (pos) {
+      this.body.pos.set(pos.x, Math.max(GY + 1, pos.y), pos.z);
+      this.body.vel.set(0, 2, 0);
+    }
+    this.root.rotation.set(0, 0, 0);
+    if (rescued) {
+      this.setState('sulk');
+      this.sulkDur = 5;
+      this.emote.show('heart', 1.5);
+    } else {
+      this.setState('flung');
+    }
+  }
+
+  /** Morning: return from off-map captivity. */
+  returnFromCaptivity() {
+    if (!this.captive && this.state !== 'kidnapped') return false;
+    this.captor = null;
+    this.captive = false;
+    this.root.visible = true;
+    this.wake();
+    this.emote.show('sweat', 2);
+    this.game.talk.sys('sys.robotReturned');
+    return true;
   }
 
   setHand(name) { for (const [k, m] of Object.entries(this.handItems)) m.visible = k === name; }
@@ -337,6 +378,18 @@ export class Robot {
     this.talkT -= dt;
     this.checkT -= dt;
     const p = this.body.pos;
+
+    if (this.captive) {
+      this.root.visible = false;
+      return;
+    }
+    if (this.state === 'kidnapped') {
+      // Position driven by dragon; just flail
+      this.root.rotation.x += dt * 6;
+      this.root.rotation.z = Math.sin(this.t * 8) * 0.3;
+      this.animate(dt, 0);
+      return;
+    }
 
     // 緑のアレが近い → 逃げる
     if (this.checkT <= 0) {

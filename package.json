@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Spud Farm / חוות הפקעות — grow crops, sell produce, hire AI helpers, defend the farm",
+  "description": "AI Robot Farm / חוות הרובוטים AI — grow by day, defend funny night pests, hire AI helpers",
   "author": "Spud Farm",
   "license": "MIT",
   "scripts": {

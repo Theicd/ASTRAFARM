@@ -20,11 +20,14 @@ export class Turret {
   constructor(game, x, z) {
     this.game = game;
     this.dead = false;
+    this.hp = 8;
+    this.maxHp = 8;
     this.cool = 0;
     this.range = 14;
     this.damage = 1;
     this.scan = 0;
     this._muzzle = 0;
+    this._shake = 0;
     this.root = new THREE.Group();
     this.root.name = 'turret';
 
@@ -114,16 +117,48 @@ export class Turret {
     this.y = y;
   }
 
+  hit(dmg = 1) {
+    if (this.dead) return false;
+    this.hp -= dmg;
+    this._shake = 0.45;
+    this.game.particles?.burst?.(this.root.position.x - 0.3, this.y + 1.5, this.root.position.z - 0.3, 0xa47d4c, 8, 1);
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.dead = true;
+      this.game.onTurretDestroyed?.(this);
+    }
+    return true;
+  }
+
+  /** Dawn / repair patch — restore some HP if still standing. */
+  mend(amount = 3) {
+    if (this.dead) return false;
+    const before = this.hp;
+    this.hp = Math.min(this.maxHp, this.hp + amount);
+    return this.hp > before;
+  }
+
   update(dt) {
     const g = this.game;
+    if (this.dead) return;
     this.cool = Math.max(0, this.cool - dt);
     this._muzzle = Math.max(0, this._muzzle - dt * 5);
+    this._shake = Math.max(0, this._shake - dt);
     this.scan += dt;
-    let best = null, bestD = this.range;
+    {
+      const crack = 1 - this.hp / this.maxHp;
+      const shake = this._shake > 0 ? Math.sin(this.scan * 40) * 0.1 * this._shake : 0;
+      this.root.rotation.z = crack * 0.12 + shake;
+    }
+    let best = null, bestScore = Infinity;
     for (const m of g.mobs) {
       if (m.dead || m.state === 'leave') continue;
       const d = Math.hypot(m.pos.x - this.root.position.x, m.pos.z - this.root.position.z);
-      if (d < bestD) { bestD = d; best = m; }
+      if (d > this.range) continue;
+      // Prefer tower-breakers and flyers when in range
+      const pri = m.kind === 'golem' ? 0.55 : m.kind === 'dragon' ? 0.7 : 1;
+      const score = d * pri;
+      if (score < bestScore) { bestScore = score; best = m; }
     }
     if (best) {
       const yaw = Math.atan2(best.pos.x - this.root.position.x, best.pos.z - this.root.position.z);
