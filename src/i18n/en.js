@@ -227,6 +227,7 @@ export const en = {
   'banner.day': 'Day {n}',
   'banner.night': 'Night has come',
   'banner.nightSub': 'Field crew is indoors. Protect the farm',
+
   'banner.nightSubBoss': '…something big is coming',
   'banner.goal': 'Goal reached!',
   'banner.boss': 'Big Green Thing',
@@ -239,6 +240,8 @@ export const en = {
   'sys.kill': 'Drove off a Green Thing!',
   'sys.bossKill': 'Defeated the Big Green Thing!',
   'sys.dusk': 'The sun is setting…',
+  'sys.turretThreat': 'ALERT: {n} towers — night brings ~{mobs} hostiles, and it lasts longer!',
+  'banner.nightSubTowers': 'The towers drew attention — a big wave is coming!',
   'sys.dawn': 'In the morning light, the Green Things went home',
   'sys.noSeed': 'No seeds left!',
   'sys.full': 'Health is full',

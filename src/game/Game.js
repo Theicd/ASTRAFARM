@@ -496,7 +496,13 @@ export class Game {
       this.talk.say('astra.dusk', { cool: 0 });
       this.sendCrewToBed();
     } else if (phase === 'night') {
-      this.hud.banner(t('banner.night'), t(c?.boss ? 'banner.nightSubBoss' : 'banner.nightSub'), 3.2);
+      const towers = this.turrets.length;
+      const sub = c?.boss
+        ? t('banner.nightSubBoss')
+        : towers > 0
+          ? t('banner.nightSubTowers', { n: towers })
+          : t('banner.nightSub');
+      this.hud.banner(t('banner.night'), sub, 3.2);
       this.audio.sfx('night');
       this.updateMusic();
       this.sendCrewToBed();
@@ -737,9 +743,11 @@ export class Game {
   // ------------------------------------------------------------------ 1 日
   startDay(i, { fromSave = false, endlessStart = false, endlessHello = false } = {}) {
     this.dayIndex = i;
-    this.cfg = this.dayConfig(i);
+    // Copy — dusk may extend night for turret threat without mutating DAYS[].
+    this.cfg = { ...this.dayConfig(i) };
     this.clock = 0;
     this.phase = 'day';
+    this._turretNightApplied = false;
     this.today = this.freshToday();
     for (const m of this.mobs) m.dispose();
     this.mobs = [];
@@ -919,6 +927,49 @@ export class Game {
     return list.sort((a, b) => a.t - b.t);
   }
 
+  /**
+   * More guard towers → louder nights: roughly +100% night mobs per tower
+   * (1 tower ≈ double the base wave) and a longer night. Applied at dusk so
+   * towers built the same day still count. Keeps the arcade tension climbing.
+   */
+  applyTurretNightPressure() {
+    if (this._turretNightApplied || !this.cfg) return;
+    this._turretNightApplied = true;
+    const towers = this.turrets.length;
+    if (towers <= 0) return;
+
+    const baseNight = this.cfg.night;
+    const baseMobs = this.cfg.mobsNight | 0;
+    const mobMult = 1 + towers; // 1→×2, 2→×3, 3→×4…
+    const targetMobs = Math.min(28, Math.max(baseMobs, Math.round(baseMobs * mobMult)));
+    const extra = Math.max(0, targetMobs - baseMobs);
+    // ~45% longer night per tower (capped) so the extra wave has room to breathe
+    const nightBoost = Math.min(110, Math.round(baseNight * 0.45 * towers));
+    this.cfg = { ...this.cfg, night: baseNight + nightBoost, mobsNight: targetMobs };
+
+    const rng = mulberry32(((this.world?.seed || 1) ^ (this.dayIndex * 4243) ^ (towers * 9176) ^ 0xa11e) >>> 0);
+    const ns = this.cfg.day + DUSK;
+    const nightLen = this.cfg.night;
+    // Stretch already-scheduled night spawns across the longer night
+    for (const s of this.schedule) {
+      if (s.t < ns || s.big) continue;
+      const u = (s.t - ns) / Math.max(1, baseNight - 8);
+      s.t = ns + 3 + Math.max(0, Math.min(0.95, u)) * (nightLen - 14);
+    }
+    for (let k = 0; k < extra; k++) {
+      const u = (k + 0.15 + rng() * 0.7) / Math.max(1, extra);
+      this.schedule.push({ t: ns + 5 + u * (nightLen - 18), surge: true });
+    }
+    // Surprise mid-night cluster when the farm is well defended
+    if (towers >= 2 && rng() < 0.65) {
+      const waveT = ns + nightLen * (0.38 + rng() * 0.22);
+      const n = Math.min(4, 1 + towers);
+      for (let i = 0; i < n; i++) this.schedule.push({ t: waveT + i * (0.9 + rng() * 0.4), surge: true });
+    }
+    this.schedule.sort((a, b) => a.t - b.t);
+    this.talk.sys('sys.turretThreat', { n: towers, mobs: targetMobs });
+  }
+
   get dayLength() { return this.cfg.day + DUSK + this.cfg.night + DAWN; }
   get isNightish() { return this.phase === 'dusk' || this.phase === 'night'; }
   get robotCanPanic() { return !this.titleMode; }
@@ -943,11 +994,18 @@ export class Game {
     if (phase !== this.phase) {
       this.phase = phase;
       if (phase === 'dusk') {
+        this.applyTurretNightPressure();
         this.talk.sys('sys.dusk');
         this.talk.say('astra.dusk', { cool: 0 });
         this.sendCrewToBed();
       } else if (phase === 'night') {
-        this.hud.banner(t('banner.night'), t(c.boss ? 'banner.nightSubBoss' : 'banner.nightSub'), 3.2);
+        const towers = this.turrets.length;
+        const sub = c.boss
+          ? t('banner.nightSubBoss')
+          : towers > 0
+            ? t('banner.nightSubTowers', { n: towers })
+            : t('banner.nightSub');
+        this.hud.banner(t('banner.night'), sub, 3.2);
         this.audio.sfx('night');
         this.updateMusic();
         this.sendCrewToBed();
@@ -960,9 +1018,10 @@ export class Game {
       }
       if (this.isNetHost()) this.pushNetSim(true);
     }
-    // 緑のアレ
+    // 緑のアレ — night cap rises with towers so the bigger waves can actually land
     let alive = this.mobs.filter((m) => !m.dead && m.state !== 'leave').length;
-    const cap = phase === 'night' ? 5 : 3;
+    const towers = this.turrets.length;
+    const cap = phase === 'night' ? Math.min(14, 5 + towers * 2) : 3;
     let spawned = 0;
     while (this.schedule.length && k >= this.schedule[0].t) {
       if (phase === 'dawn') { this.schedule.shift(); continue; }
