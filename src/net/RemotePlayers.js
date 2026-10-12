@@ -108,7 +108,9 @@ export class RemotePlayers {
       while (dy < -Math.PI) dy += Math.PI * 2;
       r.yaw += dy * (1 - Math.exp(-10 * dt));
       r.root.position.copy(r.pos);
-      r.root.rotation.y = r.yaw;
+      // Player yaw: look dir = (-sin y, -cos y). Astra model faces +Z like Robot,
+      // so add π or remotes show their back to the direction they are looking.
+      r.root.rotation.y = r.yaw + Math.PI;
       const walk = r.moving ? Math.sin(r.t * 10) * 0.35 : 0;
       const { legL, legR, armL, armR } = r.model.parts;
       legL.rotation.x = walk;
