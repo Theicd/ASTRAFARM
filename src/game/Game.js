@@ -138,7 +138,7 @@ export class Game {
     renderer.setLook({ exposure: 1, bloomStrength: 0.32, bloomRadius: 0.4, bloomThreshold: 0.92, vignette: 0.22, saturation: 1.06, contrast: 1.02 });
     this.meshBudget = 4;
     this.particleScale = 1;
-    this.fogFar = 125; // keep offshore ships / horizon readable by day
+    this.fogFar = 220; // deep-water ships stay readable on the horizon
     const applyPerf = (p = {}) => {
       this.meshBudget = p.meshBudget ?? 4;
       this.particleScale = p.particleScale ?? 1;

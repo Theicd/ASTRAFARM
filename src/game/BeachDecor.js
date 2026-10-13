@@ -245,54 +245,43 @@ export class BeachDecor {
       liner: 10.64, linerSmall: 10.64, shipLarge: 6.55, shipSmall: 5.3,
     };
 
-    // Real shore: first column that is no longer sand/grass (open sea sheet).
-    const shoreAt = (x) => {
-      const ix = Math.max(1, Math.min(95, Math.floor(x)));
-      const w = this.game.world;
-      for (let z = (LAYOUT.beach?.z0 ?? 60); z < WZ; z++) {
-        const ground = w.get(ix, GY, z);
-        if (ground === B.SAND || ground === B.GRASS || ground === B.PATH || ground === B.PLANKS || ground === B.FARM || ground === B.FARM_WET || ground === B.DIRT) continue;
-        return z;
-      }
-      return waterLine;
-    };
     // Same height as the ocean plane in Sky.js
     const seaY = SEA - 1 + 14 / 16 - 0.02;
 
-    // Ocean sheet continues past the map, so boats may sit beyond WZ.
+    // Scattered field: flanks close in, center stays open, big ships far out.
     // [key, x, blocks past shore, length, yaw]
     const spots = [
-      ['fish', xMid - 34, 8, 3.4, 0.4],
-      ['rowSmall', xMid - 18, 6, 3.2, -0.2],
-      ['fan', xMid - 4, 11, 3.4, 0.15],
-      ['speedA', xMid + 12, 7, 3.6, -0.35],
-      ['sail', xMid + 28, 10, 4.2, 0.25],
-      ['tugC', xMid + 42, 8, 3.4, -0.1],
+      ['speedA', xMid - 55, 16, 3.2, 0.7],
+      ['rowSmall', xMid + 52, 22, 3.0, -0.55],
+      ['fish', xMid - 78, 30, 3.2, 0.25],
+      ['fan', xMid + 74, 26, 3.3, -0.9],
 
-      ['row', xMid - 40, 20, 3.6, 0.5],
-      ['speedB', xMid - 22, 24, 3.8, -0.4],
-      ['sailB', xMid - 6, 18, 4.4, 0.1],
-      ['tug', xMid + 10, 22, 3.8, -0.25],
-      ['speedE', xMid + 26, 19, 3.6, 0.45],
-      ['tugA', xMid + 40, 26, 4.0, -0.15],
+      ['sail', xMid - 36, 55, 4.6, 0.4],
+      ['tug', xMid + 40, 62, 4.2, -0.25],
+      ['speedB', xMid - 88, 48, 3.6, 1.05],
+      ['speedE', xMid + 90, 58, 3.6, -1.15],
+      ['sailB', xMid - 12, 78, 4.8, 0.18],
+      ['row', xMid + 18, 88, 3.8, -0.42],
+      ['tugC', xMid - 64, 96, 4.0, 0.6],
+      ['tugA', xMid + 66, 104, 4.2, -0.5],
 
-      ['houseA', xMid - 36, 36, 5.0, 0.2],
-      ['houseC', xMid - 16, 42, 5.2, -0.3],
-      ['tow', xMid + 2, 34, 5.4, 0.05],
-      ['houseB', xMid + 20, 40, 5.2, -0.2],
-      ['houseD', xMid + 38, 36, 5.0, 0.35],
+      ['houseA', xMid - 48, 130, 6.2, 0.35],
+      ['houseD', xMid + 50, 145, 6.0, -0.28],
+      ['tow', xMid - 20, 160, 6.6, 0.12],
+      ['houseC', xMid + 24, 175, 6.4, -0.16],
+      ['houseB', xMid - 70, 150, 6.0, 0.45],
 
-      ['cargoC', xMid - 30, 54, 6.5, 0.12],
-      ['shipSmall', xMid - 8, 60, 6.2, -0.18],
-      ['cargoA', xMid + 14, 52, 7.0, 0.08],
-      ['linerSmall', xMid + 36, 58, 7.5, -0.1],
-      ['cargoB', xMid - 20, 72, 7.2, 0.16],
-      ['shipLarge', xMid + 6, 76, 8.0, -0.06],
-      ['liner', xMid + 28, 74, 8.5, 0.1],
+      ['cargoC', xMid + 58, 190, 8.5, -0.2],
+      ['shipSmall', xMid - 30, 210, 8.0, 0.14],
+      ['cargoA', xMid + 10, 230, 9.5, -0.06],
+      ['linerSmall', xMid - 8, 255, 11, 0.08],
+      ['cargoB', xMid + 42, 240, 9.0, 0.22],
+      ['shipLarge', xMid - 46, 270, 12, -0.1],
+      ['liner', xMid + 28, 290, 13, 0.05],
     ];
 
     for (const [key, x, past, len, yaw] of spots) {
-      const shore = Math.max(shoreAt(x), waterLine);
+      const shore = waterLine;
       const raw = (halfZ[key] || 2) * 2;
       const scale = len / raw;
       const hz = (halfZ[key] || 2) * scale;
