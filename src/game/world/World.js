@@ -303,7 +303,9 @@ export class World {
       const Fz = LAYOUT.farmZone;
       const lawnZ1 = Fz.z1 + 12; // protected green — never sand
       const sandStart = lawnZ1 + 1;
-      const depth = 22; // wide beach into the sea
+      // Leave a real open-water belt to the world edge for the offshore fleet
+      // (WZ=96 → sand must end ~80 so ships fit at z 82–94)
+      const depth = 12;
       const xMid = LAYOUT.pathX;
       const halfW = 28;
       const hy = GY;
