@@ -24,11 +24,18 @@ function adaptGltf(root, mats) {
     if (!o.isMesh) return;
     const srcs = Array.isArray(o.material) ? o.material : [o.material];
     const next = srcs.map((src) => {
-      const map = src?.map || null;
+      // Kenney packs paint via colormap atlas — keep the map or they go white/garbage
+      let map = src?.map || null;
+      if (map) {
+        map = map.clone();
+        map.colorSpace = THREE.SRGBColorSpace;
+        map.flipY = false;
+        map.needsUpdate = true;
+      }
       const hex = src?.color ? src.color.getHex() : 0xffffff;
       const m = map
-        ? mapEntityMaterial(map, { colorHex: hex, shade: 1.05 })
-        : solidEntityMaterial(hex === 0xffffff ? 0xb0b8c0 : hex, { shade: 1.0 });
+        ? mapEntityMaterial(map, { colorHex: 0xffffff, shade: 1.08 })
+        : solidEntityMaterial(hex === 0xffffff ? 0x6a7380 : hex, { shade: 1.05 });
       mats.push(m);
       return m;
     });
@@ -165,25 +172,6 @@ function makeSailboat(mats, scale = 1) {
   return g;
 }
 
-/** Big readable freighter silhouette for the daytime horizon. */
-function makeHorizonFreighter(mats, scale = 1) {
-  const g = new THREE.Group();
-  const hull = mat(0x2f3848, 1.08);
-  const red = mat(0xa83828, 1.1);
-  const bridge = mat(0xe8ecf0, 1.12);
-  const stack = mat(0x1a1e24, 1.05);
-  const contA = mat(0xc9a040, 1.1);
-  const contB = mat(0x2a70b8, 1.1);
-  box(g, mats, 10, 1.5, 2.6, 0, 0.55, 0, hull);
-  box(g, mats, 10.3, 0.4, 2.7, 0, -0.05, 0, red);
-  box(g, mats, 2.6, 2.0, 2.2, -3.0, 2.0, 0, bridge);
-  box(g, mats, 0.55, 1.6, 0.55, -2.5, 3.4, 0, stack);
-  box(g, mats, 4.0, 1.1, 2.0, 1.6, 1.5, 0, contA);
-  box(g, mats, 1.5, 1.1, 2.0, 4.0, 1.5, 0, contB);
-  g.scale.setScalar(scale);
-  return g;
-}
-
 /** Simple seagull — white body, grey wings (procedural, always visible). */
 function makeSeagull(mats) {
   const g = new THREE.Group();
@@ -223,6 +211,9 @@ export class BeachDecor {
     const files = {
       cargoA: 'ship_cargo.glb',
       cargoB: 'ship_cargo_b.glb',
+      sail: 'boat_sail.glb',
+      tug: 'boat_tug.glb',
+      row: 'boat_row.glb',
       palm: 'tree_palm_detailed_tall.glb',
       palmBend: 'tree_palm_bend.glb',
       palmTall: 'tree_palm_tall.glb',
@@ -253,9 +244,10 @@ export class BeachDecor {
     const loadId = ++this._loadId;
     this._placeBeachResort();
     this._placeSeagulls();
-    this._placeOffshoreFleet(); // procedural — always visible, no water-check trap
+    // Kenney watercraft ONLY — wait for GLBs, then park them offshore
     this._ensureTemplates().then(() => {
       if (loadId !== this._loadId) return;
+      this._placeKenneyFleet();
       this._placeKenneyPalms();
     });
   }
@@ -407,38 +399,42 @@ export class BeachDecor {
     }
   }
 
-  /**
-   * Always place a daytime offshore fleet with procedural models.
-   * (Kenney GLBs + strict sand-clearance previously deleted every ship.)
-   */
-  _placeOffshoreFleet() {
-    const mats = this._mats;
+  /** Original Kenney Watercraft Kit ships — same models, parked past the waterline. */
+  _placeKenneyFleet() {
     const xMid = LAYOUT.pathX;
     const waterLine = LAYOUT.waterLineZ ?? ((LAYOUT.beach?.z1 ?? LAYOUT.farmZone.z1 + 30) + 1);
-    const midZ = Math.min(WZ - 6, waterLine + 8);
-    const farZ = Math.min(WZ - 3, waterLine + 14);
-    const horizonZ = Math.min(WZ - 2, Math.max(farZ + 2, WZ - 4));
+    // Clear of sand shelf; still inside fog so they're visible by day
+    const midZ = Math.min(WZ - 7, waterLine + 7);
+    const farZ = Math.min(WZ - 4, waterLine + 13);
+    const horizonZ = Math.min(WZ - 3, Math.max(farZ + 2, WZ - 5));
 
-    const add = (mesh, x, y, z, yaw, bob = 0.06) => {
+    const add = (key, x, z, scale, yaw, bob = 0.05) => {
+      let mesh = this._clone(key, scale);
+      // Fallback only if a GLB failed to load — prefer Kenney always
+      if (!mesh && (key === 'sail' || key === 'row')) mesh = makeSailboat(this._mats, scale * 0.55);
+      if (!mesh) return;
+      const y = SEA - 0.08;
       mesh.position.set(x, y, z);
       mesh.rotation.y = yaw;
       this.root.add(mesh);
       this._ships.push({ mesh, baseY: y, phase: Math.random() * 6, bob });
     };
 
-    // Mid-sea sailboats (clear of sand shelf)
-    add(makeSailboat(mats, 1.35), xMid - 16, SEA - 0.05, midZ, 0.5);
-    add(makeSailboat(mats, 1.15), xMid + 2, SEA - 0.05, midZ + 2, -0.35);
-    add(makeSailboat(mats, 1.45), xMid + 16, SEA - 0.05, midZ + 1, 0.2);
+    // Mid-distance sailboats + small craft (Kenney boat_sail / row / tug)
+    add('sail', xMid - 15, midZ, 2.8, 0.45);
+    add('sail', xMid + 3, midZ + 2, 2.4, -0.3);
+    add('sail', xMid + 17, midZ + 1, 3.0, 0.15);
+    add('row', xMid - 5, midZ + 3, 2.2, 0.9);
+    add('tug', xMid + 10, midZ + 4, 2.5, -0.5);
 
-    // Larger freighters further out — dark silhouette cuts through fog
-    add(makeHorizonFreighter(mats, 1.4), xMid - 22, SEA + 0.1, farZ, 0.12, 0.05);
-    add(makeHorizonFreighter(mats, 1.7), xMid + 6, SEA + 0.1, farZ + 1, -0.06, 0.05);
-    add(makeHorizonFreighter(mats, 1.25), xMid + 28, SEA + 0.1, farZ, 0.22, 0.05);
+    // Cargo freighters further out (Kenney ship_cargo)
+    add('cargoA', xMid - 20, farZ, 3.2, 0.1, 0.04);
+    add('cargoB', xMid + 5, farZ + 1, 3.6, -0.05, 0.04);
+    add('cargoA', xMid + 26, farZ, 2.8, 0.2, 0.04);
 
-    // Tiny horizon dots even farther (readable blocks)
-    add(makeHorizonFreighter(mats, 0.85), xMid - 10, SEA + 0.15, horizonZ, 0.05, 0.04);
-    add(makeSailboat(mats, 0.9), xMid + 18, SEA - 0.02, horizonZ - 1, -0.4, 0.05);
+    // Horizon silhouettes
+    add('cargoB', xMid - 8, horizonZ, 2.2, 0.08, 0.035);
+    add('sail', xMid + 16, horizonZ - 1, 2.0, -0.35, 0.04);
   }
 
   _placeKenneyPalms() {
