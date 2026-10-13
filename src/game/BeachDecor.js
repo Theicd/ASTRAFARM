@@ -85,34 +85,26 @@ function canvasTex(key, draw, repeat = 2) {
 
 function clothTexture() {
   return canvasTex('cloth', (g, w, h) => {
-    g.fillStyle = '#f4f1ea';
+    g.fillStyle = '#f7f3ea';
     g.fillRect(0, 0, w, h);
-    for (let y = 0; y < h; y += 10) {
-      g.fillStyle = y % 20 === 0 ? 'rgba(40,40,40,0.28)' : 'rgba(255,255,255,0.35)';
-      g.fillRect(0, y, w, 4);
+    for (let y = 0; y < h; y += 16) {
+      g.fillStyle = 'rgba(25,25,25,0.55)';
+      g.fillRect(0, y, w, 7);
     }
-    g.strokeStyle = 'rgba(0,0,0,0.08)';
-    for (let x = 0; x < w; x += 4) {
-      g.beginPath();
-      g.moveTo(x, 0);
-      g.lineTo(x, h);
-      g.stroke();
-    }
-  }, 3);
+  }, 1);
 }
 
 function woodTexture() {
   return canvasTex('wood', (g, w, h) => {
-    g.fillStyle = '#c48a4a';
+    g.fillStyle = '#c48945';
     g.fillRect(0, 0, w, h);
-    for (let y = 0; y < h; y += 7) {
-      g.strokeStyle = `rgba(90,48,18,${0.15 + (y % 3) * 0.08})`;
-      g.beginPath();
-      g.moveTo(0, y);
-      g.bezierCurveTo(w * 0.3, y + 2, w * 0.7, y - 2, w, y + 1);
-      g.stroke();
+    for (let y = 0; y < h; y += 9) {
+      g.fillStyle = y % 18 === 0 ? 'rgba(70,35,12,0.55)' : 'rgba(255,220,160,0.18)';
+      g.fillRect(0, y, w, 3);
     }
-  }, 2);
+    g.fillStyle = 'rgba(60,30,10,0.35)';
+    for (let x = 10; x < w; x += 28) g.fillRect(x, 0, 2, h);
+  }, 1);
 }
 
 /** Kenney parasol atlas is flat color cells. Paint stripes into it so the canopy reads as cloth. */
@@ -140,17 +132,48 @@ function detailedAtlas(image) {
 
 function leafTexture() {
   return canvasTex('leaf', (g, w, h) => {
-    g.fillStyle = '#2fbf7a';
+    g.fillStyle = '#37c56e';
     g.fillRect(0, 0, w, h);
-    g.strokeStyle = 'rgba(10,70,30,0.45)';
-    g.lineWidth = 2;
-    for (let x = 8; x < w; x += 18) {
-      g.beginPath();
-      g.moveTo(x, 0);
-      g.lineTo(x - 6, h);
-      g.stroke();
+    g.fillStyle = '#1e8a45';
+    for (let x = 0; x < w; x += 14) g.fillRect(x, 0, 5, h);
+    g.fillStyle = '#d7f5a8';
+    g.fillRect(w * 0.46, 0, 4, h);
+  }, 1);
+}
+
+/** Kenney chairs/palms ship UVs in a huge range, so a normal texture smears to one color. */
+function projectUVs(mesh, mode) {
+  const src = mesh.geometry;
+  if (!src?.attributes?.position) return;
+  const old = src.attributes.uv;
+  if (old) {
+    let min = Infinity;
+    let max = -Infinity;
+    const n = Math.min(old.count, 300);
+    for (let i = 0; i < n; i++) {
+      min = Math.min(min, old.getX(i), old.getY(i));
+      max = Math.max(max, old.getX(i), old.getY(i));
     }
-  }, 2);
+    if (max - min < 3) return;
+  }
+  const geo = src.clone();
+  mesh.geometry = geo;
+  const pos = geo.attributes.position;
+  let uv = geo.attributes.uv;
+  if (!uv) {
+    uv = new THREE.BufferAttribute(new Float32Array(pos.count * 2), 2);
+    geo.setAttribute('uv', uv);
+  }
+  const scale = mode === 'leaf' ? 2.4 : mode === 'bark' ? 3.2 : 2.2;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    if (mode === 'bark') uv.setXY(i, x * scale, y * scale);
+    else if (mode === 'leaf') uv.setXY(i, x * scale, z * scale);
+    else uv.setXY(i, x * scale, z * scale + y * 0.35);
+  }
+  uv.needsUpdate = true;
 }
 
 function dressPalm(group) {
@@ -160,9 +183,10 @@ function dressPalm(group) {
   group.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const leafy = mats.some((m) => (m.name || '').toLowerCase().includes('leaf'));
+    projectUVs(o, leafy ? 'leaf' : 'bark');
     for (const m of mats) {
-      const name = (m.name || '').toLowerCase();
-      m.map = name.includes('leaf') ? leaf : bark;
+      m.map = leafy ? leaf : bark;
       m.color.set(0xffffff);
       m.needsUpdate = true;
     }
@@ -183,12 +207,14 @@ function dressFurniture(group, hex) {
         m.map = detailedAtlas(m.map.image);
         m.color.set(0xffffff);
       } else if (name.includes('wood')) {
+        projectUVs(o, 'seat');
         m.map = wood;
         m.color.set(0xffffff);
       } else if (name.includes('metal')) {
         m.map = null;
         m.color.set(0x9aa3ab);
       } else {
+        projectUVs(o, 'seat');
         m.map = cloth;
         m.color.copy(tint);
       }
