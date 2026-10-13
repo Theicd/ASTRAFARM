@@ -296,36 +296,24 @@ export class World {
       }
     }
 
-    // ── Beach INTO THE OCEAN only ──
-    // HARD RULE: never turn grass / farm / lawn into sand.
-    // Green lawn stays from the lodge through the fields and a wide belt past them.
-    // Sand shelf = water columns raised seaward (island grows forward into the sea).
+    // ── Beach shelf PAST the green lawn, expanding INTO the sea ──
+    // Lawn (house → fields → belt) stays grass forever.
+    // Past lawnZ1 we FORCE a wide flat sand pad (convert leftover island grass + water).
     {
       const Fz = LAYOUT.farmZone;
-      const lawnZ1 = Fz.z1 + 12; // green growing/lawn belt past the fields — DO NOT SAND
+      const lawnZ1 = Fz.z1 + 12; // protected green — never sand
       const sandStart = lawnZ1 + 1;
-      const depth = 16; // push beach forward into the water
+      const depth = 22; // wide beach into the sea
       const xMid = LAYOUT.pathX;
-      const halfW = 26;
+      const halfW = 28;
       const hy = GY;
 
-      const isProtected = (id) =>
-        id === B.GRASS || id === B.PATH || id === B.DIRT || id === B.COBBLE
-        || id === B.FARM || id === B.FARM_WET || id === B.PLANKS || id === B.LOG
-        || id === B.BOX || id === B.BED || id === B.BED_FOOT || id === B.HAY;
-
-      const inLawn = (x, z) =>
-        z <= lawnZ1
-        || inRect(x, z, LAYOUT.farmZone, 1)
-        || inRect(x, z, A, 1) || inRect(x, z, Bf, 1)
-        || inRect(x, z, LAYOUT.house, 3)
-        || inRect(x, z, LAYOUT.pigPen, 2);
-
-      // 1) Restore green lawn everywhere the beach previously ate grass
+      // 1) Restore lawn grass (undo any prior sand eat)
       for (let z = LAYOUT.house.z0; z <= lawnZ1; z++) {
         for (let x = Math.min(LAYOUT.house.x0, Fz.x0) - 2; x <= Math.max(LAYOUT.pigPen.x1, Fz.x1) + 2; x++) {
           if (!this.inside(x, GY, z)) continue;
           if (inRect(x, z, A, 0) || inRect(x, z, Bf, 0)) continue;
+          if (inRect(x, z, LAYOUT.house, 0)) continue;
           if (at(x, GY, z) === B.SAND || at(x, GY, z) === B.GRAVEL || at(x, GY, z) === B.WATER) {
             put(x, GY, z, B.GRASS);
             for (let y = GY + 1; y <= GY + 2; y++) {
@@ -336,40 +324,42 @@ export class World {
         }
       }
 
-      const stampOceanSand = (x, z) => {
-        if (!this.inside(x, hy, z)) return false;
-        if (z < sandStart) return false;
-        if (inLawn(x, z)) return false;
-        if (isCrop(at(x, GY + 1, z)) || isCrop(at(x, SEA + 1, z))) return false;
-        // NEVER overwrite grass / farm surfaces
-        if (isProtected(at(x, GY, z))) return false;
-        if (isProtected(at(x, SEA, z)) && at(x, SEA, z) !== B.SAND) return false;
-        const oceanish =
-          at(x, SEA, z) === B.WATER
-          || at(x, SEA - 1, z) === B.WATER
-          || at(x, GY, z) === B.WATER
-          || (at(x, SEA, z) === B.AIR && at(x, SEA - 1, z) === B.AIR)
-          || (at(x, SEA, z) === B.SAND && z >= sandStart)
-          || (at(x, SEA, z) === B.GRAVEL && z >= sandStart);
-        if (!oceanish) return false;
+      const stampSand = (x, z) => {
+        if (!this.inside(x, hy, z)) return;
+        if (z < sandStart || z > sandStart + depth) return;
+        if (inRect(x, z, LAYOUT.house, 2)) return;
+        if (inRect(x, z, LAYOUT.pigPen, 1)) return;
+        if (inRect(x, z, LAYOUT.farmZone, 0)) return;
+        if (inRect(x, z, A, 0) || inRect(x, z, Bf, 0)) return;
+        if (isCrop(at(x, GY + 1, z))) return;
+        // Flat GY sand pad — may replace grass/water/air ONLY past the lawn
         for (let y = 1; y <= hy; y++) {
           put(x, y, z, y === hy ? B.SAND : (y > hy - 3 ? B.SAND : B.STONE));
         }
         for (let y = hy + 1; y < WY - 1; y++) put(x, y, z, B.AIR);
         top[x + z * WX] = hy;
-        return true;
       };
 
-      for (let z = sandStart; z <= Math.min(WZ - 6, sandStart + depth); z++) {
+      for (let z = sandStart; z <= Math.min(WZ - 5, sandStart + depth); z++) {
         for (let x = xMid - halfW; x <= xMid + halfW; x++) {
           const side = Math.abs(x - xMid) / halfW;
-          if (side > 0.92) continue;
-          stampOceanSand(x, z);
+          if (side > 0.93) continue;
+          stampSand(x, z);
         }
       }
 
-      // Path across ocean sand only (never carve lawn grass into a pier-drop)
-      for (let z = sandStart; z <= Math.min(WZ - 6, sandStart + depth - 2); z++) {
+      // Path on lawn (grass) then onto beach sand — same GY, no drop
+      for (let z = Fz.z1 + 1; z <= lawnZ1; z++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const x = LAYOUT.pathX + dx;
+          if (!this.inside(x, GY, z)) continue;
+          if (at(x, GY, z) === B.SAND) put(x, GY, z, B.GRASS);
+          put(x, GY, z, B.PATH);
+          put(x, GY + 1, z, B.AIR);
+          top[x + z * WX] = GY;
+        }
+      }
+      for (let z = sandStart; z <= Math.min(WZ - 5, sandStart + depth - 3); z++) {
         for (let dx = -1; dx <= 1; dx++) {
           const x = LAYOUT.pathX + dx;
           if (at(x, GY, z) === B.SAND) {
@@ -378,44 +368,34 @@ export class World {
           }
         }
       }
-      // Keep path on the green lawn as PATH on grass height (no sand)
-      for (let z = Fz.z1 + 1; z <= lawnZ1; z++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const x = LAYOUT.pathX + dx;
-          if (!this.inside(x, GY, z)) continue;
-          if (at(x, GY, z) === B.SAND) put(x, GY, z, B.GRASS);
-          if (at(x, GY, z) === B.GRASS || at(x, GY, z) === B.PATH) {
-            put(x, GY, z, B.PATH);
-            put(x, GY + 1, z, B.AIR);
-            top[x + z * WX] = GY;
-          }
-        }
-      }
 
-      // Pier on the ocean shelf (past the lawn)
+      // Pier from mid-beach OUT into open water past the sand shelf
+      const beachEnd = Math.min(WZ - 5, sandStart + depth);
       const pierX0 = xMid + 10;
-      const pierZ0 = sandStart + 4;
-      const pierLen = 12;
-      for (let z = pierZ0; z <= Math.min(WZ - 5, pierZ0 + pierLen); z++) {
+      const pierZ0 = sandStart + 10;
+      const pierZ1 = Math.min(WZ - 4, beachEnd + 8); // extends into water
+      for (let z = pierZ0; z <= pierZ1; z++) {
         for (let dx = 0; dx <= 2; dx++) {
           const x = pierX0 + dx;
           if (!this.inside(x, GY, z)) continue;
-          if (isProtected(at(x, GY, z)) && at(x, GY, z) !== B.SAND && z < sandStart) continue;
           for (let y = 1; y < GY; y++) {
             if ((z - pierZ0) % 3 === 0 && (dx === 0 || dx === 2)) put(x, y, z, B.LOG);
-            else if (at(x, y, z) === B.WATER || at(x, y, z) === B.AIR) put(x, y, z, B.STONE);
+            else if (at(x, y, z) === B.WATER || at(x, y, z) === B.AIR || z > beachEnd) {
+              if (y < SEA) put(x, y, z, B.STONE);
+              else if (at(x, y, z) === B.WATER || at(x, y, z) === B.AIR) put(x, y, z, B.STONE);
+            }
           }
           put(x, GY, z, B.PLANKS);
           put(x, GY + 1, z, B.AIR);
           top[x + z * WX] = GY;
         }
       }
-      LAYOUT.pier = { x0: pierX0, x1: pierX0 + 2, z0: pierZ0, z1: Math.min(WZ - 5, pierZ0 + pierLen) };
-      LAYOUT.beach = { x0: xMid - halfW, x1: xMid + halfW, z0: sandStart, z1: Math.min(WZ - 6, sandStart + depth) };
+      LAYOUT.pier = { x0: pierX0, x1: pierX0 + 2, z0: pierZ0, z1: pierZ1 };
+      LAYOUT.beach = { x0: xMid - halfW, x1: xMid + halfW, z0: sandStart, z1: beachEnd };
       LAYOUT.lawnZ1 = lawnZ1;
     }
 
-    // Re-stamp crop beds after any sand mistakes
+    // Re-stamp crop beds
     {
       for (let z = A.z0; z <= A.z1; z++) for (let x = A.x0; x <= A.x1; x++) {
         if (at(x, GY, z) !== B.FARM_WET && at(x, GY, z) !== B.FARM) put(x, GY, z, B.FARM_WET);

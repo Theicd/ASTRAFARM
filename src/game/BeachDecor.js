@@ -325,8 +325,9 @@ export class BeachDecor {
       this.root.add(p);
     });
 
-    // ── Volleyball court (left of path) ──
-    const court = pads.find(([x, z]) => x < LAYOUT.pathX - 6 && z > LAYOUT.farmZone.z1 + 6);
+    // ── Volleyball court (left of path, on sand) ──
+    const beachZ0 = LAYOUT.beach?.z0 ?? LAYOUT.farmZone.z1 + 13;
+    const court = pads.find(([x, z]) => x < LAYOUT.pathX - 6 && z >= beachZ0 + 3);
     if (court) {
       const [x, z] = court;
       const net = makeVolleyballNet(mats);
@@ -358,61 +359,57 @@ export class BeachDecor {
     });
   }
 
+  /** True only when this column is open water (ships must never sit on sand). */
+  _isWaterColumn(x, z) {
+    const w = this.game.world;
+    if (!w.inside(x, SEA, z)) return false;
+    const g = w.get(x, GY, z);
+    if (g === B.SAND || g === B.PATH || g === B.GRASS || g === B.PLANKS) return false;
+    return w.get(x, SEA, z) === B.WATER || w.get(x, SEA - 1, z) === B.WATER || g === B.WATER || g === B.AIR;
+  }
+
+  _placeShip(key, x, z, scale, yaw, bob = 0.05) {
+    if (!this._isWaterColumn(Math.floor(x), Math.floor(z))) return;
+    const mesh = this._clone(key, scale);
+    if (!mesh) return;
+    const baseY = SEA - 0.12;
+    mesh.position.set(x, baseY, z);
+    mesh.rotation.y = yaw;
+    this.root.add(mesh);
+    this._ships.push({ mesh, baseY, phase: Math.random() * 6, bob });
+  }
+
   _placeShipsAndExtraPalms() {
-    const pier = LAYOUT.pier || {
-      x0: LAYOUT.pathX + 10, x1: LAYOUT.pathX + 12,
-      z0: LAYOUT.farmZone.z1 + 10, z1: LAYOUT.farmZone.z1 + 22,
-    };
-
-    // Docked cargo — IN WATER beside pier (not on sand)
-    const dock = this._clone('cargoA', 1.2);
-    if (dock) {
-      dock.position.set(pier.x1 + 5.5, SEA - 0.15, pier.z1 - 3);
-      dock.rotation.y = Math.PI / 2 + 0.06;
-      this.root.add(dock);
-      this._ships.push({ mesh: dock, baseY: SEA - 0.15, phase: 1.1, bob: 0.04 });
-    }
-    const tug = this._clone('tug', 1.35);
-    if (tug) {
-      tug.position.set(pier.x0 - 4, SEA - 0.12, pier.z0 + 3);
-      tug.rotation.y = -0.5;
-      this.root.add(tug);
-      this._ships.push({ mesh: tug, baseY: SEA - 0.12, phase: 2.2, bob: 0.05 });
-    }
-    const row = this._clone('row', 1.5);
-    if (row) {
-      row.position.set(pier.x1 + 3, SEA - 0.08, pier.z0 + 1.5);
-      row.rotation.y = 1.0;
-      this.root.add(row);
-      this._ships.push({ mesh: row, baseY: SEA - 0.08, phase: 0.6, bob: 0.06 });
-    }
-
-    // Horizon freighters — far edge only
+    const pier = LAYOUT.pier;
+    const beach = LAYOUT.beach;
     const xMid = LAYOUT.pathX;
-    const farZ = WZ - 3;
-    for (const [x, z, key, sc, yaw] of [
-      [xMid - 30, farZ, 'cargoB', 0.6, 0.12],
-      [xMid - 5, farZ - 1, 'cargoA', 0.75, -0.04],
-      [xMid + 22, farZ, 'cargoB', 0.55, 0.2],
-      [xMid + 36, farZ - 1, 'sail', 0.5, -0.25],
-    ]) {
-      const s = this._clone(key, sc);
-      if (!s) continue;
-      s.position.set(x, SEA + 0.02, Math.min(WZ - 2, z));
-      s.rotation.y = yaw;
-      this.root.add(s);
-      this._ships.push({ mesh: s, baseY: SEA + 0.02, phase: Math.random() * 6, bob: 0.04 });
-    }
+    const beachEnd = beach?.z1 ?? (LAYOUT.farmZone.z1 + 30);
 
-    // Extra Kenney palms mixed in (textured) along flanks
+    // Docked craft — ONLY past the sand shelf, in water next to pier tip
+    if (pier) {
+      this._placeShip('cargoA', pier.x1 + 7, pier.z1 + 0.5, 1.15, Math.PI / 2 + 0.05, 0.04);
+      this._placeShip('tug', pier.x0 - 5.5, pier.z1 + 0.5, 1.3, -0.55, 0.05);
+      this._placeShip('row', pier.x1 + 4, pier.z1 + 2, 1.45, 0.9, 0.06);
+    }
+    // Mid-water sailboats just past beach
+    this._placeShip('sail', xMid - 14, beachEnd + 4, 0.9, 0.4, 0.06);
+    this._placeShip('sail', xMid + 12, beachEnd + 5, 0.75, -0.3, 0.06);
+
+    // Horizon freighters — world edge
+    const farZ = WZ - 3;
+    this._placeShip('cargoB', xMid - 28, farZ, 0.65, 0.1, 0.04);
+    this._placeShip('cargoA', xMid + 2, farZ - 1, 0.8, -0.05, 0.04);
+    this._placeShip('cargoB', xMid + 26, farZ, 0.55, 0.18, 0.04);
+
+    // Kenney palms only on confirmed sand pads (interior beach)
     const sandY = GY + 0.02;
     const palmKeys = ['palm', 'palmBend', 'palmTall'];
-    const bz0 = (LAYOUT.beach?.z0 ?? LAYOUT.farmZone.z1 + 13);
+    const bz0 = beach?.z0 ?? LAYOUT.farmZone.z1 + 13;
     const slots = [
-      [xMid - 20, bz0 + 2, 3.0],
-      [xMid - 16, bz0 + 6, 3.4],
-      [xMid + 18, bz0 + 3, 3.1],
-      [xMid + 22, bz0 + 7, 2.9],
+      [xMid - 18, bz0 + 4, 3.0],
+      [xMid - 14, bz0 + 10, 3.3],
+      [xMid + 16, bz0 + 5, 3.1],
+      [xMid + 20, bz0 + 11, 2.9],
     ];
     slots.forEach(([px, pz, sc], i) => {
       if (this.game.world.get(px, GY, pz) !== B.SAND) return;
