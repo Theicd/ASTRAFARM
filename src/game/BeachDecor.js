@@ -167,8 +167,10 @@ function makeSurfboard(mats, hex) {
 function mapSandPads(world) {
   const beach = LAYOUT.beach || {
     x0: LAYOUT.pathX - 24, x1: LAYOUT.pathX + 24,
-    z0: LAYOUT.farmZone.z1 + 2, z1: LAYOUT.farmZone.z1 + 18,
+    z0: LAYOUT.farmZone.z1 + 13, z1: LAYOUT.farmZone.z1 + 28,
   };
+  // Never place props on the green lawn belt
+  if (LAYOUT.lawnZ1 && beach.z0 <= LAYOUT.lawnZ1) beach.z0 = LAYOUT.lawnZ1 + 1;
   const pier = LAYOUT.pier;
   const pads = [];
   for (let z = beach.z0 + 1; z <= beach.z1 - 2; z++) {
@@ -405,11 +407,12 @@ export class BeachDecor {
     // Extra Kenney palms mixed in (textured) along flanks
     const sandY = GY + 0.02;
     const palmKeys = ['palm', 'palmBend', 'palmTall'];
+    const bz0 = (LAYOUT.beach?.z0 ?? LAYOUT.farmZone.z1 + 13);
     const slots = [
-      [xMid - 20, LAYOUT.farmZone.z1 + 8, 3.0],
-      [xMid - 16, LAYOUT.farmZone.z1 + 14, 3.4],
-      [xMid + 18, LAYOUT.farmZone.z1 + 9, 3.1],
-      [xMid + 22, LAYOUT.farmZone.z1 + 15, 2.9],
+      [xMid - 20, bz0 + 2, 3.0],
+      [xMid - 16, bz0 + 6, 3.4],
+      [xMid + 18, bz0 + 3, 3.1],
+      [xMid + 22, bz0 + 7, 2.9],
     ];
     slots.forEach(([px, pz, sc], i) => {
       if (this.game.world.get(px, GY, pz) !== B.SAND) return;
