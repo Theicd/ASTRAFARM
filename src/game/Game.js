@@ -31,6 +31,7 @@ import { ChargeBay } from './ChargeBay.js';
 import { Green, Pig } from './Mobs.js';
 import { Golem, CropThief, Dragon, Chomper, Hopper, SeaBeast, Dino } from './Enemies.js';
 import { ArcadeEvents } from './ArcadeEvents.js';
+import { BeachDecor } from './BeachDecor.js';
 import { Drops } from './items.js';
 import { Particles, FloatTexts, selectionBox } from './fx.js';
 import { Talk } from './talk.js';
@@ -99,6 +100,7 @@ export class Game {
     this.turrets = [];
     this.pigGates = null;
     this.chargeBay = null;
+    this.beachDecor = null;
     this.mobs = [];
     this.pigs = [];
     this.arcade = new ArcadeEvents(this);
@@ -238,6 +240,8 @@ export class Game {
     this.mesher.update(999);
     this.chargeBay?.dispose();
     this.chargeBay = new ChargeBay(this);
+    this.beachDecor?.dispose();
+    this.beachDecor = new BeachDecor(this);
     this.spawnPigs();
     this.robot.reset();
     this.player.reset(LAYOUT.spawn);
@@ -692,6 +696,7 @@ export class Game {
     this.clearHired();
     if (this.pigGates) { this.pigGates.dispose(); this.pigGates = null; }
     if (this.chargeBay) { this.chargeBay.dispose(); this.chargeBay = null; }
+    if (this.beachDecor) { this.beachDecor.dispose(); this.beachDecor = null; }
     this.drops.clear();
     this.particles.clear();
     this.floats.clear();
@@ -703,6 +708,7 @@ export class Game {
     this.player.reset(LAYOUT.spawn);
     this.pigGates = new PigGates(this);
     this.chargeBay = new ChargeBay(this);
+    this.beachDecor = new BeachDecor(this);
     this.spawnPigs();
     this.talk.reset();
     this.hud.clearChat();
@@ -2198,6 +2204,7 @@ export class Game {
     for (const tr of this.turrets) tr.update(dt);
     this.pigGates?.update(dt);
     this.chargeBay?.update(dt);
+    this.beachDecor?.update(dt);
     for (const m of [...this.mobs]) {
       m.update(dt);
       if (m.dead && this.mobs.includes(m)) this.removeMob(m);

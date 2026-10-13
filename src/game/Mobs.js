@@ -22,7 +22,7 @@ export class Green {
     this.root = this.model.root;
     game.scene.add(this.root);
     const s = this.model.baseScale;
-    this.body = { pos: new THREE.Vector3(x, game.world.floor[Math.floor(x) + Math.floor(z) * WX] || GY + 1, z), vel: new THREE.Vector3(), hw: 0.3 * s, h: 0.8 * s, onGround: false, step: 1.05, inWater: false };
+    this.body = { pos: new THREE.Vector3(x, game.world.floor[Math.floor(x) + Math.floor(z) * WX] || GY + 1, z), vel: new THREE.Vector3(), hw: 0.3 * s, h: 0.8 * s, onGround: false, step: 1.35, inWater: false };
     this.hp = big ? 14 : 3;
     this.maxHp = this.hp;
     this.speed = big ? 1.8 : night ? 2.75 : 2.45;

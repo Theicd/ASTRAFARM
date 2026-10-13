@@ -281,12 +281,49 @@ export class World {
     put(hx - 2, GY + 1, H.z1 + 1, B.LANTERN); put(hx + 2, GY + 1, H.z1 + 1, B.LANTERN);
     for (const [x, z] of LAYOUT.posts) { put(x, GY + 1, z, B.LOG); put(x, GY + 2, z, B.LANTERN); }
     // Path from fields toward the open beach (+Z past the farm)
-    for (let z = LAYOUT.farmZone.z1 + 1; z <= Math.min(WZ - 3, LAYOUT.farmZone.z1 + 14); z++) {
+    for (let z = LAYOUT.farmZone.z1 + 1; z <= Math.min(WZ - 3, LAYOUT.farmZone.z1 + 22); z++) {
       for (let dx = -1; dx <= 1; dx++) {
         const x = LAYOUT.pathX + dx;
-        if (at(x, GY, z) === B.GRASS || at(x, GY, z) === B.DIRT || at(x, GY, z) === B.SAND) {
+        if (at(x, GY, z) === B.GRASS || at(x, GY, z) === B.DIRT || at(x, GY, z) === B.SAND || at(x, GY, z) === B.WATER) {
           put(x, GY, z, B.PATH);
-          put(x, GY + 1, z, B.AIR);
+          for (let y = GY + 1; y <= GY + 3; y++) put(x, y, z, B.AIR);
+        }
+      }
+    }
+
+    // ── Widen sandy beach OUTWARD into the sea only (never edit grass / farm / lodge) ──
+    {
+      const z0 = LAYOUT.farmZone.z1 + 1;
+      const depth = 22; // sand shelf into former ocean
+      const xMid = LAYOUT.pathX;
+      const halfW = 24;
+      for (let z = z0; z <= Math.min(WZ - 3, z0 + depth); z++) {
+        const u = (z - z0) / depth;
+        // Flat sand at grass height near farm (no cliff), then gentle slope to sea level
+        let hy;
+        if (u < 0.28) hy = GY;
+        else if (u < 0.62) hy = Math.round(lerp(GY, SEA, (u - 0.28) / 0.34));
+        else hy = SEA;
+        hy = Math.max(SEA, Math.min(GY, hy));
+        for (let x = xMid - halfW; x <= xMid + halfW; x++) {
+          if (!this.inside(x, hy, z)) continue;
+          // Soft side falloff so the shelf is beach-shaped
+          const side = Math.abs(x - xMid) / halfW;
+          if (side > 0.92 && rng() < (side - 0.92) / 0.08) continue;
+          if (z <= LAYOUT.farmZone.z1) continue; // hard guard: never touch farm belt
+          // Do not convert existing grass plateau cells (extra safety)
+          const curTop = top[x + z * WX] | 0;
+          if (curTop >= GY && at(x, GY, z) === B.GRASS && z <= LAYOUT.farmZone.z1 + 0) continue;
+          // Build sand column; clear above for walkability
+          for (let y = 1; y <= hy; y++) {
+            const id = y === hy ? B.SAND : (y > hy - 3 ? B.SAND : B.STONE);
+            put(x, y, z, id);
+          }
+          for (let y = hy + 1; y < WY - 1; y++) {
+            if (y < SEA) put(x, y, z, B.WATER);
+            else put(x, y, z, B.AIR);
+          }
+          top[x + z * WX] = hy;
         }
       }
     }

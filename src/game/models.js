@@ -464,33 +464,47 @@ export function createSeaBeastModel(big = false) {
   return { root, scale, body, head, tail, mat, baseScale: s };
 }
 
-// ------------------------------------------------------------------ דינו (עדר ארקייד מהחוף)
+// ------------------------------------------------------------------ עדר רובוטריקים (משאית־רובוט כחולה/אדומה) — kind נשאר 'dino' בלוח הזמנים
 export function createDinoModel() {
-  const skin = new Skin(64, 48, 818);
-  const green = ['#6ab04c', '#5a9a3c', '#7ac05c', '#4a8a30'];
-  const Bd = skin.boxNoise(0, 0, 10, 10, 16, green);
+  const skin = new Skin(64, 48, 918);
+  const blue = ['#2a6ad8', '#1e58c0', '#3a7ce8', '#1848a8'];
+  const red = ['#e03828', '#c02820', '#f04838'];
+  const grey = ['#c8ccd4', '#a8acb4', '#e0e4ec'];
+  const Bd = skin.boxNoise(0, 0, 12, 10, 14, blue);
   const [fx, fy] = Bd.front;
-  skin.rect(fx + 2, fy + 3, 2, 2, '#101808');
-  skin.rect(fx + 6, fy + 3, 2, 2, '#101808');
-  skin.px(fx + 2, fy + 3, '#ffe080');
-  skin.px(fx + 6, fy + 3, '#ffe080');
-  skin.rect(fx + 3, fy + 6, 4, 2, '#203010');
-  skin.boxNoise(40, 0, 6, 6, 6, ['#5a9a3c', '#4a8a30']); // head
-  skin.boxNoise(0, 24, 4, 8, 4, ['#4a8a30', '#3a7020']); // legs
+  // Windshield / visor
+  skin.rect(fx + 2, fy + 3, 8, 4, '#101820');
+  skin.rect(fx + 3, fy + 4, 6, 2, '#60e8ff');
+  skin.px(fx + 4, fy + 4, '#e8ffff');
+  // Autobot chest badge zone
+  skin.rect(fx + 4, fy + 7, 4, 2, '#e03828');
+  skin.px(fx + 5, fy + 7, '#ffe080');
+  skin.boxNoise(40, 0, 8, 7, 7, grey); // head / helmet
+  const Hh = skin.boxNoise(40, 0, 8, 7, 7, grey);
+  skin.rect(Hh.front[0] + 1, Hh.front[1] + 2, 2, 2, '#101820');
+  skin.rect(Hh.front[0] + 5, Hh.front[1] + 2, 2, 2, '#101820');
+  skin.px(Hh.front[0] + 1, Hh.front[1] + 2, '#40f0ff');
+  skin.px(Hh.front[0] + 5, Hh.front[1] + 2, '#40f0ff');
+  skin.boxNoise(0, 24, 4, 8, 4, blue); // legs
+  skin.boxNoise(20, 24, 4, 9, 4, red); // arms / smokestack accents
   const tex = skin.texture();
   const mat = entityMaterial(tex);
   const root = new THREE.Group();
-  root.name = 'dino';
+  root.name = 'transformer';
   const scale = new THREE.Group(); scale.name = 'scale'; root.add(scale);
-  const body = part('body', scale, mat, skin, { size: [10, 10, 16], uv: [0, 0], at: [0, 8, 0] });
-  const head = part('head', scale, mat, skin, { size: [6, 6, 6], uv: [40, 0], at: [0, 12, 8], off: [-3, -3, -3] });
+  // Truck-cab torso
+  const body = part('body', scale, mat, skin, { size: [12, 10, 14], uv: [0, 0], at: [0, 9, 0] });
+  const head = part('head', scale, mat, skin, { size: [8, 7, 7], uv: [40, 0], at: [0, 15, 2], off: [-4, -3.5, -3.5] });
+  // Smokestacks / shoulder stacks
+  const armL = part('armL', scale, mat, skin, { size: [4, 9, 4], uv: [20, 24], at: [-7, 12, 0], off: [-2, -9, -2] });
+  const armR = part('armR', scale, mat, skin, { size: [4, 9, 4], uv: [20, 24], at: [7, 12, 0], off: [-2, -9, -2] });
   const legs = [];
-  for (const [i, x, z] of [[0, -3, 4], [1, 3, 4], [2, -3, -4], [3, 3, -4]]) {
-    legs.push(part('leg' + i, scale, mat, skin, { size: [4, 8, 4], uv: [0, 24], at: [x, 8, z], off: [-2, -8, -2] }));
+  for (const [i, x, z] of [[0, -3.5, 3], [1, 3.5, 3], [2, -3.5, -3], [3, 3.5, -3]]) {
+    legs.push(part('leg' + i, scale, mat, skin, { size: [4, 8, 4], uv: [0, 24], at: [x, 9, z], off: [-2, -8, -2] }));
   }
-  const s = 1.35;
+  const s = 1.55;
   scale.scale.setScalar(s);
-  return { root, scale, body, head, legs, mat, baseScale: s };
+  return { root, scale, body, head, arms: [armL, armR], legs, mat, baseScale: s };
 }
 
 // ------------------------------------------------------------------ ブタ

@@ -83,7 +83,7 @@ export class Chomper {
     const s = this.model.baseScale;
     this.body = {
       pos: new THREE.Vector3(x, game.world.floor[Math.floor(x) + Math.floor(z) * WX] || GY + 1, z),
-      vel: new THREE.Vector3(), hw: 0.4 * s, h: 0.7 * s, onGround: false, step: 1.05, inWater: false,
+      vel: new THREE.Vector3(), hw: 0.4 * s, h: 0.7 * s, onGround: false, step: 1.35, inWater: false,
     };
     this.hp = 3; this.maxHp = 3;
     this.speed = 2.35;
@@ -502,7 +502,7 @@ export class CropThief {
     const s = this.model.baseScale;
     this.body = {
       pos: new THREE.Vector3(x, game.world.floor[Math.floor(x) + Math.floor(z) * WX] || GY + 1, z),
-      vel: new THREE.Vector3(), hw: 0.28 * s, h: 0.75 * s, onGround: false, step: 1.05, inWater: false,
+      vel: new THREE.Vector3(), hw: 0.28 * s, h: 0.75 * s, onGround: false, step: 1.35, inWater: false,
     };
     this.hp = 2; this.maxHp = 2;
     this.speed = 3.6;
@@ -992,7 +992,7 @@ export class Dino {
     const floor = game.world.floor[Math.floor(x) + Math.floor(z) * WX] || GY + 1;
     this.body = {
       pos: new THREE.Vector3(x, floor, z),
-      vel: new THREE.Vector3(), hw: 0.45 * s, h: 1.1 * s, onGround: false, step: 1.15, inWater: false,
+      vel: new THREE.Vector3(), hw: 0.45 * s, h: 1.1 * s, onGround: false, step: 1.35, inWater: false,
     };
     this.hp = 8; this.maxHp = 8;
     this.speed = 4.2;
