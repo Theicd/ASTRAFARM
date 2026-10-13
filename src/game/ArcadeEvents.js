@@ -14,35 +14,73 @@ function beachXZ(rng, spread = 12) {
   return [x, Math.max(LAYOUT.farmZone.z1 + 4, Math.min(WZ - 3, z))];
 }
 
-/** Visible swirling debris cloud that travels across the farm. */
+/** Funnel tornado: narrow at the ground, wide cloud deck, debris in a rising helix. */
 function makeHurricaneMesh() {
   const root = new THREE.Group();
   root.name = 'hurricane';
-  const mat = new THREE.MeshBasicMaterial({
-    color: 0xb8c8d8, transparent: true, opacity: 0.72, depthWrite: false, fog: true,
-  });
-  const dark = new THREE.MeshBasicMaterial({
-    color: 0x4a5568, transparent: true, opacity: 0.55, depthWrite: false, fog: true,
-  });
-  const bits = [];
-  for (let i = 0; i < 28; i++) {
-    const w = 0.6 + Math.random() * 1.8;
-    const h = 0.4 + Math.random() * 1.4;
-    const d = 0.4 + Math.random() * 1.2;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), Math.random() < 0.45 ? dark : mat);
-    const ang = (i / 28) * Math.PI * 2;
-    const rad = 2.2 + (i % 5) * 1.1;
-    m.userData = { ang, rad, y: 2 + (i % 7) * 0.85, spin: 1.2 + (i % 4) * 0.35 };
-    m.position.set(Math.cos(ang) * rad, m.userData.y, Math.sin(ang) * rad);
-    root.add(m);
-    bits.push(m);
+  const funnel = new THREE.Group();
+  const ghost = {
+    transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide,
+  };
+
+  const rings = [];
+  for (let i = 0; i < 11; i++) {
+    const t = i / 10;
+    const radius = 1.15 + t * t * 8.2;
+    const tube = 0.16 + t * 0.42;
+    const mat = new THREE.MeshBasicMaterial({
+      ...ghost,
+      color: t < 0.25 ? 0x5c6b7a : t < 0.7 ? 0xb7c4d0 : 0xe4ebf2,
+      opacity: 0.22 + (1 - t) * 0.42,
+    });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 6, 20), mat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.35 + t * 17;
+    ring.userData.spin = 1.6 + t * 4.2;
+    funnel.add(ring);
+    rings.push(ring);
   }
-  // Tall funnel core
-  const core = new THREE.Mesh(new THREE.BoxGeometry(2.2, 10, 2.2), dark);
-  core.position.y = 6;
-  root.add(core);
+
+  const debrisColors = [0x8d6a45, 0x6a8f4a, 0xcbb892, 0x9aa8b8, 0x3e4a58, 0xd8dee6];
+  const bits = [];
+  for (let i = 0; i < 48; i++) {
+    const t = i / 48;
+    const y = 0.25 + t * 16.5;
+    const rad = 0.7 + t * t * 6.4;
+    const ang = t * Math.PI * 9;
+    const mat = new THREE.MeshBasicMaterial({
+      ...ghost,
+      color: debrisColors[i % debrisColors.length],
+      opacity: 0.92,
+    });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.28 + (i % 3) * 0.16, 0.16, 0.42 + (i % 2) * 0.2), mat);
+    mesh.userData = { ang, rad, y, spin: 4.2 + (i % 5) * 0.55 };
+    mesh.position.set(Math.cos(ang) * rad, y, Math.sin(ang) * rad);
+    funnel.add(mesh);
+    bits.push(mesh);
+  }
+
+  const dust = new THREE.Mesh(
+    new THREE.RingGeometry(0.9, 3.6, 24),
+    new THREE.MeshBasicMaterial({ ...ghost, color: 0xd8c8a4, opacity: 0.42 }),
+  );
+  dust.rotation.x = -Math.PI / 2;
+  dust.position.y = 0.12;
+  funnel.add(dust);
+
+  const eye = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 1.05, 15, 10, 1, true),
+    new THREE.MeshBasicMaterial({ ...ghost, color: 0x1c2430, opacity: 0.5 }),
+  );
+  eye.position.y = 7.4;
+  funnel.add(eye);
+
+  root.add(funnel);
   root.userData.bits = bits;
-  root.userData.core = core;
+  root.userData.rings = rings;
+  root.userData.dust = dust;
+  root.userData.eye = eye;
+  root.userData.funnel = funnel;
   return root;
 }
 
@@ -289,21 +327,28 @@ export class ArcadeEvents {
     if (!mesh) return;
     const ev = this.active;
     const live = ev?.kind === 'hurricane' && ev.phase !== 'clear';
+    const spin = live ? 1 : 0.35;
     const bits = mesh.userData.bits || [];
     for (const b of bits) {
-      b.userData.ang += dt * b.userData.spin * (live ? 2.8 : 1.2);
-      const rad = b.userData.rad * (0.85 + Math.sin(b.userData.ang * 0.5) * 0.15);
-      b.position.set(
-        Math.cos(b.userData.ang) * rad,
-        b.userData.y + Math.sin(b.userData.ang * 1.7) * 0.35,
-        Math.sin(b.userData.ang) * rad,
-      );
-      b.rotation.y += dt * 3;
-      b.rotation.x += dt * 1.5;
+      b.userData.ang += dt * b.userData.spin * spin;
+      const wobble = 1 + Math.sin(b.userData.ang * 0.35) * 0.08;
+      const rad = b.userData.rad * wobble;
+      b.position.set(Math.cos(b.userData.ang) * rad, b.userData.y, Math.sin(b.userData.ang) * rad);
+      b.rotation.y = b.userData.ang;
+      b.rotation.x += dt * 2.2;
     }
-    if (mesh.userData.core) {
-      mesh.userData.core.rotation.y += dt * 4.5;
-      mesh.userData.core.scale.y = 1 + Math.sin(performance.now() * 0.004) * 0.08;
+    for (const ring of mesh.userData.rings || []) {
+      ring.rotation.z += dt * ring.userData.spin * spin;
+    }
+    if (mesh.userData.dust) mesh.userData.dust.rotation.z += dt * 2.4 * spin;
+    if (mesh.userData.eye) {
+      mesh.userData.eye.rotation.y += dt * 3.2 * spin;
+      const pulse = 1 + Math.sin(performance.now() * 0.006) * 0.06;
+      mesh.userData.eye.scale.set(pulse, 1, pulse);
+    }
+    if (mesh.userData.funnel) {
+      mesh.userData.funnel.rotation.z = Math.sin(performance.now() * 0.0015) * 0.12;
+      mesh.userData.funnel.rotation.x = Math.sin(performance.now() * 0.0011) * 0.06;
     }
 
     if (!live) {
@@ -333,9 +378,10 @@ export class ArcadeEvents {
     mesh.rotation.y += dt * 1.8;
 
     // Debris trail particles
-    if (Math.random() < dt * 14) {
+    if (live && Math.random() < dt * 18) {
       const p = mesh.position;
-      this.game.particles?.burst(p.x, p.y + 3, p.z, 0x9ab0c4, 4, 1.3);
+      this.game.particles?.burst(p.x, p.y + 0.4, p.z, 0xd8c8a4, 6, 1.6);
+      this.game.particles?.burst(p.x, p.y + 8, p.z, 0xc5d0dc, 3, 1.1);
     }
   }
 
