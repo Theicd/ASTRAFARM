@@ -1,0 +1,9 @@
+﻿Beach 3D props (CC0 — public domain):
+- Ships / boats: Kenney Watercraft Kit — https://kenney.nl/assets/watercraft-kit
+- Palms / beach platform: Kenney Nature Kit — https://kenney.nl/assets/nature-kit
+- Parasols: Kenney City Kit (Commercial) — https://kenney.nl/assets/city-kit-commercial
+- Lounge chairs: Kenney Furniture Kit — https://kenney.nl/assets/furniture-kit
+- Deck chair: The Base Mesh (CC0 via Papyszoo mirror)
+
+Mirrored from Papyszoo/CC0-Public-Domain-Models for offline game packaging.
+Attribution to Kenney.nl appreciated but not required (CC0).
