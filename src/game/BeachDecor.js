@@ -89,16 +89,34 @@ export class BeachDecor {
     const files = {
       cargoA: 'ship_cargo.glb',
       cargoB: 'ship_cargo_b.glb',
+      cargoC: 'ship_cargo_c.glb',
+      liner: 'ship_ocean_liner.glb',
+      linerSmall: 'ship_ocean_liner_small.glb',
+      shipLarge: 'ship_large.glb',
+      shipSmall: 'ship_small.glb',
       sail: 'boat_sail.glb',
+      sailB: 'boat_sail_b.glb',
       tug: 'boat_tug.glb',
+      tugA: 'boat_tug_a.glb',
+      tugC: 'boat_tug_c.glb',
       row: 'boat_row.glb',
+      rowSmall: 'boat_row_small.glb',
+      fan: 'boat_fan.glb',
+      fish: 'boat_fishing_small.glb',
+      houseA: 'boat_house_a.glb',
+      houseB: 'boat_house_b.glb',
+      houseC: 'boat_house_c.glb',
+      houseD: 'boat_house_d.glb',
+      speedA: 'boat_speed_a.glb',
+      speedB: 'boat_speed_b.glb',
+      speedE: 'boat_speed_e.glb',
+      tow: 'boat_tow_a.glb',
       palm: 'tree_palm_detailed_tall.glb',
       palmBend: 'tree_palm_bend.glb',
       palmTall: 'tree_palm_tall.glb',
       parasolA: 'detail_parasol_a.glb',
       parasolB: 'detail_parasol_b.glb',
       lounge: 'lounge_chair_relax.glb',
-      lounge2: 'lounge_chair.glb',
       deck: 'deck_chair.glb',
     };
     const out = {};
@@ -146,40 +164,40 @@ export class BeachDecor {
     const z0 = beach.z0 + 3; // past the short entrance path
     const z1 = beach.z1 - 2;
 
-    // Two tidy rows, clear of the center path
+    // Kenney parasols are cafe TABLES. Chairs go in front of the table, not inside it.
+    // Sets are 9 blocks apart so neighboring canopies and chairs never intersect.
     const sets = [
-      [xMid - 14, z0],
-      [xMid - 7, z0 + 1],
-      [xMid + 6, z0],
-      [xMid + 13, z0 + 1],
-      [xMid - 11, z1 - 1],
-      [xMid - 4, z1],
-      [xMid + 4, z1 - 1],
-      [xMid + 11, z1],
+      [xMid - 16, z0],
+      [xMid - 7, z0],
+      [xMid + 7, z0],
+      [xMid + 16, z0],
+      [xMid - 16, z1],
+      [xMid - 7, z1],
+      [xMid + 7, z1],
+      [xMid + 16, z1],
     ];
 
     let si = 0;
     for (const [cx, cz] of sets) {
-      if (Math.abs(cx - xMid) < 2) continue;
-      if (!sandOk(w, cx, cz)) continue;
-      // Parasol raw height 0.45 → scale 7 ≈ 3.1m pole + ~2.4m canopy
-      const parasol = this._clone(si % 2 ? 'parasolB' : 'parasolA', 7);
+      if (Math.abs(cx - xMid) < 3) continue;
+      if (!sandOk(w, cx, cz) || !sandOk(w, cx, cz + 3)) continue;
+      // Table+parasol. Raw size 0.35 → scale 6 ≈ 2.1m canopy, clear of the chairs.
+      const parasol = this._clone(si % 2 ? 'parasolB' : 'parasolA', 6);
       if (parasol) {
         parasol.position.set(cx + 0.5, sandY, cz + 0.5);
-        parasol.rotation.y = si * 0.35;
         this.root.add(parasol);
       }
-      // Lounger raw ~0.67m → scale 2.6 ≈ 1.7m sunbed, sitting under the canopy
-      const L1 = this._clone(si % 2 ? 'deck' : 'lounge', 2.6);
-      if (L1) {
-        L1.position.set(cx + 1.15, sandY, cz + 0.85);
-        L1.rotation.y = Math.PI + 0.15;
+      // Sunbeds 2.5 blocks seaward of the table (canopy radius is ~1.1)
+      const L1 = this._clone('lounge', 2.2);
+      if (L1 && sandOk(w, cx - 2, cz + 3)) {
+        L1.position.set(cx - 1.1, sandY, cz + 3.1);
+        L1.rotation.y = Math.PI;
         this.root.add(L1);
       }
-      const L2 = this._clone(si % 2 ? 'lounge' : 'deck', 2.6);
-      if (L2) {
-        L2.position.set(cx - 0.15, sandY, cz + 0.9);
-        L2.rotation.y = Math.PI - 0.2;
+      const L2 = this._clone('deck', 1.8);
+      if (L2 && sandOk(w, cx + 2, cz + 3)) {
+        L2.position.set(cx + 1.6, sandY, cz + 3.1);
+        L2.rotation.y = Math.PI;
         this.root.add(L2);
       }
       si++;
@@ -208,51 +226,65 @@ export class BeachDecor {
   }
 
   /**
-   * Measured Kenney hulls (local units, long axis = Z, origin at center):
-   *   cargo 10.55 long, sail ~3.8, tug/row ~2.9
-   * Scale must stay small or a "3x" cargo is 30+ blocks and covers the whole beach.
-   * Pivot is pushed so the NEAR end of the hull is still past the waterline.
+   * Two lines of Kenney watercraft, both fully past the sand.
+   * nearZ = bow of the near row. farZ = bow of the ship row, behind the small boats.
+   * Scale is chosen so each hull is a few blocks long (ocean liner raw length is 21).
    */
   _placeKenneyFleetOffshore() {
     const xMid = LAYOUT.pathX;
     const beachEnd = LAYOUT.beach?.z1 ?? (LAYOUT.farmZone.z1 + 25);
     const waterLine = LAYOUT.waterLineZ ?? (beachEnd + 1);
-    const zMax = WZ - 3;
-    // Half-length along Z at scale 1 (max |minZ|,|maxZ|)
-    const halfZ = { sail: 1.98, row: 1.43, tug: 1.43, cargoA: 5.27, cargoB: 5.27 };
-
-    const add = (key, x, scale, yaw, extra = 1.5, bob = 0.05) => {
-      const hz = (halfZ[key] || 2) * scale;
-      // Near tip of the hull must clear the sand
-      let z = waterLine + hz + extra;
-      if (z + hz > zMax) z = zMax - hz - 0.4;
-      if (z - hz < waterLine + 0.5) return;
-      const ix = Math.floor(x);
-      const iz = Math.floor(z);
-      if (this.game.world.inside(ix, GY, iz)) {
-        const g = this.game.world.get(ix, GY, iz);
-        if (g === B.SAND || g === B.PATH || g === B.PLANKS || g === B.GRASS) return;
-      }
-      const mesh = this._clone(key, scale);
-      if (!mesh) return;
-      const y = SEA - 0.15;
-      mesh.position.set(x, y, z);
-      mesh.rotation.y = yaw; // keep yaw small — long axis stays out to sea
-      this.root.add(mesh);
-      this._ships.push({ mesh, baseY: y, phase: Math.random() * 6, bob });
+    const zMax = WZ - 2.5;
+    // Half-length on Z at scale 1
+    const halfZ = {
+      fan: 1.43, fish: 1.93, row: 1.43, rowSmall: 1.19,
+      sail: 1.98, sailB: 2.29, speedA: 1.69, speedB: 1.65, speedE: 1.43,
+      tug: 1.43, tugA: 1.73, tugC: 1.43,
+      houseA: 2.32, houseB: 2.78, houseC: 2.58, houseD: 2.32, tow: 3.32,
+      cargoA: 5.27, cargoB: 5.27, cargoC: 5.27,
+      liner: 10.64, linerSmall: 10.64, shipLarge: 6.55, shipSmall: 5.3,
     };
 
-    // Sailboats just offshore (readable, not beached)
-    add('sail', xMid - 16, 1.15, 0.15, 1.2, 0.06);
-    add('sail', xMid + 2, 1.05, -0.12, 2.2, 0.06);
-    add('sail', xMid + 16, 1.2, 0.08, 1.4, 0.06);
-    add('row', xMid - 6, 1.3, 0.2, 2.8, 0.05);
-    add('tug', xMid + 10, 1.25, -0.18, 3.2, 0.05);
+    const placeRow = (keys, nearBowZ, targetLen, x0, gap) => {
+      keys.forEach((key, i) => {
+        const raw = (halfZ[key] || 2) * 2;
+        let scale = targetLen / raw;
+        let hz = (halfZ[key] || 2) * scale;
+        let z = nearBowZ + hz;
+        if (z + hz > zMax) {
+          const room = Math.max(1.2, zMax - nearBowZ);
+          scale *= room / (hz * 2);
+          hz = (halfZ[key] || 2) * scale;
+          z = nearBowZ + hz;
+        }
+        if (z - hz < waterLine + 0.4) return;
+        const x = x0 + i * gap;
+        const mesh = this._clone(key, scale);
+        if (!mesh) return;
+        const y = SEA - 0.12;
+        mesh.position.set(x, y, z);
+        mesh.rotation.y = 0.04 * ((i % 2) ? 1 : -1);
+        this.root.add(mesh);
+        this._ships.push({ mesh, baseY: y, phase: i * 0.7, bob: 0.045 });
+      });
+    };
 
-    // Cargo freighters further out — scale ~0.55 → ~6 blocks long, on the horizon
-    add('cargoA', xMid - 18, 0.55, 0.06, 4.5, 0.04);
-    add('cargoB', xMid + 6, 0.62, -0.05, 5.2, 0.04);
-    add('cargoA', xMid + 24, 0.5, 0.1, 4.8, 0.04);
+    // Near line: small craft, bows ~1.5 blocks past the sand
+    placeRow(
+      ['fish', 'fan', 'rowSmall', 'row', 'sail', 'sailB', 'speedA', 'speedB', 'speedE', 'tug', 'tugA', 'tugC'],
+      waterLine + 1.6,
+      3.6,
+      xMid - 22,
+      4,
+    );
+    // Far line: houses, tugs-with-tow, cargo, liners — behind the small boats
+    placeRow(
+      ['houseA', 'houseB', 'houseC', 'houseD', 'tow', 'cargoA', 'cargoB', 'cargoC', 'shipSmall', 'shipLarge', 'linerSmall', 'liner'],
+      waterLine + 6.2,
+      5.2,
+      xMid - 22,
+      4,
+    );
   }
 
   _placeSeagulls() {
