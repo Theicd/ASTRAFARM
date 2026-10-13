@@ -123,6 +123,7 @@ export class Robot {
   releaseKidnap(pos, rescued) {
     this.captor = null;
     this.captive = false;
+    this.netHidden = false;
     this.root.visible = true;
     if (pos) {
       this.body.pos.set(pos.x, Math.max(GY + 1, pos.y), pos.z);
@@ -143,6 +144,7 @@ export class Robot {
     if (!this.captive && this.state !== 'kidnapped') return false;
     this.captor = null;
     this.captive = false;
+    this.netHidden = false;
     this.root.visible = true;
     this.wake();
     this.emote.show('sweat', 2);

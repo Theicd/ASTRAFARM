@@ -738,6 +738,7 @@ export class Dragon {
       this.game.money += 8;
       this.game.floats.add('+8', this.body.pos.x, this.body.pos.y + 1, this.body.pos.z, '#ffe080');
     }
+    if (this.game.isNetHost()) this.game.pushNetSim(true);
   }
 
   update(dt) {
@@ -748,6 +749,11 @@ export class Dragon {
 
     if (this.netPuppet) {
       this.root.position.copy(this.body.pos);
+      if (this.carrying && !this.carrying.captive && !this.carrying.netHidden) {
+        this.carrying.body.pos.set(this.body.pos.x, this.body.pos.y - 0.9, this.body.pos.z);
+        this.carrying.root.position.copy(this.carrying.body.pos);
+        this.carrying.root.visible = true;
+      }
       this.animate(dt);
       return;
     }
@@ -794,6 +800,7 @@ export class Dragon {
           g.talk.sys('sys.dragonGrab', null, 'warn');
           g.hud.banner(t('banner.dragon'), t('banner.dragonSub'), 2.8);
           g.audio.sfx('boss_spawn', { pos: this.body.pos, pitch: 1.35 });
+          if (g.isNetHost()) g.pushNetSim(true);
           g.particles.sparkle(tp.x - 0.3, tp.y + 1, tp.z - 0.3, 16, 0xff8060);
         }
       }
@@ -816,9 +823,11 @@ export class Dragon {
       if (edge) {
         g.onDragonEscaped(this);
         if (this.carrying) {
+          this.carrying.netHidden = true;
           this.carrying.captive = true;
           this.carrying.root.visible = false;
           this.carrying = null;
+          if (g.isNetHost()) g.pushNetSim(true);
         }
         this.dead = true;
         this.state = 'dead';

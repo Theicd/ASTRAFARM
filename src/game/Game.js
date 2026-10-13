@@ -479,13 +479,18 @@ export class Game {
       fuse: +(m.fuse || 0).toFixed(2),
       hp: m.hp | 0,
       mv: Math.hypot(m.body?.vel?.x || 0, m.body?.vel?.z || 0) > 0.35 ? 1 : 0,
+      carry: m.kind === 'dragon' ? this.crewIndex(m.carrying) : -1,
     }));
+    const hid = [];
+    const crew = [this.robot, ...this.helpers];
+    for (let i = 0; i < crew.length; i++) if (crew[i]?.netHidden) hid.push(i);
     netBroadcast({
       t: 'sim',
       clock: +this.clock.toFixed(2),
       phase: this.phase,
       day: this.dayIndex | 0,
       mobs,
+      hid,
       arc: this.arcade?.netSnapshot() || null,
     });
   }
@@ -524,9 +529,59 @@ export class Game {
       if (typeof d.hp === 'number') m.hp = d.hp;
       m._netMoving = !!d.mv;
       m.dead = false;
+      if (m.kind === 'dragon') this.syncDragonCarry(m, d.carry, ev.hid);
     }
     for (const m of [...this.mobs]) {
       if (m.netPuppet && !seen.has(m.netId)) this.removeMob(m);
+    }
+    if (Array.isArray(ev.hid)) this.applyNetHiddenCrew(ev.hid);
+  }
+
+  crewIndex(r) {
+    if (!r) return -1;
+    if (r === this.robot) return 0;
+    const i = this.helpers.indexOf(r);
+    return i >= 0 ? i + 1 : -1;
+  }
+
+  crewAt(i) {
+    if (i === 0) return this.robot;
+    return this.helpers[i - 1] || null;
+  }
+
+  /** Clients: hang the same robot under the puppet dragon the host is carrying. */
+  syncDragonCarry(dragon, idx, hid) {
+    const hidden = new Set(Array.isArray(hid) ? hid : []);
+    if (typeof idx !== 'number' || idx < 0) {
+      const r = dragon.carrying;
+      dragon.carrying = null;
+      if (r && !r.netHidden && !hidden.has(this.crewIndex(r))) r.releaseKidnap(dragon.body.pos, true);
+      return;
+    }
+    const r = this.crewAt(idx);
+    if (!r || r.netHidden) return;
+    if (dragon.carrying !== r) {
+      r.kidnapBy(dragon);
+      dragon.carrying = r;
+    }
+    r.netHidden = false;
+    r.captive = false;
+    r.root.visible = true;
+    r.body.pos.set(dragon.body.pos.x, dragon.body.pos.y - 0.9, dragon.body.pos.z);
+    r.root.position.copy(r.body.pos);
+  }
+
+  applyNetHiddenCrew(hid) {
+    const hide = new Set(hid);
+    const crew = [this.robot, ...this.helpers];
+    for (let i = 0; i < crew.length; i++) {
+      const r = crew[i];
+      if (!r) continue;
+      if (!hide.has(i)) continue;
+      r.netHidden = true;
+      r.captive = true;
+      r.root.visible = false;
+      if (r.state !== 'kidnapped') r.setState('kidnapped');
     }
   }
 
