@@ -1,6 +1,6 @@
 // Beach set dressing: umbrellas, chairs, toys on the SAND shelf + distant ships in deep water.
 import * as THREE from 'three';
-import { LAYOUT, SEA, WZ } from './world/World.js';
+import { LAYOUT, GY, SEA, WZ } from './world/World.js';
 import { B } from './world/blocks.js';
 import { solidEntityMaterial, setEntityLight } from './world/materials.js';
 
