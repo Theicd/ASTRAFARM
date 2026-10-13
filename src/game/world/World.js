@@ -303,8 +303,9 @@ export class World {
       const Fz = LAYOUT.farmZone;
       const lawnZ1 = Fz.z1 + 12; // protected green — never sand
       const sandStart = lawnZ1 + 1;
-      // Sand shelf, then a real water belt (ships are ~6 blocks long and must fit past this)
-      const depth = 14;
+      // Sand shelf, then FORCE open water. The enlarged island radius runs off the
+      // 96-map, so z past the shelf was still GY land and boats sat in the sand.
+      const depth = 11;
       const xMid = LAYOUT.pathX;
       const halfW = 28;
       const hy = GY;
@@ -371,10 +372,22 @@ export class World {
           }
         }
       }
+      // Open sea after the sand — overwrite the extended island so boats have water
+      const seaZ0 = beachEnd + 1;
+      for (let z = seaZ0; z < WZ - 1; z++) {
+        for (let x = xMid - halfW; x <= xMid + halfW; x++) {
+          if (!this.inside(x, GY, z)) continue;
+          if (inRect(x, z, LAYOUT.farmZone, 0) || z <= lawnZ1) continue;
+          for (let y = 1; y <= SEA - 2; y++) put(x, y, z, y >= SEA - 3 ? B.SAND : B.STONE);
+          put(x, SEA - 1, z, B.WATER);
+          for (let y = SEA; y < WY - 1; y++) put(x, y, z, B.AIR);
+          top[x + z * WX] = SEA - 2;
+        }
+      }
       LAYOUT.pier = null;
       LAYOUT.beach = { x0: xMid - halfW, x1: xMid + halfW, z0: sandStart, z1: beachEnd };
       LAYOUT.lawnZ1 = lawnZ1;
-      LAYOUT.waterLineZ = beachEnd + 1; // first open-water row past sand
+      LAYOUT.waterLineZ = seaZ0;
     }
 
     // Re-stamp crop beds

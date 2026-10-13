@@ -245,23 +245,37 @@ export class BeachDecor {
       liner: 10.64, linerSmall: 10.64, shipLarge: 6.55, shipSmall: 5.3,
     };
 
-    const placeRow = (keys, nearBowZ, targetLen, x0, gap) => {
+    // Real shore: first column that is open water (GY is air, sea block is water).
+    const shoreAt = (x) => {
+      const ix = Math.max(1, Math.min(95, Math.floor(x)));
+      const w = this.game.world;
+      for (let z = (LAYOUT.beach?.z0 ?? 60); z < WZ - 1; z++) {
+        const ground = w.get(ix, GY, z);
+        if (ground === B.SAND || ground === B.GRASS || ground === B.PATH || ground === B.PLANKS || ground === B.FARM || ground === B.FARM_WET) continue;
+        if (w.get(ix, SEA - 1, z) === B.WATER) return z;
+      }
+      return waterLine;
+    };
+
+    const placeRow = (keys, bowGap, targetLen, x0, gap) => {
       keys.forEach((key, i) => {
         const raw = (halfZ[key] || 2) * 2;
         let scale = targetLen / raw;
         let hz = (halfZ[key] || 2) * scale;
-        let z = nearBowZ + hz;
-        if (z + hz > zMax) {
-          const room = Math.max(1.2, zMax - nearBowZ);
-          scale *= room / (hz * 2);
-          hz = (halfZ[key] || 2) * scale;
-          z = nearBowZ + hz;
-        }
-        if (z - hz < waterLine + 0.4) return;
         const x = x0 + i * gap;
+        const shore = Math.max(shoreAt(x - 1), shoreAt(x), shoreAt(x + 1), waterLine);
+        let bow = shore + bowGap;
+        let z = bow + hz;
+        if (z + hz > zMax) {
+          const room = Math.max(1.4, zMax - bow);
+          scale *= room / Math.max(0.4, hz * 2);
+          hz = (halfZ[key] || 2) * scale;
+          z = bow + hz;
+        }
+        if (z - hz < shore + 0.3) return;
         const mesh = this._clone(key, scale);
         if (!mesh) return;
-        const y = SEA - 0.12;
+        const y = SEA - 0.35;
         mesh.position.set(x, y, z);
         mesh.rotation.y = 0.04 * ((i % 2) ? 1 : -1);
         this.root.add(mesh);
@@ -269,19 +283,18 @@ export class BeachDecor {
       });
     };
 
-    // Near line: small craft, bows ~1.5 blocks past the sand
+    // Near line just off the real shore, far line behind it — both in carved water
     placeRow(
       ['fish', 'fan', 'rowSmall', 'row', 'sail', 'sailB', 'speedA', 'speedB', 'speedE', 'tug', 'tugA', 'tugC'],
-      waterLine + 1.6,
-      3.6,
+      1.2,
+      3.2,
       xMid - 22,
       4,
     );
-    // Far line: houses, tugs-with-tow, cargo, liners — behind the small boats
     placeRow(
       ['houseA', 'houseB', 'houseC', 'houseD', 'tow', 'cargoA', 'cargoB', 'cargoC', 'shipSmall', 'shipLarge', 'linerSmall', 'liner'],
-      waterLine + 6.2,
-      5.2,
+      5.4,
+      4.4,
       xMid - 22,
       4,
     );
