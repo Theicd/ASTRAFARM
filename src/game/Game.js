@@ -236,6 +236,7 @@ export class Game {
   async init() {
     await document.fonts?.ready;
     this.world.generate();
+    this.sky.setSouthShore(LAYOUT.waterLineZ ?? 80);
     this.rebuildCrops();
     this.mesher.update(999);
     this.chargeBay?.dispose();
@@ -702,6 +703,7 @@ export class Game {
     this.floats.clear();
     this.reserved.clear();
     this.world.generate();
+    this.sky.setSouthShore(LAYOUT.waterLineZ ?? 80);
     this.rebuildCrops();
     this.mesher.update(999);
     this.robot.reset();

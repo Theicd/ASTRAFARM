@@ -372,16 +372,16 @@ export class World {
           }
         }
       }
-      // Open sea after the sand — overwrite the extended island so boats have water
+      // Drop the map past the sand BELOW the ocean sheet (no voxel-water pool).
+      // The visible sea is the ocean plane, so a WATER block here reads as a boxed pond.
       const seaZ0 = beachEnd + 1;
-      for (let z = seaZ0; z < WZ - 1; z++) {
-        for (let x = xMid - halfW; x <= xMid + halfW; x++) {
+      for (let z = seaZ0; z < WZ; z++) {
+        for (let x = 0; x < WX; x++) {
           if (!this.inside(x, GY, z)) continue;
-          if (inRect(x, z, LAYOUT.farmZone, 0) || z <= lawnZ1) continue;
-          for (let y = 1; y <= SEA - 2; y++) put(x, y, z, y >= SEA - 3 ? B.SAND : B.STONE);
-          put(x, SEA - 1, z, B.WATER);
-          for (let y = SEA; y < WY - 1; y++) put(x, y, z, B.AIR);
-          top[x + z * WX] = SEA - 2;
+          if (z <= lawnZ1 || inRect(x, z, LAYOUT.farmZone, 0) || inRect(x, z, LAYOUT.house, 1)) continue;
+          for (let y = 1; y <= SEA - 3; y++) put(x, y, z, B.STONE);
+          for (let y = SEA - 2; y < WY - 1; y++) put(x, y, z, B.AIR);
+          top[x + z * WX] = SEA - 3;
         }
       }
       LAYOUT.pier = null;

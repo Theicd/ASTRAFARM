@@ -245,17 +245,19 @@ export class BeachDecor {
       liner: 10.64, linerSmall: 10.64, shipLarge: 6.55, shipSmall: 5.3,
     };
 
-    // Real shore: first column that is open water (GY is air, sea block is water).
+    // Real shore: first column that is no longer sand/grass (open sea sheet).
     const shoreAt = (x) => {
       const ix = Math.max(1, Math.min(95, Math.floor(x)));
       const w = this.game.world;
-      for (let z = (LAYOUT.beach?.z0 ?? 60); z < WZ - 1; z++) {
+      for (let z = (LAYOUT.beach?.z0 ?? 60); z < WZ; z++) {
         const ground = w.get(ix, GY, z);
-        if (ground === B.SAND || ground === B.GRASS || ground === B.PATH || ground === B.PLANKS || ground === B.FARM || ground === B.FARM_WET) continue;
-        if (w.get(ix, SEA - 1, z) === B.WATER) return z;
+        if (ground === B.SAND || ground === B.GRASS || ground === B.PATH || ground === B.PLANKS || ground === B.FARM || ground === B.FARM_WET || ground === B.DIRT) continue;
+        return z;
       }
       return waterLine;
     };
+    // Same height as the ocean plane in Sky.js
+    const seaY = SEA - 1 + 14 / 16 - 0.02;
 
     const placeRow = (keys, bowGap, targetLen, x0, gap) => {
       keys.forEach((key, i) => {
@@ -275,7 +277,7 @@ export class BeachDecor {
         if (z - hz < shore + 0.3) return;
         const mesh = this._clone(key, scale);
         if (!mesh) return;
-        const y = SEA - 0.35;
+        const y = seaY;
         mesh.position.set(x, y, z);
         mesh.rotation.y = 0.04 * ((i % 2) ? 1 : -1);
         this.root.add(mesh);

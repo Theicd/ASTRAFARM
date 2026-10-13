@@ -153,15 +153,38 @@ export class Sky {
     const om = oceanMaterial(atlas.water);
     const Y = SEA - 1 + 14 / 16 - 0.01;
     const E = 600;
-    for (const [x0, z0, x1, z1] of [[-E, -E, WX + E, 0], [-E, WZ, WX + E, WZ + E], [-E, 0, 0, WZ], [WX, 0, WX + E, WZ]]) {
+    this._oceanY = Y;
+    this._oceanMat = om;
+    this._oceanE = E;
+    // North + side sheets. South sheet is rebuilt to meet the beach shore.
+    for (const [x0, z0, x1, z1] of [[-E, -E, WX + E, 0], [-E, 0, 0, WZ], [WX, 0, WX + E, WZ]]) {
       const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0);
       g.rotateX(-Math.PI / 2);
       g.translate((x0 + x1) / 2, Y, (z0 + z1) / 2);
       ocean.add(new THREE.Mesh(g, om));
     }
-    scene.add(ocean);
+    this._southOcean = null;
     this.ocean = ocean;
+    this.setSouthShore(WZ);
+    scene.add(ocean);
     this.state = skyAt(0.2);
+  }
+
+  /** Pull the south ocean sheet up to the beach so it is one sea, not a pool plus a distant sheet. */
+  setSouthShore(zShore) {
+    const z0 = Math.max(0, Math.min(WZ - 1, zShore));
+    const E = this._oceanE;
+    const Y = this._oceanY;
+    if (this._southOcean) {
+      this.ocean.remove(this._southOcean);
+      this._southOcean.geometry.dispose();
+    }
+    const g = new THREE.PlaneGeometry(WX + E * 2, (WZ + E) - z0);
+    g.rotateX(-Math.PI / 2);
+    g.translate(WX / 2, Y, (z0 + WZ + E) / 2);
+    this._southOcean = new THREE.Mesh(g, this._oceanMat);
+    this._southOcean.frustumCulled = false;
+    this.ocean.add(this._southOcean);
   }
 
   /**
