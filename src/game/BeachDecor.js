@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { LAYOUT, GY, SEA, WZ } from './world/World.js';
+
 import { B } from './world/blocks.js';
 import { solidEntityMaterial, setEntityLight } from './world/materials.js';
 
@@ -234,7 +235,6 @@ export class BeachDecor {
     const xMid = LAYOUT.pathX;
     const beachEnd = LAYOUT.beach?.z1 ?? (LAYOUT.farmZone.z1 + 25);
     const waterLine = LAYOUT.waterLineZ ?? (beachEnd + 1);
-    const zMax = WZ - 2.5;
     // Half-length on Z at scale 1
     const halfZ = {
       fan: 1.43, fish: 1.93, row: 1.43, rowSmall: 1.19,
@@ -259,47 +259,52 @@ export class BeachDecor {
     // Same height as the ocean plane in Sky.js
     const seaY = SEA - 1 + 14 / 16 - 0.02;
 
-    const placeRow = (keys, bowGap, targetLen, x0, gap) => {
-      keys.forEach((key, i) => {
-        const raw = (halfZ[key] || 2) * 2;
-        let scale = targetLen / raw;
-        let hz = (halfZ[key] || 2) * scale;
-        const x = x0 + i * gap;
-        const shore = Math.max(shoreAt(x - 1), shoreAt(x), shoreAt(x + 1), waterLine);
-        let bow = shore + bowGap;
-        let z = bow + hz;
-        if (z + hz > zMax) {
-          const room = Math.max(1.4, zMax - bow);
-          scale *= room / Math.max(0.4, hz * 2);
-          hz = (halfZ[key] || 2) * scale;
-          z = bow + hz;
-        }
-        if (z - hz < shore + 0.3) return;
-        const mesh = this._clone(key, scale);
-        if (!mesh) return;
-        const y = seaY;
-        mesh.position.set(x, y, z);
-        mesh.rotation.y = 0.04 * ((i % 2) ? 1 : -1);
-        this.root.add(mesh);
-        this._ships.push({ mesh, baseY: y, phase: i * 0.7, bob: 0.045 });
-      });
-    };
+    // Ocean sheet continues past the map, so boats may sit beyond WZ.
+    // [key, x, blocks past shore, length, yaw]
+    const spots = [
+      ['fish', xMid - 34, 8, 3.4, 0.4],
+      ['rowSmall', xMid - 18, 6, 3.2, -0.2],
+      ['fan', xMid - 4, 11, 3.4, 0.15],
+      ['speedA', xMid + 12, 7, 3.6, -0.35],
+      ['sail', xMid + 28, 10, 4.2, 0.25],
+      ['tugC', xMid + 42, 8, 3.4, -0.1],
 
-    // Near line just off the real shore, far line behind it — both in carved water
-    placeRow(
-      ['fish', 'fan', 'rowSmall', 'row', 'sail', 'sailB', 'speedA', 'speedB', 'speedE', 'tug', 'tugA', 'tugC'],
-      1.2,
-      3.2,
-      xMid - 22,
-      4,
-    );
-    placeRow(
-      ['houseA', 'houseB', 'houseC', 'houseD', 'tow', 'cargoA', 'cargoB', 'cargoC', 'shipSmall', 'shipLarge', 'linerSmall', 'liner'],
-      5.4,
-      4.4,
-      xMid - 22,
-      4,
-    );
+      ['row', xMid - 40, 20, 3.6, 0.5],
+      ['speedB', xMid - 22, 24, 3.8, -0.4],
+      ['sailB', xMid - 6, 18, 4.4, 0.1],
+      ['tug', xMid + 10, 22, 3.8, -0.25],
+      ['speedE', xMid + 26, 19, 3.6, 0.45],
+      ['tugA', xMid + 40, 26, 4.0, -0.15],
+
+      ['houseA', xMid - 36, 36, 5.0, 0.2],
+      ['houseC', xMid - 16, 42, 5.2, -0.3],
+      ['tow', xMid + 2, 34, 5.4, 0.05],
+      ['houseB', xMid + 20, 40, 5.2, -0.2],
+      ['houseD', xMid + 38, 36, 5.0, 0.35],
+
+      ['cargoC', xMid - 30, 54, 6.5, 0.12],
+      ['shipSmall', xMid - 8, 60, 6.2, -0.18],
+      ['cargoA', xMid + 14, 52, 7.0, 0.08],
+      ['linerSmall', xMid + 36, 58, 7.5, -0.1],
+      ['cargoB', xMid - 20, 72, 7.2, 0.16],
+      ['shipLarge', xMid + 6, 76, 8.0, -0.06],
+      ['liner', xMid + 28, 74, 8.5, 0.1],
+    ];
+
+    for (const [key, x, past, len, yaw] of spots) {
+      const shore = Math.max(shoreAt(x), waterLine);
+      const raw = (halfZ[key] || 2) * 2;
+      const scale = len / raw;
+      const hz = (halfZ[key] || 2) * scale;
+      const z = shore + past + hz;
+      if (z - hz < shore + 1) continue;
+      const mesh = this._clone(key, scale);
+      if (!mesh) continue;
+      mesh.position.set(x, seaY, z);
+      mesh.rotation.y = yaw;
+      this.root.add(mesh);
+      this._ships.push({ mesh, baseY: seaY, phase: past * 0.2, bob: 0.04 });
+    }
   }
 
   _placeSeagulls() {
