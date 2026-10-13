@@ -7,17 +7,13 @@ import {
   createChomperModel, createHopperModel,
   createSeaBeastModel, createDinoModel,
 } from './models.js';
-import { findPath } from './nav.js';
+import { findPath, houseFootprintBlocked, outdoorGoal } from './nav.js';
 import { moveBody, applyGravity } from './physics.js';
 import { damp, dampAngle } from '../core/math.js';
 import { setEntityLight } from './world/materials.js';
-import { LAYOUT, GY, WX, SEA } from './world/World.js';
-import { HOUSE_IN } from './Robot.js';
+import { LAYOUT, GY, WX, WZ, SEA } from './world/World.js';
 
-const houseCell = (i) => {
-  const x = i % WX, z = (i / WX) | 0;
-  return x >= HOUSE_IN.x0 && x <= HOUSE_IN.x1 && z >= HOUSE_IN.z0 && z <= HOUSE_IN.z1 + 1;
-};
+const houseCell = houseFootprintBlocked;
 
 /** Shared ground-path chase helpers. */
 function chaseAlong(self, dt, tx, tz, speed) {
@@ -156,7 +152,8 @@ export class Chomper {
         const crop = g.nearestCrop(p);
         if (crop) {
           this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5) };
-          const r = findPath(g.world, p.x, p.z, this.target.pos.x, this.target.pos.z, { near: 0, maxNodes: 2200, blocked: houseCell });
+          const goal = outdoorGoal(this.target.pos.x, this.target.pos.z);
+          const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: 0, maxNodes: 2800, blocked: houseCell });
           this.path = r.path; this.pathI = 0;
         } else {
           this.target = {
@@ -445,7 +442,7 @@ export class Golem {
         const tr = this.pickTurret();
         if (tr) {
           this.target = { kind: 'turret', turret: tr, pos: tr.root.position.clone() };
-          const r = findPath(g.world, p.x, p.z, tr.root.position.x, tr.root.position.z, { near: 1.2, maxNodes: 2200, blocked: houseCell });
+          const r = findPath(g.world, p.x, p.z, tr.root.position.x, tr.root.position.z, { near: 1.2, maxNodes: 2800, blocked: houseCell });
           this.path = r.path; this.pathI = 0;
         } else {
           // No towers — lumber toward farm center and sulk-smash the dirt
@@ -562,7 +559,8 @@ export class CropThief {
         const crop = g.nearestCrop(p);
         if (crop) {
           this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5), crop: true };
-          const r = findPath(g.world, p.x, p.z, this.target.pos.x, this.target.pos.z, { near: 0, maxNodes: 2200, blocked: houseCell });
+          const goal = outdoorGoal(this.target.pos.x, this.target.pos.z);
+          const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: 0, maxNodes: 2800, blocked: houseCell });
           this.path = r.path; this.pathI = 0;
         } else {
           // Empty field — still raid the plots so the thief is visible
@@ -861,12 +859,12 @@ export class SeaBeast {
     game.scene.add(this.root);
     const s = this.model.baseScale;
     this.body = {
-      pos: new THREE.Vector3(x, SEA - 0.5, z),
-      vel: new THREE.Vector3(), hw: 0.55 * s, h: 0.9 * s, onGround: false, step: 1.2, inWater: true,
+      pos: new THREE.Vector3(x, SEA - 0.2, z),
+      vel: new THREE.Vector3(), hw: 0.7 * s, h: 1.35 * s, onGround: false, step: 1.35, inWater: true,
     };
-    this.hp = big ? 28 : 16;
+    this.hp = big ? 32 : 18;
     this.maxHp = this.hp;
-    this.speed = big ? 2.1 : 2.6;
+    this.speed = big ? 2.0 : 2.45;
     this.state = 'emerge';
     this.afterEmerge = 'hunt';
     this.stateT = 0;
@@ -905,12 +903,12 @@ export class SeaBeast {
     const p = this.body.pos;
 
     if (this.state === 'retreat') {
-      // Slide back into the southern sea
-      const tz = 1.5;
+      // Slide back into the farm-facing sea (+Z past the fields)
+      const tz = Math.min(WZ - 3, LAYOUT.farmZone.z1 + 16);
       chaseAlong(this, dt, p.x, tz, this.speed * 1.3);
       applyGravity(this.body, dt);
       moveBody(g.world, this.body, dt);
-      if (p.z < 4 || this.stateT > 10) {
+      if (p.z > LAYOUT.farmZone.z1 + 10 || this.stateT > 12) {
         this.state = 'leave';
         this.stateT = 0;
       }
@@ -940,7 +938,8 @@ export class SeaBeast {
         const crop = g.nearestCrop?.(p) || null;
         if (crop) {
           this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5) };
-          const r = findPath(g.world, p.x, p.z, this.target.pos.x, this.target.pos.z, { near: 0, maxNodes: 2400, blocked: houseCell });
+          const goal = outdoorGoal(this.target.pos.x, this.target.pos.z);
+          const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: 0, maxNodes: 2800, blocked: houseCell });
           this.path = r.path; this.pathI = 0;
         } else {
           this.target = { x: LAYOUT.farmZone.x0 + 4, z: LAYOUT.farmZone.z0 + 2, pos: new THREE.Vector3(LAYOUT.farmZone.x0 + 4.5, GY + 1, LAYOUT.farmZone.z0 + 2.5) };
@@ -1033,9 +1032,9 @@ export class Dino {
     let moving = false;
 
     if (this.state === 'charge' && this.stun <= 0) {
-      // Sprint toward farm center / fields
+      // Sprint from beach (+Z) into the fields toward the lodge door
       const tx = LAYOUT.center[0] + Math.sin(this.t * 0.7) * 6;
-      const tz = LAYOUT.farmZone.z0 + 3 + (this.t % 5);
+      const tz = LAYOUT.farmZone.z1 - 2 - (this.t % 8);
       chaseAlong(this, dt, tx, tz, this.speed);
       moving = true;
       this.stompT -= dt;

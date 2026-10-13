@@ -1,7 +1,7 @@
 // 緑のアレ（近づいて、シューッといって、爆発する）と、ブタ（ただ歩いている）。
 import * as THREE from 'three';
 import { createGreenModel, createPigModel } from './models.js';
-import { findPath } from './nav.js';
+import { findPath, houseFootprintBlocked, outdoorGoal } from './nav.js';
 import { moveBody, applyGravity } from './physics.js';
 import { damp, dampAngle } from '../core/math.js';
 import { setEntityLight } from './world/materials.js';
@@ -12,8 +12,6 @@ const penCenter = () => {
   const P = LAYOUT.pigPen;
   return [(P.x0 + P.x1) * 0.5 + 0.5, (P.z0 + P.z1) * 0.5 + 0.5];
 };
-
-const houseCell = (i) => { const x = i % WX, z = (i / WX) | 0; return x >= HOUSE_IN.x0 && x <= HOUSE_IN.x1 && z >= HOUSE_IN.z0 - 0 && z <= HOUSE_IN.z1 + 1; };
 
 export class Green {
   constructor(game, x, z, { big = false, night = false } = {}) {
@@ -126,7 +124,8 @@ export class Green {
       this.repathT = 0.7 + Math.random() * 0.3;
       this.target = this.pickTarget();
       const t = this.target;
-      const r = findPath(g.world, p.x, p.z, t.pos.x, t.pos.z, { near: t.kind === 'crop' ? 0 : 1, maxNodes: 2200, blocked: houseCell });
+      const goal = outdoorGoal(t.pos.x, t.pos.z);
+      const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: t.kind === 'crop' ? 0 : 1, maxNodes: 2800, blocked: houseFootprintBlocked });
       this.path = r.path;
       this.pathI = 0;
     }

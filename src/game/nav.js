@@ -1,6 +1,23 @@
 // 地面のマス（x, z）の上での道さがし（A*）。world.floor（立つ高さ）の差が 1 以内なら隣へ進める。
 // ななめは、両どなりが通れるときだけ（角を切らない）。
-import { WX, WZ } from './world/World.js';
+import { WX, WZ, LAYOUT } from './world/World.js';
+
+/** Full lodge footprint (walls + interior) — pests path around, never into walls. */
+export function houseFootprintBlocked(i) {
+  const x = i % WX, z = (i / WX) | 0;
+  const H = LAYOUT.house;
+  return x >= H.x0 && x <= H.x1 && z >= H.z0 && z <= H.z1;
+}
+
+/** If a chase goal is inside the lodge, aim at the farm-side door instead. */
+export function outdoorGoal(tx, tz) {
+  const H = LAYOUT.house;
+  const x = Math.floor(tx), z = Math.floor(tz);
+  if (x >= H.x0 && x <= H.x1 && z >= H.z0 && z <= H.z1) {
+    return { x: H.door[0] + 0.5, z: H.door[1] + 1.55 };
+  }
+  return { x: tx, z: tz };
+}
 
 class Heap {
   constructor() { this.a = []; this.p = []; }

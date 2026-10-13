@@ -39,9 +39,9 @@ export const LAYOUT = {
   posts: [[20 + OX, 29 + OZ], [40 + OX, 29 + OZ], [20 + OX, 39 + OZ], [40 + OX, 39 + OZ]],
   // Open-air pig sty east of the fields (gate faces the farm)
   pigPen: { x0: 43 + OX, x1: 51 + OX, z0: 29 + OZ, z1: 37 + OZ, gateX: 43 + OX, gateZ0: 32 + OZ, gateZ1: 34 + OZ },
-  // Southern shore gap — no mountain rim; walk from house to open beach
-  beachDir: -Math.PI / 2,
-  beachHalfWidth: 0.72,
+  // Beach opens past the fields (+Z), in front of the lodge door — not behind the house
+  beachDir: Math.PI / 2,
+  beachHalfWidth: 0.95,
 };
 
 // ---- 値ノイズ（生成用）
@@ -146,15 +146,19 @@ export class World {
         const hill = fbm(x * 0.09, z * 0.09, S + 1, 3);
         const shore = smoothstep(1.0, 0.86, t);
         let ring = smoothstep(0.5, 0.7, t) * (1 - smoothstep(0.84, 0.97, t));
-        // Open southern shore: flatten the mountain rim into a sandy ramp to the sea
-        if (beachGate) ring *= 0.05;
+        // Open shore past the farm (+Z): flatten the mountain rim into a sandy ramp to the sea
+        if (beachGate) ring *= 0.04;
+        // Extra: anything beyond the fields toward the horizon stays beach/sea, not peaks
+        const pastFarm = z > LAYOUT.farmZone.z1 + 1;
+        if (pastFarm) ring *= 0.08;
         h = SEA - 1 + shore * 2.2 + ring * (hill * 6.5 + 0.5) + (hill - 0.5) * 1.2 * shore;
-        if (beachGate && t > 0.52) {
+        if ((beachGate || pastFarm) && t > 0.48) {
           const beachH = SEA + 0.15 + shore * 1.35 + (1 - t) * 1.8;
-          h = lerp(h, beachH, smoothstep(0.52, 0.78, t));
+          h = lerp(h, beachH, smoothstep(0.48, 0.76, t));
         }
         const flat = 1 - smoothstep(15.5, 19.5, r);
         h = lerp(h, GY, flat);
+        if (pastFarm && t > 0.55) h = Math.min(h, SEA + 1.2);
       }
       const gy = Math.max(2, Math.min(WY - 8, Math.round(h)));
       top[x + z * WX] = gy;
@@ -276,11 +280,14 @@ export class World {
     // Lanterns flanking the wider doorway
     put(hx - 2, GY + 1, H.z1 + 1, B.LANTERN); put(hx + 2, GY + 1, H.z1 + 1, B.LANTERN);
     for (const [x, z] of LAYOUT.posts) { put(x, GY + 1, z, B.LOG); put(x, GY + 2, z, B.LANTERN); }
-    // Path from beach-side wall toward the open southern beach
-    for (let z = H.z0 - 1; z >= H.z0 - 10; z--) {
-      if (at(hx, GY, z) === B.GRASS || at(hx, GY, z) === B.DIRT || at(hx, GY, z) === B.SAND) {
-        put(hx, GY, z, B.PATH);
-        put(hx, GY + 1, z, B.AIR);
+    // Path from fields toward the open beach (+Z past the farm)
+    for (let z = LAYOUT.farmZone.z1 + 1; z <= Math.min(WZ - 3, LAYOUT.farmZone.z1 + 14); z++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = LAYOUT.pathX + dx;
+        if (at(x, GY, z) === B.GRASS || at(x, GY, z) === B.DIRT || at(x, GY, z) === B.SAND) {
+          put(x, GY, z, B.PATH);
+          put(x, GY + 1, z, B.AIR);
+        }
       }
     }
 
@@ -363,8 +370,9 @@ export class World {
       const gy = top[x + z * WX];
       const r = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
       if (r < 14 || gy < SEA || at(x, gy, z) !== B.GRASS || keepOut(x, z)) continue;
-      // Keep the southern beach opening clear of trees
-      if (angDist(Math.atan2(z + 0.5 - cz, x + 0.5 - cx), LAYOUT.beachDir) < LAYOUT.beachHalfWidth * 0.85 && r > 18) continue;
+      // Keep the farm-facing beach opening clear of trees
+      if (angDist(Math.atan2(z + 0.5 - cz, x + 0.5 - cx), LAYOUT.beachDir) < LAYOUT.beachHalfWidth * 0.9 && r > 16) continue;
+      if (z > LAYOUT.farmZone.z1 + 2) continue;
       if (trees.some(([a, b]) => Math.hypot(a - x, b - z) < 4.2)) continue;
       trees.push([x, z]);
       const h = 4 + Math.floor(rng() * 2);

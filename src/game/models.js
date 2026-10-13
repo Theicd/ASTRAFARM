@@ -436,29 +436,30 @@ export function createDragonModel() {
   return { root, scale, body, head, wings, legs, mat, baseScale: s };
 }
 
-// ------------------------------------------------------------------ מפלצת ים (גאות ארקייד)
+// ------------------------------------------------------------------ מפלצת ים / לוויתן — גדולה, ראש בולט מהמים
 export function createSeaBeastModel(big = false) {
   const skin = new Skin(64, 48, 616);
   const teal = ['#2a8a9a', '#1e7080', '#3aa0b0', '#186070', '#48b0c0'];
-  const Bd = skin.boxNoise(0, 0, 14, 8, 18, teal);
+  const Bd = skin.boxNoise(0, 0, 16, 10, 22, teal);
   const [fx, fy] = Bd.front;
-  skin.rect(fx + 3, fy + 2, 3, 3, '#081820');
-  skin.rect(fx + 8, fy + 2, 3, 3, '#081820');
-  skin.px(fx + 4, fy + 3, '#80ffe0');
-  skin.px(fx + 9, fy + 3, '#80ffe0');
-  skin.rect(fx + 4, fy + 5, 6, 2, '#102028');
-  skin.px(fx + 5, fy + 5, '#e8fff0');
-  skin.boxNoise(40, 0, 6, 6, 4, ['#186070', '#104858']); // head
-  skin.boxNoise(0, 24, 10, 6, 4, ['#1e7080', '#2a8a9a']); // tail
+  skin.rect(fx + 3, fy + 3, 4, 4, '#081820');
+  skin.rect(fx + 9, fy + 3, 4, 4, '#081820');
+  skin.px(fx + 4, fy + 4, '#80ffe0');
+  skin.px(fx + 10, fy + 4, '#80ffe0');
+  skin.rect(fx + 5, fy + 7, 6, 2, '#102028');
+  skin.px(fx + 6, fy + 7, '#e8fff0');
+  skin.boxNoise(40, 0, 10, 10, 8, ['#186070', '#104858', '#48b0c0']); // huge head
+  skin.boxNoise(0, 24, 12, 8, 6, ['#1e7080', '#2a8a9a']); // tail fluke
   const tex = skin.texture();
   const mat = entityMaterial(tex);
   const root = new THREE.Group();
   root.name = big ? 'leviathan' : 'seaBeast';
   const scale = new THREE.Group(); scale.name = 'scale'; root.add(scale);
-  const body = part('body', scale, mat, skin, { size: [14, 8, 18], uv: [0, 0], at: [0, 5, 0] });
-  const head = part('head', scale, mat, skin, { size: [6, 6, 4], uv: [40, 0], at: [0, 7, 10], off: [-3, -3, -2] });
-  const tail = part('tail', scale, mat, skin, { size: [10, 6, 4], uv: [0, 24], at: [0, 5, -10], off: [-5, -3, -2] });
-  const s = big ? 2.1 : 1.55;
+  // Body sits low; head rises high so it reads from the farm as a whale breach
+  const body = part('body', scale, mat, skin, { size: [16, 10, 22], uv: [0, 0], at: [0, 2, 0] });
+  const head = part('head', scale, mat, skin, { size: [10, 10, 8], uv: [40, 0], at: [0, 10, 12], off: [-5, -5, -4] });
+  const tail = part('tail', scale, mat, skin, { size: [12, 8, 6], uv: [0, 24], at: [0, 3, -12], off: [-6, -4, -3] });
+  const s = big ? 3.4 : 2.6;
   scale.scale.setScalar(s);
   return { root, scale, body, head, tail, mat, baseScale: s };
 }
