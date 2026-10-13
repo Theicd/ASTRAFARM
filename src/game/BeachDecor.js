@@ -45,6 +45,7 @@ function adaptGltf(root, mats) {
         opacity: src?.opacity ?? 1,
         side: THREE.DoubleSide,
       });
+      m.name = src?.name || '';
       mats.push(m);
       return m;
     });
@@ -64,16 +65,134 @@ function makeSeagull(mats) {
   return g;
 }
 
-/** Push a Kenney chair toward a beach color. Grey cloth picks it up; strong pink gets softened. */
-function tintGroup(group, hex, strength = 0.7) {
+const _texCache = new Map();
+
+function canvasTex(key, draw, repeat = 2) {
+  if (_texCache.has(key)) return _texCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  draw(c.getContext('2d'), c.width, c.height);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeat, repeat);
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  _texCache.set(key, tex);
+  return tex;
+}
+
+function clothTexture() {
+  return canvasTex('cloth', (g, w, h) => {
+    g.fillStyle = '#f4f1ea';
+    g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 10) {
+      g.fillStyle = y % 20 === 0 ? 'rgba(40,40,40,0.28)' : 'rgba(255,255,255,0.35)';
+      g.fillRect(0, y, w, 4);
+    }
+    g.strokeStyle = 'rgba(0,0,0,0.08)';
+    for (let x = 0; x < w; x += 4) {
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.lineTo(x, h);
+      g.stroke();
+    }
+  }, 3);
+}
+
+function woodTexture() {
+  return canvasTex('wood', (g, w, h) => {
+    g.fillStyle = '#c48a4a';
+    g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 7) {
+      g.strokeStyle = `rgba(90,48,18,${0.15 + (y % 3) * 0.08})`;
+      g.beginPath();
+      g.moveTo(0, y);
+      g.bezierCurveTo(w * 0.3, y + 2, w * 0.7, y - 2, w, y + 1);
+      g.stroke();
+    }
+  }, 2);
+}
+
+/** Kenney parasol atlas is flat color cells. Paint stripes into it so the canopy reads as cloth. */
+function detailedAtlas(image) {
+  const key = image;
+  if (_texCache.has(key)) return _texCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = image.width || 512;
+  c.height = image.height || 512;
+  const g = c.getContext('2d');
+  g.drawImage(image, 0, 0, c.width, c.height);
+  g.globalCompositeOperation = 'multiply';
+  for (let x = 0; x < c.width; x += 8) {
+    g.fillStyle = (x / 8) % 2 === 0 ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.08)';
+    g.fillRect(x, 0, 3, c.height);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = false;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  _texCache.set(key, tex);
+  return tex;
+}
+
+function leafTexture() {
+  return canvasTex('leaf', (g, w, h) => {
+    g.fillStyle = '#2fbf7a';
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(10,70,30,0.45)';
+    g.lineWidth = 2;
+    for (let x = 8; x < w; x += 18) {
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.lineTo(x - 6, h);
+      g.stroke();
+    }
+  }, 2);
+}
+
+function dressPalm(group) {
   if (!group) return;
-  const tint = new THREE.Color(hex);
+  const bark = woodTexture();
+  const leaf = leafTexture();
   group.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     for (const m of mats) {
-      if (!m.color) continue;
-      m.color.lerp(tint, strength);
+      const name = (m.name || '').toLowerCase();
+      m.map = name.includes('leaf') ? leaf : bark;
+      m.color.set(0xffffff);
+      m.needsUpdate = true;
+    }
+  });
+}
+
+function dressFurniture(group, hex) {
+  if (!group) return;
+  const tint = new THREE.Color(hex);
+  const cloth = clothTexture();
+  const wood = woodTexture();
+  group.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      const name = (m.name || '').toLowerCase();
+      if (m.map?.image) {
+        m.map = detailedAtlas(m.map.image);
+        m.color.set(0xffffff);
+      } else if (name.includes('wood')) {
+        m.map = wood;
+        m.color.set(0xffffff);
+      } else if (name.includes('metal')) {
+        m.map = null;
+        m.color.set(0x9aa3ab);
+      } else {
+        m.map = cloth;
+        m.color.copy(tint);
+      }
+      m.needsUpdate = true;
     }
   });
 }
@@ -202,6 +321,7 @@ export class BeachDecor {
       // Shade table. Canopy is ~2.1m; furniture stays outside that radius.
       const parasol = this._clone(si % 2 ? 'parasolB' : 'parasolA', 6);
       if (parasol) {
+        dressFurniture(parasol, 0xffffff);
         parasol.position.set(cx + 0.5, sandY, cz + 0.5);
         this.root.add(parasol);
       }
@@ -211,7 +331,7 @@ export class BeachDecor {
         if (!sandOk(w, cx + Math.round(ox), cz + 3)) continue;
         const bed = this._clone('lounge', 3.15);
         if (!bed) continue;
-        tintGroup(bed, tint, 0.78);
+        dressFurniture(bed, tint);
         bed.position.set(cx + ox, sandY, cz + 2.45);
         bed.rotation.y = Math.PI;
         this.root.add(bed);
@@ -221,7 +341,7 @@ export class BeachDecor {
       if (sandOk(w, cx + 2, cz)) {
         const chair = this._clone('deck', 1.45);
         if (chair) {
-          tintGroup(chair, tint, 0.55);
+          dressFurniture(chair, tint);
           chair.position.set(cx + 2.15, sandY, cz + 0.35);
           chair.rotation.y = -Math.PI / 2;
           this.root.add(chair);
@@ -247,6 +367,7 @@ export class BeachDecor {
       if (!sandOk(w, ix, iz)) continue;
       const p = this._clone(key, sc);
       if (!p) continue;
+      dressPalm(p);
       p.position.set(ix + 0.5, sandY, iz + 0.5);
       this.root.add(p);
     }
