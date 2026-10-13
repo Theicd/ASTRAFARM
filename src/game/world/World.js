@@ -303,9 +303,8 @@ export class World {
       const Fz = LAYOUT.farmZone;
       const lawnZ1 = Fz.z1 + 12; // protected green — never sand
       const sandStart = lawnZ1 + 1;
-      // Leave a real open-water belt to the world edge for the offshore fleet
-      // (WZ=96 → sand must end ~80 so ships fit at z 82–94)
-      const depth = 12;
+      // Sand shelf, then a real water belt (ships are ~6 blocks long and must fit past this)
+      const depth = 14;
       const xMid = LAYOUT.pathX;
       const halfW = 28;
       const hy = GY;
@@ -361,7 +360,9 @@ export class World {
           top[x + z * WX] = GY;
         }
       }
-      for (let z = sandStart; z <= Math.min(WZ - 5, sandStart + depth - 3); z++) {
+      // Short entrance only — do not cut a dirt road through the resort sand
+      const beachEnd = Math.min(WZ - 8, sandStart + depth);
+      for (let z = sandStart; z <= sandStart + 2; z++) {
         for (let dx = -1; dx <= 1; dx++) {
           const x = LAYOUT.pathX + dx;
           if (at(x, GY, z) === B.SAND) {
@@ -370,26 +371,7 @@ export class World {
           }
         }
       }
-
-      // Pier stays ON the sand shelf — tip at the waterline (no plank runway into the sea)
-      const beachEnd = Math.min(WZ - 5, sandStart + depth);
-      const pierX0 = xMid + 10;
-      const pierZ0 = sandStart + 8;
-      const pierZ1 = beachEnd; // ends at sand edge — boats sit FURTHER out in open water
-      for (let z = pierZ0; z <= pierZ1; z++) {
-        for (let dx = 0; dx <= 2; dx++) {
-          const x = pierX0 + dx;
-          if (!this.inside(x, GY, z)) continue;
-          for (let y = 1; y < GY; y++) {
-            if ((z - pierZ0) % 3 === 0 && (dx === 0 || dx === 2)) put(x, y, z, B.LOG);
-            else if (at(x, y, z) === B.WATER || at(x, y, z) === B.AIR) put(x, y, z, B.STONE);
-          }
-          put(x, GY, z, B.PLANKS);
-          put(x, GY + 1, z, B.AIR);
-          top[x + z * WX] = GY;
-        }
-      }
-      LAYOUT.pier = { x0: pierX0, x1: pierX0 + 2, z0: pierZ0, z1: pierZ1 };
+      LAYOUT.pier = null;
       LAYOUT.beach = { x0: xMid - halfW, x1: xMid + halfW, z0: sandStart, z1: beachEnd };
       LAYOUT.lawnZ1 = lawnZ1;
       LAYOUT.waterLineZ = beachEnd + 1; // first open-water row past sand

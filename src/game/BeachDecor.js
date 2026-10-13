@@ -133,133 +133,126 @@ export class BeachDecor {
     });
   }
 
-  /** Kenney parasol + loungers UNDER it, palm rows, volleyball toys. */
+  /**
+   * Kenney city parasols are ~0.45m and loungers ~0.6m — scale them up to real beach size.
+   * Sets: parasol with two sunbeds under the canopy, palms on the flanks.
+   */
   _placeKenneyResort() {
     const w = this.game.world;
     const beach = LAYOUT.beach;
     if (!beach) return;
     const xMid = LAYOUT.pathX;
-    const pier = LAYOUT.pier;
-    const sandY = GY + 0.02;
-    const z0 = beach.z0 + 2;
+    const sandY = GY + 1.02; // top of the GY sand block
+    const z0 = beach.z0 + 3; // past the short entrance path
     const z1 = beach.z1 - 2;
-    const zMid = Math.floor((z0 + z1) / 2);
 
+    // Two tidy rows, clear of the center path
     const sets = [
-      [xMid - 12, z0 + 2],
-      [xMid - 5, z0 + 3],
-      [xMid + 3, z0 + 2],
-      [xMid + 10, z0 + 3],
-      [xMid - 9, zMid],
-      [xMid + 6, zMid],
-      [xMid - 3, z1 - 1],
-      [xMid + 11, z1 - 1],
+      [xMid - 14, z0],
+      [xMid - 7, z0 + 1],
+      [xMid + 6, z0],
+      [xMid + 13, z0 + 1],
+      [xMid - 11, z1 - 1],
+      [xMid - 4, z1],
+      [xMid + 4, z1 - 1],
+      [xMid + 11, z1],
     ];
 
     let si = 0;
     for (const [cx, cz] of sets) {
-      if (pier && cx >= pier.x0 - 2 && cx <= pier.x1 + 3 && cz >= pier.z0) continue;
+      if (Math.abs(cx - xMid) < 2) continue;
       if (!sandOk(w, cx, cz)) continue;
-
-      const parasol = this._clone(si % 2 ? 'parasolB' : 'parasolA', 2.2);
+      // Parasol raw height 0.45 → scale 7 ≈ 3.1m pole + ~2.4m canopy
+      const parasol = this._clone(si % 2 ? 'parasolB' : 'parasolA', 7);
       if (parasol) {
         parasol.position.set(cx + 0.5, sandY, cz + 0.5);
-        parasol.rotation.y = si * 0.4;
+        parasol.rotation.y = si * 0.35;
         this.root.add(parasol);
       }
-
-      // Sunbeds / loungers directly under the shade (sea-facing)
-      const L1 = this._clone(si % 2 ? 'deck' : 'lounge', 1.35);
+      // Lounger raw ~0.67m → scale 2.6 ≈ 1.7m sunbed, sitting under the canopy
+      const L1 = this._clone(si % 2 ? 'deck' : 'lounge', 2.6);
       if (L1) {
-        L1.position.set(cx + 1.5, sandY, cz + 1.45);
-        L1.rotation.y = Math.PI + 0.2;
+        L1.position.set(cx + 1.15, sandY, cz + 0.85);
+        L1.rotation.y = Math.PI + 0.15;
         this.root.add(L1);
       }
-      const L2 = this._clone(si % 2 ? 'lounge2' : 'deck', 1.35);
+      const L2 = this._clone(si % 2 ? 'lounge' : 'deck', 2.6);
       if (L2) {
-        L2.position.set(cx - 0.5, sandY, cz + 1.5);
-        L2.rotation.y = Math.PI - 0.25;
+        L2.position.set(cx - 0.15, sandY, cz + 0.9);
+        L2.rotation.y = Math.PI - 0.2;
         this.root.add(L2);
       }
       si++;
     }
 
-    // Palm line on both flanks
+    // Palm raw height ~1.4m → scale 3.2 ≈ 4.5m trees along both edges
     const palms = [
-      [xMid - 18, z0 + 1, 'palm', 3.4],
-      [xMid - 18, zMid, 'palmBend', 3.2],
-      [xMid - 18, z1 - 1, 'palmTall', 3.5],
-      [xMid - 15, z0 + 4, 'palm', 3.0],
-      [xMid + 16, z0 + 1, 'palmTall', 3.3],
-      [xMid + 16, zMid, 'palm', 3.4],
-      [xMid + 16, z1 - 1, 'palmBend', 3.1],
-      [xMid + 19, z0 + 4, 'palm', 3.2],
+      [xMid - 20, z0, 'palm', 3.2],
+      [xMid - 20, (z0 + z1) / 2, 'palmBend', 3.0],
+      [xMid - 20, z1, 'palmTall', 3.4],
+      [xMid - 17, z0 + 3, 'palm', 2.8],
+      [xMid + 18, z0, 'palmTall', 3.3],
+      [xMid + 18, (z0 + z1) / 2, 'palm', 3.1],
+      [xMid + 18, z1, 'palmBend', 3.0],
+      [xMid + 21, z0 + 3, 'palm', 2.9],
     ];
     for (const [px, pz, key, sc] of palms) {
-      if (!sandOk(w, px, pz)) continue;
+      const ix = Math.round(px);
+      const iz = Math.round(pz);
+      if (!sandOk(w, ix, iz)) continue;
       const p = this._clone(key, sc);
       if (!p) continue;
-      p.position.set(px + 0.5, sandY, pz + 0.5);
+      p.position.set(ix + 0.5, sandY, iz + 0.5);
       this.root.add(p);
     }
   }
 
   /**
-   * Water starts at LAYOUT.waterLineZ (= beach.z1 + 1).
-   * Every craft is placed strictly at z >= waterLine + 2, up to the world edge.
+   * Measured Kenney hulls (local units, long axis = Z, origin at center):
+   *   cargo 10.55 long, sail ~3.8, tug/row ~2.9
+   * Scale must stay small or a "3x" cargo is 30+ blocks and covers the whole beach.
+   * Pivot is pushed so the NEAR end of the hull is still past the waterline.
    */
   _placeKenneyFleetOffshore() {
     const xMid = LAYOUT.pathX;
     const beachEnd = LAYOUT.beach?.z1 ?? (LAYOUT.farmZone.z1 + 25);
     const waterLine = LAYOUT.waterLineZ ?? (beachEnd + 1);
-
-    // Sanity: never spawn on sand
-    const zMin = Math.max(waterLine + 2, beachEnd + 2);
     const zMax = WZ - 3;
-    if (zMin > zMax) {
-      console.warn('[BeachDecor] no open water for ships', { waterLine, beachEnd, WZ });
-      return;
-    }
+    // Half-length along Z at scale 1 (max |minZ|,|maxZ|)
+    const halfZ = { sail: 1.98, row: 1.43, tug: 1.43, cargoA: 5.27, cargoB: 5.27 };
 
-    const midZ = Math.min(zMax, zMin + 2);
-    const farZ = Math.min(zMax, zMin + 5);
-    const horizonZ = zMax;
-
-    const add = (key, x, z, scale, yaw, bob = 0.05) => {
-      const zz = Math.max(z, zMin);
-      if (zz > zMax) return;
-      // Refuse if somehow still on sand/planks
+    const add = (key, x, scale, yaw, extra = 1.5, bob = 0.05) => {
+      const hz = (halfZ[key] || 2) * scale;
+      // Near tip of the hull must clear the sand
+      let z = waterLine + hz + extra;
+      if (z + hz > zMax) z = zMax - hz - 0.4;
+      if (z - hz < waterLine + 0.5) return;
       const ix = Math.floor(x);
-      const iz = Math.floor(zz);
+      const iz = Math.floor(z);
       if (this.game.world.inside(ix, GY, iz)) {
         const g = this.game.world.get(ix, GY, iz);
         if (g === B.SAND || g === B.PATH || g === B.PLANKS || g === B.GRASS) return;
       }
       const mesh = this._clone(key, scale);
       if (!mesh) return;
-      const y = SEA - 0.05;
-      mesh.position.set(x, y, zz);
-      mesh.rotation.y = yaw;
+      const y = SEA - 0.15;
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = yaw; // keep yaw small — long axis stays out to sea
       this.root.add(mesh);
       this._ships.push({ mesh, baseY: y, phase: Math.random() * 6, bob });
     };
 
-    // Sailboats mid-water
-    add('sail', xMid - 14, midZ, 3.2, 0.4);
-    add('sail', xMid + 2, midZ + 1, 2.8, -0.35);
-    add('sail', xMid + 15, midZ, 3.4, 0.15);
-    add('row', xMid - 4, midZ + 2, 2.4, 0.85);
-    add('tug', xMid + 9, midZ + 2, 2.6, -0.45);
+    // Sailboats just offshore (readable, not beached)
+    add('sail', xMid - 16, 1.15, 0.15, 1.2, 0.06);
+    add('sail', xMid + 2, 1.05, -0.12, 2.2, 0.06);
+    add('sail', xMid + 16, 1.2, 0.08, 1.4, 0.06);
+    add('row', xMid - 6, 1.3, 0.2, 2.8, 0.05);
+    add('tug', xMid + 10, 1.25, -0.18, 3.2, 0.05);
 
-    // Cargo further out
-    add('cargoA', xMid - 18, farZ, 3.5, 0.08, 0.04);
-    add('cargoB', xMid + 4, farZ + 1, 3.8, -0.06, 0.04);
-    add('cargoA', xMid + 22, farZ, 3.2, 0.18, 0.04);
-
-    // Horizon line
-    add('cargoB', xMid - 8, horizonZ, 2.6, 0.05, 0.035);
-    add('sail', xMid + 14, horizonZ, 2.4, -0.3, 0.04);
-    add('cargoA', xMid + 28, horizonZ, 2.3, 0.12, 0.035);
+    // Cargo freighters further out — scale ~0.55 → ~6 blocks long, on the horizon
+    add('cargoA', xMid - 18, 0.55, 0.06, 4.5, 0.04);
+    add('cargoB', xMid + 6, 0.62, -0.05, 5.2, 0.04);
+    add('cargoA', xMid + 24, 0.5, 0.1, 4.8, 0.04);
   }
 
   _placeSeagulls() {
