@@ -1,9 +1,9 @@
-// Beach set dressing — Kenney CC0 GLBs (ships, palms, chairs, parasols) + pier dock.
+// Beach dressing: colorful props + Kenney CC0 GLBs (textured ships/palms).
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { LAYOUT, GY, SEA, WZ } from './world/World.js';
 import { B } from './world/blocks.js';
-import { solidEntityMaterial, setEntityLight } from './world/materials.js';
+import { solidEntityMaterial, mapEntityMaterial, setEntityLight } from './world/materials.js';
 
 const ASSET = (name) => `./assets/beach/${name}`;
 
@@ -19,113 +19,185 @@ function box(parent, mats, w, h, d, x, y, z, m) {
   return mesh;
 }
 
-/** Rebind Kenney materials to game fog/light shaders (scene has no classic lights). */
+/** Keep Kenney colormap textures — without the map everything renders pure white. */
 function adaptGltf(root, mats) {
   root.traverse((o) => {
     if (!o.isMesh) return;
-    const src = o.material;
-    let hex = 0xc8c8c8;
-    if (src?.color) hex = src.color.getHex();
-    else if (src?.map) hex = 0xd0c8b0;
-    const m = solidEntityMaterial(hex, { shade: 1.0 });
-    mats.push(m);
-    if (Array.isArray(o.material)) o.material.forEach((mm) => mm.dispose?.());
-    else o.material?.dispose?.();
-    o.material = m;
+    const srcs = Array.isArray(o.material) ? o.material : [o.material];
+    const next = srcs.map((src) => {
+      const map = src?.map || null;
+      const hex = src?.color ? src.color.getHex() : 0xffffff;
+      const m = map
+        ? mapEntityMaterial(map, { colorHex: hex, shade: 1.05 })
+        : solidEntityMaterial(hex === 0xffffff ? 0xb0b8c0 : hex, { shade: 1.0 });
+      mats.push(m);
+      return m;
+    });
+    o.material = next.length === 1 ? next[0] : next;
     o.castShadow = false;
     o.receiveShadow = false;
   });
 }
 
+/* ─── Procedural colorful props (match farm voxel look, guaranteed color) ─── */
+
+function makeUmbrella(mats, color = 0xe85a4a) {
+  const g = new THREE.Group();
+  const pole = mat(0xe8d8a8, 1.0);
+  const cloth = mat(color, 1.08);
+  const tip = mat(0xf5e6b0, 1.1);
+  const stripe = mat(0xfff8ee, 1.12);
+  box(g, mats, 0.1, 2.5, 0.1, 0, 1.25, 0, pole);
+  box(g, mats, 2.8, 0.1, 2.8, 0, 2.5, 0, cloth);
+  box(g, mats, 2.0, 0.08, 2.0, 0, 2.6, 0, cloth);
+  box(g, mats, 1.2, 0.06, 1.2, 0, 2.68, 0, cloth);
+  box(g, mats, 0.3, 0.22, 0.3, 0, 2.82, 0, tip);
+  box(g, mats, 2.85, 0.04, 0.28, 0, 2.52, 0, stripe);
+  box(g, mats, 0.28, 0.04, 2.85, 0, 2.52, 0, stripe);
+  // Sand base
+  box(g, mats, 0.35, 0.12, 0.35, 0, 0.06, 0, mat(0xd2b48c, 1.0));
+  return g;
+}
+
+function makeLounger(mats, clothHex = 0x3a7ec8) {
+  const g = new THREE.Group();
+  const wood = mat(0xc4a060, 1.0);
+  const cloth = mat(clothHex, 1.08);
+  // Frame
+  box(g, mats, 0.9, 0.08, 2.0, 0, 0.28, 0.1, wood);
+  box(g, mats, 0.08, 0.28, 0.08, -0.38, 0.14, 0.9, wood);
+  box(g, mats, 0.08, 0.28, 0.08, 0.38, 0.14, 0.9, wood);
+  box(g, mats, 0.08, 0.4, 0.08, -0.38, 0.2, -0.8, wood);
+  box(g, mats, 0.08, 0.4, 0.08, 0.38, 0.2, -0.8, wood);
+  // Cushion + backrest
+  box(g, mats, 0.85, 0.1, 1.35, 0, 0.38, 0.25, cloth);
+  box(g, mats, 0.85, 0.85, 0.12, 0, 0.85, -0.75, cloth);
+  box(g, mats, 0.85, 0.08, 0.35, 0, 0.42, -0.45, cloth);
+  return g;
+}
+
 function makeTowel(mats, hex) {
   const g = new THREE.Group();
-  box(g, mats, 1.1, 0.04, 1.8, 0, 0.03, 0, mat(hex, 1.05));
-  box(g, mats, 1.1, 0.03, 0.15, 0, 0.04, -0.85, mat(0xffffff, 1.1));
+  box(g, mats, 1.15, 0.04, 1.9, 0, 0.03, 0, mat(hex, 1.08));
+  box(g, mats, 1.15, 0.03, 0.18, 0, 0.045, -0.88, mat(0xffffff, 1.12));
+  box(g, mats, 0.15, 0.035, 1.9, -0.45, 0.04, 0, mat(0xffffff, 1.1));
   return g;
 }
 
 function makeCooler(mats) {
   const g = new THREE.Group();
-  box(g, mats, 0.7, 0.55, 0.5, 0, 0.28, 0, mat(0x2a80d0));
-  box(g, mats, 0.72, 0.08, 0.52, 0, 0.58, 0, mat(0xe8e8e8));
-  box(g, mats, 0.2, 0.12, 0.12, 0.25, 0.62, 0, mat(0xe05040));
+  box(g, mats, 0.75, 0.55, 0.55, 0, 0.3, 0, mat(0x2a80d0, 1.05));
+  box(g, mats, 0.78, 0.08, 0.58, 0, 0.6, 0, mat(0xf0f0f0, 1.1));
+  box(g, mats, 0.22, 0.12, 0.14, 0.28, 0.64, 0, mat(0xe05040, 1.1));
   return g;
 }
 
 function makeBall(mats) {
   const g = new THREE.Group();
-  box(g, mats, 0.45, 0.45, 0.45, 0, 0.25, 0, mat(0xf0a020, 1.1));
-  box(g, mats, 0.48, 0.12, 0.48, 0, 0.25, 0, mat(0xffffff, 1.15));
+  box(g, mats, 0.48, 0.48, 0.48, 0, 0.26, 0, mat(0xf0a020, 1.12));
+  box(g, mats, 0.5, 0.12, 0.5, 0, 0.26, 0, mat(0xffffff, 1.15));
+  box(g, mats, 0.12, 0.5, 0.5, 0, 0.26, 0, mat(0xe05040, 1.1));
   return g;
 }
 
-function makeSandcastle(mats) {
+function makePalm(mats, bend = 0) {
   const g = new THREE.Group();
-  const sand = mat(0xe8d090, 1.05);
-  box(g, mats, 1.1, 0.45, 1.1, 0, 0.22, 0, sand);
-  box(g, mats, 0.35, 0.55, 0.35, -0.35, 0.7, -0.35, sand);
-  box(g, mats, 0.35, 0.55, 0.35, 0.35, 0.7, -0.35, sand);
-  box(g, mats, 0.35, 0.55, 0.35, -0.35, 0.7, 0.35, sand);
-  box(g, mats, 0.35, 0.55, 0.35, 0.35, 0.7, 0.35, sand);
-  box(g, mats, 0.5, 0.7, 0.5, 0, 0.8, 0, sand);
-  box(g, mats, 0.2, 0.25, 0.2, 0, 1.2, 0, mat(0xe05040));
-  return g;
-}
-
-function makeSurfboard(mats, hex = 0x3a90d8) {
-  const g = new THREE.Group();
-  box(g, mats, 0.45, 0.08, 2.0, 0, 0.06, 0, mat(hex, 1.05));
-  box(g, mats, 0.2, 0.05, 1.6, 0, 0.1, 0, mat(0xffffff, 1.1));
-  return g;
-}
-
-function makeLifeRing(mats) {
-  const g = new THREE.Group();
-  box(g, mats, 0.9, 0.12, 0.9, 0, 0.08, 0, mat(0xe05040));
-  box(g, mats, 0.95, 0.05, 0.2, 0, 0.1, 0, mat(0xffffff, 1.1));
-  box(g, mats, 0.2, 0.05, 0.95, 0, 0.1, 0, mat(0xffffff, 1.1));
+  const trunk = mat(0xa86f3c, 1.0);
+  const leaf = mat(0x2f9e4a, 1.1);
+  const leaf2 = mat(0x3cb85a, 1.08);
+  box(g, mats, 0.38, 2.6, 0.38, bend * 0.15, 1.3, 0, trunk);
+  box(g, mats, 0.32, 1.0, 0.32, bend * 0.35, 2.6, bend * 0.1, trunk);
+  // Fronds
+  box(g, mats, 2.4, 0.12, 0.55, 0.9, 3.15, 0, leaf);
+  box(g, mats, 2.4, 0.12, 0.55, -0.9, 3.1, 0.1, leaf2);
+  box(g, mats, 0.55, 0.12, 2.2, 0.1, 3.2, 0.85, leaf);
+  box(g, mats, 0.55, 0.12, 2.2, -0.1, 3.05, -0.85, leaf2);
+  box(g, mats, 1.8, 0.1, 0.45, 0.5, 3.25, 0.5, leaf);
+  box(g, mats, 1.8, 0.1, 0.45, -0.55, 3.18, -0.4, leaf2);
+  // Coconuts
+  box(g, mats, 0.28, 0.28, 0.28, 0.35, 2.95, 0.2, mat(0x6b3f1a, 1.0));
+  box(g, mats, 0.24, 0.24, 0.24, -0.25, 2.9, 0.15, mat(0x7a4a22, 1.0));
   return g;
 }
 
 function makeVolleyballNet(mats) {
   const g = new THREE.Group();
-  const post = mat(0xe8d8a8);
-  const net = mat(0xf5f0e6, 0.85);
-  box(g, mats, 0.12, 2.2, 0.12, -2.2, 1.1, 0, post);
-  box(g, mats, 0.12, 2.2, 0.12, 2.2, 1.1, 0, post);
-  box(g, mats, 4.4, 0.06, 0.06, 0, 2.05, 0, net);
-  box(g, mats, 4.4, 0.06, 0.06, 0, 1.2, 0, net);
-  box(g, mats, 4.4, 1.0, 0.04, 0, 1.6, 0, mat(0xd0d8e0, 0.55));
+  const post = mat(0xe8d8a8, 1.0);
+  const rope = mat(0xf5f0e6, 1.05);
+  const mesh = mat(0xe8eef5, 0.75);
+  // Posts
+  box(g, mats, 0.14, 2.4, 0.14, -3.0, 1.2, 0, post);
+  box(g, mats, 0.14, 2.4, 0.14, 3.0, 1.2, 0, post);
+  box(g, mats, 0.35, 0.12, 0.35, -3.0, 0.06, 0, mat(0xd2b48c));
+  box(g, mats, 0.35, 0.12, 0.35, 3.0, 0.06, 0, mat(0xd2b48c));
+  // Top / bottom lines
+  box(g, mats, 6.0, 0.05, 0.05, 0, 2.25, 0, rope);
+  box(g, mats, 6.0, 0.05, 0.05, 0, 1.05, 0, rope);
+  // Thin net grid (not a solid wall)
+  for (let i = -2; i <= 2; i++) {
+    box(g, mats, 0.04, 1.15, 0.04, i * 1.2, 1.65, 0, mesh);
+  }
+  for (let j = 0; j < 4; j++) {
+    box(g, mats, 6.0, 0.03, 0.03, 0, 1.2 + j * 0.28, 0, mesh);
+  }
+  // Ball nearby marker
   return g;
 }
 
-/** Flat SAND/PATH at farm height — interior pads only (not water edge / grass cliff). */
-function findSandSpots(world, need) {
-  const F = LAYOUT.farmZone;
-  const zMin = F.z1 + 7;
-  const zMax = Math.min(WZ - 16, F.z1 + 18);
-  const xMid = LAYOUT.pathX;
-  const out = [];
-  for (let z = zMin; z <= zMax; z++) {
-    for (let x = xMid - 20; x <= xMid + 20; x++) {
+function makeSandcastle(mats) {
+  const g = new THREE.Group();
+  const sand = mat(0xe8d090, 1.08);
+  box(g, mats, 1.2, 0.5, 1.2, 0, 0.25, 0, sand);
+  for (const [x, z] of [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]]) {
+    box(g, mats, 0.32, 0.55, 0.32, x, 0.75, z, sand);
+  }
+  box(g, mats, 0.55, 0.75, 0.55, 0, 0.85, 0, sand);
+  box(g, mats, 0.18, 0.28, 0.18, 0, 1.3, 0, mat(0xe05040, 1.1));
+  return g;
+}
+
+function makeSurfboard(mats, hex) {
+  const g = new THREE.Group();
+  box(g, mats, 0.5, 0.08, 2.1, 0, 0.06, 0, mat(hex, 1.08));
+  box(g, mats, 0.22, 0.05, 1.7, 0, 0.1, 0, mat(0xffffff, 1.12));
+  return g;
+}
+
+/** Scan entire sand shelf for prop pads. */
+function mapSandPads(world) {
+  const beach = LAYOUT.beach || {
+    x0: LAYOUT.pathX - 24, x1: LAYOUT.pathX + 24,
+    z0: LAYOUT.farmZone.z1 + 2, z1: LAYOUT.farmZone.z1 + 18,
+  };
+  const pier = LAYOUT.pier;
+  const pads = [];
+  for (let z = beach.z0 + 1; z <= beach.z1 - 2; z++) {
+    for (let x = beach.x0 + 2; x <= beach.x1 - 2; x++) {
       if (!world.inside(x, GY, z)) continue;
-      const top = world.get(x, GY, z);
-      if (top !== B.SAND && top !== B.PATH) continue;
+      const t = world.get(x, GY, z);
+      if (t !== B.SAND && t !== B.PATH) continue;
       if (world.get(x, GY + 1, z) !== B.AIR) continue;
-      const nbr = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-      if (nbr.some(([dx, dz]) => world.get(x + dx, GY, z + dz) === B.WATER)) continue;
-      if (nbr.some(([dx, dz]) => {
-        const g = world.get(x + dx, GY, z + dz);
-        return g === B.GRASS || g === B.FARM || g === B.FARM_WET;
-      })) continue;
-      out.push([x, z]);
+      if (pier && x >= pier.x0 - 1 && x <= pier.x1 + 1 && z >= pier.z0) continue;
+      // Prefer interior (not water edge)
+      const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(
+        ([dx, dz]) => world.get(x + dx, GY, z + dz) === B.WATER,
+      );
+      if (edge) continue;
+      pads.push([x, z]);
     }
   }
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = (Math.imul(i + 17, 1103515245) >>> 0) % (i + 1);
-    [out[i], out[j]] = [out[j], out[i]];
+  return pads;
+}
+
+function takeSpaced(pads, count, minDist) {
+  const out = [];
+  for (const p of pads) {
+    if (out.every(([ax, az]) => Math.hypot(ax - p[0], az - p[1]) >= minDist)) {
+      out.push(p);
+      if (out.length >= count) break;
+    }
   }
-  return out.slice(0, need);
+  return out;
 }
 
 export class BeachDecor {
@@ -153,12 +225,6 @@ export class BeachDecor {
       palm: 'tree_palm_detailed_tall.glb',
       palmBend: 'tree_palm_bend.glb',
       palmTall: 'tree_palm_tall.glb',
-      parasolA: 'detail_parasol_a.glb',
-      parasolB: 'detail_parasol_b.glb',
-      lounge: 'lounge_chair_relax.glb',
-      lounge2: 'lounge_chair.glb',
-      deck: 'deck_chair.glb',
-      platform: 'platform_beach.glb',
     };
     const out = {};
     await Promise.all(Object.entries(files).map(async ([key, file]) => {
@@ -185,181 +251,174 @@ export class BeachDecor {
   rebuild() {
     this.disposeMeshes();
     const loadId = ++this._loadId;
-    const sandY = GY + 0.02;
-    const w = this.game.world;
-    const F = LAYOUT.farmZone;
-    const xMid = LAYOUT.pathX;
-    const mats = this._mats;
-
-    // Sync fillers while GLBs load
-    const spotsEarly = findSandSpots(w, 8);
-    for (let i = 0; i < Math.min(3, spotsEarly.length); i++) {
-      const [x, z] = spotsEarly[i];
-      const towel = makeTowel(mats, i % 2 ? 0xf06080 : 0x40a0e0);
-      towel.position.set(x + 0.5, sandY, z + 0.5);
-      this.root.add(towel);
-    }
-
-    this._ensureTemplates().then((tpl) => {
+    // Place colorful props immediately (don't wait for GLB)
+    this._placeColorProps();
+    this._ensureTemplates().then(() => {
       if (loadId !== this._loadId) return;
-      this._placeAll(tpl, sandY);
+      this._placeShipsAndExtraPalms();
     });
   }
 
-  _placeAll(tpl, sandY) {
+  _placeColorProps() {
     const w = this.game.world;
-    const F = LAYOUT.farmZone;
-    const xMid = LAYOUT.pathX;
     const mats = this._mats;
-    const pier = LAYOUT.pier || {
-      x0: xMid + 9, x1: xMid + 11,
-      z0: F.z1 + 11, z1: F.z1 + 25,
-    };
+    const sandY = GY + 0.02;
+    const pads = mapSandPads(w);
+    if (!pads.length) return;
 
-    const spots = findSandSpots(w, 28);
-    let si = 0;
-    for (let i = 0; i < spots.length && si < 6; i++) {
-      const [x, z] = spots[i];
-      if (spots.slice(0, i).some(([ax, az]) => Math.hypot(ax - x, az - z) < 5.5)) continue;
-      // Keep clear of pier
-      if (x >= pier.x0 - 3 && x <= pier.x1 + 4 && z >= pier.z0 - 2) continue;
+    // Shuffle deterministically
+    for (let i = pads.length - 1; i > 0; i--) {
+      const j = (Math.imul(i + 31, 1103515245) >>> 0) % (i + 1);
+      [pads[i], pads[j]] = [pads[j], pads[i]];
+    }
 
-      const parasol = this._clone(si % 2 ? 'parasolB' : 'parasolA', 1.35);
-      if (parasol) {
-        parasol.position.set(x + 0.5, sandY, z + 0.5);
-        parasol.rotation.y = si * 0.7;
-        this.root.add(parasol);
-      }
+    const umbrellaColors = [0xe85a4a, 0xf0c040, 0x3a90d8, 0xff6a9a, 0x50c8a0, 0xff8c40];
+    const loungerColors = [0x3a7ec8, 0xe85a4a, 0xf0c040, 0xffffff, 0x50c8a0, 0xff6a9a];
 
-      const chairA = this._clone(si % 2 ? 'deck' : 'lounge', si % 2 ? 1.1 : 1.25);
-      if (chairA) {
-        chairA.position.set(x + 1.6, sandY, z + 1.3);
-        chairA.rotation.y = 0.45 + Math.PI;
-        this.root.add(chairA);
-      }
-      const chairB = this._clone(si % 2 ? 'lounge2' : 'deck', si % 2 ? 1.25 : 1.1);
-      if (chairB) {
-        chairB.position.set(x - 0.5, sandY, z + 1.4);
-        chairB.rotation.y = -0.5 + Math.PI;
-        this.root.add(chairB);
-      }
+    // ── Lounge clusters: umbrella + 2 loungers + towel + cooler/ball ──
+    const clusters = takeSpaced(pads, 7, 6.5);
+    clusters.forEach(([x, z], i) => {
+      const um = makeUmbrella(mats, umbrellaColors[i % umbrellaColors.length]);
+      um.position.set(x + 0.5, sandY, z + 0.5);
+      um.rotation.y = i * 0.55;
+      this.root.add(um);
 
-      const towel = makeTowel(mats, si % 2 ? 0xf06080 : 0x40a0e0);
-      towel.position.set(x + 0.3, sandY, z + 2.6);
-      towel.rotation.y = 0.15;
+      const L1 = makeLounger(mats, loungerColors[i % loungerColors.length]);
+      L1.position.set(x + 1.7, sandY, z + 1.4);
+      L1.rotation.y = 0.35 + Math.PI;
+      this.root.add(L1);
+
+      const L2 = makeLounger(mats, loungerColors[(i + 2) % loungerColors.length]);
+      L2.position.set(x - 0.6, sandY, z + 1.5);
+      L2.rotation.y = -0.4 + Math.PI;
+      this.root.add(L2);
+
+      const towel = makeTowel(mats, i % 2 ? 0xf06080 : 0x40a0e0);
+      towel.position.set(x + 0.4, sandY, z + 2.8);
+      towel.rotation.y = 0.2;
       this.root.add(towel);
 
-      if (si % 2 === 0) {
-        const cool = makeCooler(mats);
-        cool.position.set(x + 2.2, sandY, z + 0.5);
-        this.root.add(cool);
+      if (i % 2 === 0) {
+        const c = makeCooler(mats);
+        c.position.set(x + 2.3, sandY, z + 0.4);
+        this.root.add(c);
       } else {
-        const ball = makeBall(mats);
-        ball.position.set(x - 1.4, sandY, z + 2.2);
-        this.root.add(ball);
+        const b = makeBall(mats);
+        b.position.set(x - 1.5, sandY, z + 2.4);
+        this.root.add(b);
       }
-      si++;
-    }
+    });
 
-    const used = new Set(spots.slice(0, 10).map(([x, z]) => `${x},${z}`));
-    const extras = spots.filter(([x, z]) => !used.has(`${x},${z}`));
-    if (extras[0]) {
-      const [x, z] = extras[0];
-      const sc = makeSandcastle(mats);
-      sc.position.set(x + 0.5, sandY, z + 0.5);
-      this.root.add(sc);
-    }
-    if (extras[1]) {
-      const [x, z] = extras[1];
-      const sb = makeSurfboard(mats, 0xff6a3a);
-      sb.position.set(x + 0.5, sandY, z + 0.5);
-      sb.rotation.y = 0.9;
-      this.root.add(sb);
-    }
-    if (extras[2]) {
-      const [x, z] = extras[2];
-      const lr = makeLifeRing(mats);
-      lr.position.set(x + 0.5, sandY, z + 0.5);
-      this.root.add(lr);
-    }
-    if (extras[3]) {
-      const [x, z] = extras[3];
-      const net = makeVolleyballNet(mats);
-      net.position.set(x + 0.5, sandY, z + 0.5);
-      this.root.add(net);
-    }
-    if (extras[4] && tpl.platform) {
-      const [x, z] = extras[4];
-      const pl = this._clone('platform', 1.4);
-      if (pl) {
-        pl.position.set(x + 0.5, sandY, z + 0.5);
-        this.root.add(pl);
-      }
-    }
-
-    // Palm line along beach sides
-    const palmKeys = ['palm', 'palmBend', 'palmTall'];
-    const palmSlots = [
-      [xMid - 18, F.z1 + 9, 2.8],
-      [xMid - 14, F.z1 + 12, 3.2],
-      [xMid - 20, F.z1 + 14, 2.6],
-      [xMid + 16, F.z1 + 10, 3.0],
-      [xMid + 19, F.z1 + 13, 2.7],
-      [xMid + 14, F.z1 + 16, 3.4],
-      [xMid - 8, F.z1 + 15, 2.5],
-      [xMid + 6, F.z1 + 17, 2.9],
-    ];
-    palmSlots.forEach(([px, pz, sc], i) => {
-      if (w.get(px, GY, pz) !== B.SAND && w.get(px, GY, pz) !== B.PATH) return;
-      const p = this._clone(palmKeys[i % palmKeys.length], sc);
-      if (!p) return;
-      p.position.set(px + 0.5, sandY, pz + 0.5);
-      p.rotation.y = i * 0.9;
+    // ── Palm line along both shores ──
+    const palmPads = takeSpaced(
+      pads.filter(([x]) => Math.abs(x - LAYOUT.pathX) > 8),
+      10,
+      5,
+    );
+    palmPads.forEach(([x, z], i) => {
+      const p = makePalm(mats, i % 2 ? 0.6 : -0.4);
+      p.position.set(x + 0.5, sandY, z + 0.5);
+      p.rotation.y = i * 0.8;
+      p.scale.setScalar(0.95 + (i % 3) * 0.12);
       this.root.add(p);
     });
 
-    // ── Pier: docked cargo ship + small boat ──
-    const dockZ = pier.z1 - 2;
-    const dockX = pier.x1 + 4;
-    const docked = this._clone('cargoA', 1.15);
-    if (docked) {
-      docked.position.set(dockX, SEA - 0.05, dockZ);
-      docked.rotation.y = Math.PI / 2 + 0.08;
-      this.root.add(docked);
-      this._ships.push({ mesh: docked, baseY: SEA - 0.05, phase: 1.2, bob: 0.04 });
-    }
-    const tug = this._clone('tug', 1.3);
-    if (tug) {
-      tug.position.set(pier.x0 - 3.5, SEA - 0.1, pier.z0 + 4);
-      tug.rotation.y = -0.4;
-      this.root.add(tug);
-      this._ships.push({ mesh: tug, baseY: SEA - 0.1, phase: 2.5, bob: 0.05 });
-    }
-    const row = this._clone('row', 1.4);
-    if (row) {
-      row.position.set(pier.x1 + 2.5, SEA - 0.05, pier.z0 + 2);
-      row.rotation.y = 1.1;
-      this.root.add(row);
-      this._ships.push({ mesh: row, baseY: SEA - 0.05, phase: 0.4, bob: 0.06 });
+    // ── Volleyball court (left of path) ──
+    const court = pads.find(([x, z]) => x < LAYOUT.pathX - 6 && z > LAYOUT.farmZone.z1 + 6);
+    if (court) {
+      const [x, z] = court;
+      const net = makeVolleyballNet(mats);
+      net.position.set(x + 0.5, sandY, z + 0.5);
+      net.rotation.y = 0.12;
+      this.root.add(net);
+      const ball = makeBall(mats);
+      ball.position.set(x + 2.2, sandY, z + 1.5);
+      this.root.add(ball);
     }
 
-    // ── Horizon freighters — world edge, in fog, read as distant background ──
+    // ── Extras: castles, boards ──
+    const extras = takeSpaced(
+      pads.filter((p) => clusters.every(([cx, cz]) => Math.hypot(cx - p[0], cz - p[1]) > 4)),
+      6,
+      7,
+    );
+    extras.forEach(([x, z], i) => {
+      if (i % 3 === 0) {
+        const sc = makeSandcastle(mats);
+        sc.position.set(x + 0.5, sandY, z + 0.5);
+        this.root.add(sc);
+      } else {
+        const sb = makeSurfboard(mats, i % 2 ? 0xff6a3a : 0x3a90d8);
+        sb.position.set(x + 0.5, sandY, z + 0.5);
+        sb.rotation.y = 0.7 + i * 0.3;
+        this.root.add(sb);
+      }
+    });
+  }
+
+  _placeShipsAndExtraPalms() {
+    const pier = LAYOUT.pier || {
+      x0: LAYOUT.pathX + 10, x1: LAYOUT.pathX + 12,
+      z0: LAYOUT.farmZone.z1 + 10, z1: LAYOUT.farmZone.z1 + 22,
+    };
+
+    // Docked cargo — IN WATER beside pier (not on sand)
+    const dock = this._clone('cargoA', 1.2);
+    if (dock) {
+      dock.position.set(pier.x1 + 5.5, SEA - 0.15, pier.z1 - 3);
+      dock.rotation.y = Math.PI / 2 + 0.06;
+      this.root.add(dock);
+      this._ships.push({ mesh: dock, baseY: SEA - 0.15, phase: 1.1, bob: 0.04 });
+    }
+    const tug = this._clone('tug', 1.35);
+    if (tug) {
+      tug.position.set(pier.x0 - 4, SEA - 0.12, pier.z0 + 3);
+      tug.rotation.y = -0.5;
+      this.root.add(tug);
+      this._ships.push({ mesh: tug, baseY: SEA - 0.12, phase: 2.2, bob: 0.05 });
+    }
+    const row = this._clone('row', 1.5);
+    if (row) {
+      row.position.set(pier.x1 + 3, SEA - 0.08, pier.z0 + 1.5);
+      row.rotation.y = 1.0;
+      this.root.add(row);
+      this._ships.push({ mesh: row, baseY: SEA - 0.08, phase: 0.6, bob: 0.06 });
+    }
+
+    // Horizon freighters — far edge only
+    const xMid = LAYOUT.pathX;
     const farZ = WZ - 3;
-    const horizon = [
-      [xMid - 32, farZ, 'cargoB', 0.55, 0.15],
-      [xMid - 8, farZ - 1, 'cargoA', 0.7, -0.05],
-      [xMid + 18, farZ, 'cargoB', 0.5, 0.22],
-      [xMid + 34, farZ - 1, 'sail', 0.45, -0.3],
-    ];
-    for (const [x, z, key, sc, yaw] of horizon) {
+    for (const [x, z, key, sc, yaw] of [
+      [xMid - 30, farZ, 'cargoB', 0.6, 0.12],
+      [xMid - 5, farZ - 1, 'cargoA', 0.75, -0.04],
+      [xMid + 22, farZ, 'cargoB', 0.55, 0.2],
+      [xMid + 36, farZ - 1, 'sail', 0.5, -0.25],
+    ]) {
       const s = this._clone(key, sc);
       if (!s) continue;
-      // Sit on water; small scale + max Z + fog = distant silhouette
       s.position.set(x, SEA + 0.02, Math.min(WZ - 2, z));
       s.rotation.y = yaw;
       this.root.add(s);
-      this._ships.push({ mesh: s, baseY: SEA + 0.02, phase: Math.random() * 6, bob: 0.05 });
+      this._ships.push({ mesh: s, baseY: SEA + 0.02, phase: Math.random() * 6, bob: 0.04 });
     }
+
+    // Extra Kenney palms mixed in (textured) along flanks
+    const sandY = GY + 0.02;
+    const palmKeys = ['palm', 'palmBend', 'palmTall'];
+    const slots = [
+      [xMid - 20, LAYOUT.farmZone.z1 + 8, 3.0],
+      [xMid - 16, LAYOUT.farmZone.z1 + 14, 3.4],
+      [xMid + 18, LAYOUT.farmZone.z1 + 9, 3.1],
+      [xMid + 22, LAYOUT.farmZone.z1 + 15, 2.9],
+    ];
+    slots.forEach(([px, pz, sc], i) => {
+      if (this.game.world.get(px, GY, pz) !== B.SAND) return;
+      const p = this._clone(palmKeys[i % palmKeys.length], sc);
+      if (!p) return;
+      p.position.set(px + 0.5, sandY, pz + 0.5);
+      p.rotation.y = i * 1.1;
+      this.root.add(p);
+    });
   }
 
   update() {
@@ -376,9 +435,7 @@ export class BeachDecor {
   disposeMeshes() {
     while (this.root.children.length) {
       const c = this.root.children.pop();
-      c.traverse?.((o) => {
-        o.geometry?.dispose?.();
-      });
+      c.traverse?.((o) => o.geometry?.dispose?.());
       this.root.remove(c);
     }
     for (const m of this._mats) m.dispose?.();

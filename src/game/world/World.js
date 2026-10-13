@@ -292,41 +292,25 @@ export class World {
       }
     }
 
-    // ── Beach shelf at GY (same height as farm) — no step down into sand ──
-    // Only claim oceanward cells past a grass buffer. Never touch crops/farmZone.
+    // ── Flat beach at GY (same height as farm) — no cliff / step ──
+    // Past the crop fields only: convert approach grass + ocean into one flat sand shelf.
     {
-      const margin = 5;
-      const z0 = LAYOUT.farmZone.z1 + margin;
-      const depth = 15;
+      const Fz = LAYOUT.farmZone;
+      const sandStart = Fz.z1 + 2; // right after fields — keep crops untouched
+      const depth = 18;
       const xMid = LAYOUT.pathX;
-      const halfW = 26;
-      const hy = GY; // flat with farm plateau
-      const protectedGround = (id) =>
-        id === B.GRASS || id === B.PATH || id === B.DIRT || id === B.COBBLE || id === B.FARM || id === B.FARM_WET
-        || id === B.PLANKS || id === B.LOG || id === B.BOX || id === B.BED || id === B.BED_FOOT || id === B.HAY;
+      const halfW = 28;
+      const hy = GY;
 
-      const canClaim = (x, z) => {
-        if (!this.inside(x, hy, z)) return false;
-        if (z < z0) return false;
-        if (inRect(x, z, LAYOUT.farmZone, 2)) return false;
-        if (inRect(x, z, LAYOUT.house, 2)) return false;
-        if (inRect(x, z, LAYOUT.pigPen, 1)) return false;
-        if (isCrop(at(x, GY + 1, z)) || isCrop(at(x, SEA + 1, z))) return false;
-        // Never carve the grass buffer / plateau grass
-        if (z < z0 && protectedGround(at(x, GY, z))) return false;
-        if (protectedGround(at(x, GY, z)) && z < z0) return false;
-        // Prefer ocean / already-low columns; also allow filling ragged sand pits
-        const g = at(x, GY, z);
-        const s = at(x, SEA, z);
-        if (g === B.GRASS || g === B.FARM || g === B.FARM_WET || g === B.PATH) return false;
-        return (
-          s === B.WATER || s === B.SAND || s === B.GRAVEL || s === B.AIR
-          || g === B.WATER || g === B.SAND || g === B.GRAVEL || g === B.AIR
-          || at(x, SEA - 1, z) === B.WATER
-        );
-      };
+      const forbidden = (x, z) =>
+        inRect(x, z, LAYOUT.farmZone, 0)
+        || inRect(x, z, A, 0) || inRect(x, z, Bf, 0)
+        || inRect(x, z, LAYOUT.house, 2)
+        || inRect(x, z, LAYOUT.pigPen, 1)
+        || isCrop(at(x, GY + 1, z));
 
       const stampSand = (x, z) => {
+        if (!this.inside(x, hy, z) || forbidden(x, z)) return;
         for (let y = 1; y <= hy; y++) {
           put(x, y, z, y === hy ? B.SAND : (y > hy - 3 ? B.SAND : B.STONE));
         }
@@ -334,49 +318,34 @@ export class World {
         top[x + z * WX] = hy;
       };
 
-      for (let z = z0; z <= Math.min(WZ - 8, z0 + depth); z++) {
+      // Continuous flat pad at GY — raises ocean columns and converts approach grass (not crops)
+      for (let z = sandStart; z <= Math.min(WZ - 8, sandStart + depth); z++) {
         for (let x = xMid - halfW; x <= xMid + halfW; x++) {
-          if (!canClaim(x, z)) continue;
+          if (forbidden(x, z)) continue;
           const side = Math.abs(x - xMid) / halfW;
-          // Soft crescent sides — still solid (no random holes)
-          if (side > 0.92) continue;
+          if (side > 0.93) continue;
           stampSand(x, z);
         }
       }
 
-      // Flatten pass: fill any leftover pits inside the shelf
-      for (let z = z0; z <= Math.min(WZ - 8, z0 + depth - 1); z++) {
-        for (let x = xMid - halfW + 1; x <= xMid + halfW - 1; x++) {
-          if (!canClaim(x, z) && at(x, hy, z) !== B.SAND && at(x, hy, z) !== B.PATH) continue;
-          if (at(x, hy, z) === B.WATER || at(x, hy, z) === B.AIR || at(x, hy, z) === B.GRAVEL) {
-            if (canClaim(x, z) || at(x, hy, z) === B.WATER) stampSand(x, z);
-          }
-          if (at(x, hy, z) === B.SAND) {
-            if (at(x, hy - 1, z) === B.WATER || at(x, hy - 1, z) === B.AIR) put(x, hy - 1, z, B.SAND);
-            put(x, hy + 1, z, B.AIR);
-            top[x + z * WX] = hy;
-          }
-        }
-      }
-
-      // Path from farm onto the beach (same height — no stair)
-      for (let z = LAYOUT.farmZone.z1 + 1; z <= Math.min(WZ - 8, z0 + depth - 2); z++) {
+      // Path continues onto the beach at the SAME height (no pier-drop)
+      for (let z = Fz.z1 + 1; z <= Math.min(WZ - 8, sandStart + depth - 2); z++) {
         for (let dx = -1; dx <= 1; dx++) {
           const x = LAYOUT.pathX + dx;
-          if (at(x, GY, z) === B.SAND || (z >= z0 && canClaim(x, z))) {
-            if (at(x, GY, z) !== B.SAND && at(x, GY, z) !== B.PATH && z >= z0) stampSand(x, z);
-            if (at(x, GY, z) === B.SAND) {
-              put(x, GY, z, B.PATH);
-              put(x, GY + 1, z, B.AIR);
-            }
+          if (forbidden(x, z)) continue;
+          if (z >= sandStart) stampSand(x, z);
+          if (at(x, GY, z) === B.SAND || at(x, GY, z) === B.GRASS || at(x, GY, z) === B.PATH) {
+            put(x, GY, z, B.PATH);
+            put(x, GY + 1, z, B.AIR);
+            top[x + z * WX] = GY;
           }
         }
       }
 
-      // Wooden pier into the water (past the sand shelf)
-      const pierX0 = xMid + 9;
-      const pierZ0 = z0 + 6;
-      const pierLen = 14;
+      // Pier into open water past the sand shelf
+      const pierX0 = xMid + 10;
+      const pierZ0 = sandStart + 8;
+      const pierLen = 12;
       for (let z = pierZ0; z <= Math.min(WZ - 5, pierZ0 + pierLen); z++) {
         for (let dx = 0; dx <= 2; dx++) {
           const x = pierX0 + dx;
@@ -390,31 +359,27 @@ export class World {
           top[x + z * WX] = GY;
         }
       }
-      // Store pier tip for decor (docked ship)
       LAYOUT.pier = { x0: pierX0, x1: pierX0 + 2, z0: pierZ0, z1: Math.min(WZ - 5, pierZ0 + pierLen) };
+      LAYOUT.beach = { x0: xMid - halfW, x1: xMid + halfW, z0: sandStart, z1: Math.min(WZ - 8, sandStart + depth) };
     }
 
-    // Absolute restore: farm + grass buffer stay crops/grass — beach never eats them
+    // Restore crop fields only
     {
-      const Fz = LAYOUT.farmZone;
-      const margin = 5;
-      for (let z = Fz.z0; z <= Fz.z1 + margin - 1; z++) for (let x = Fz.x0 - 1; x <= Fz.x1 + 1; x++) {
-        if (!this.inside(x, GY, z)) continue;
-        if (z <= Fz.z1 && inRect(x, z, A, 0)) continue;
-        if (z <= Fz.z1 && inRect(x, z, Bf, 0)) continue;
-        if (at(x, GY, z) === B.SAND || at(x, GY, z) === B.WATER || at(x, GY, z) === B.GRAVEL) {
-          put(x, GY, z, B.GRASS);
-          for (let y = GY + 1; y <= GY + 2; y++) {
-            if (at(x, y, z) === B.WATER || at(x, y, z) === B.SAND) put(x, y, z, B.AIR);
-          }
-          top[x + z * WX] = GY;
-        }
-      }
       for (let z = A.z0; z <= A.z1; z++) for (let x = A.x0; x <= A.x1; x++) {
         if (at(x, GY, z) !== B.FARM_WET && at(x, GY, z) !== B.FARM) put(x, GY, z, B.FARM_WET);
       }
       for (let z = Bf.z0; z <= Bf.z1; z++) for (let x = Bf.x0; x <= Bf.x1; x++) {
         if (at(x, GY, z) === B.SAND || at(x, GY, z) === B.WATER) put(x, GY, z, B.GRASS);
+      }
+      for (let z = LAYOUT.farmZone.z0; z <= LAYOUT.farmZone.z1; z++) {
+        for (let x = LAYOUT.farmZone.x0; x <= LAYOUT.farmZone.x1; x++) {
+          if (inRect(x, z, A, 0) || inRect(x, z, Bf, 0)) continue;
+          if (at(x, GY, z) === B.SAND || at(x, GY, z) === B.WATER) {
+            put(x, GY, z, B.GRASS);
+            put(x, GY + 1, z, B.AIR);
+            top[x + z * WX] = GY;
+          }
+        }
       }
     }
 

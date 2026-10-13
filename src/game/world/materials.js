@@ -215,3 +215,50 @@ export function solidEntityMaterial(colorHex, { side = THREE.DoubleSide, shade =
     side,
   });
 }
+
+/**
+ * Textured GLTF props (Kenney colormap atlases) — keep the map, light/fog like entities.
+ * Without this, Kenney meshes look pure white (base color is white; paint is in the texture).
+ */
+export function mapEntityMaterial(map, { colorHex = 0xffffff, side = THREE.DoubleSide, shade = 1.0 } = {}) {
+  if (map) {
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.flipY = false;
+    map.needsUpdate = true;
+  }
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uFogColor: shared.uFogColor, uFogNear: shared.uFogNear, uFogFar: shared.uFogFar,
+      uSky: shared.uSky, uSkyColor: shared.uSkyColor, uBlockColor: shared.uBlockColor, uMinLight: shared.uMinLight,
+      map: { value: map },
+      uColor: { value: new THREE.Color(colorHex) },
+      uLight: { value: new THREE.Vector2(1, 0) },
+      uShade: { value: shade },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      varying float vDepth;
+      void main() {
+        vUv = uv;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vDepth = -mv.z;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D map;
+      uniform vec3 uColor;
+      uniform vec2 uLight;
+      uniform float uShade;
+      varying vec2 vUv;
+      varying float vDepth;
+      ${LIGHT_GLSL}
+      void main() {
+        vec4 tex = texture2D(map, vUv);
+        if (tex.a < 0.1) discard;
+        vec3 col = tex.rgb * uColor * lightOf(uLight.x, uLight.y) * clamp(uShade, 0.0, 1.0);
+        gl_FragColor = vec4(fogged(col, vDepth), 1.0);
+      }`,
+    side,
+    transparent: false,
+  });
+}
