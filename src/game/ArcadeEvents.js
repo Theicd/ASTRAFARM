@@ -140,11 +140,97 @@ export class ArcadeEvents {
     return this.shelter || (this.active?.kind === 'hurricane' && this.active.phase === 'rage');
   }
 
+  /** Host snapshot so every client sees the same storm, like the shared night. */
+  netSnapshot() {
+    const a = this.active;
+    const p = this.stormMesh?.position;
+    if (!a && this.storm < 0.04 && !this.stormMesh) return null;
+    return {
+      k: a?.kind || '',
+      ph: a?.phase || 'clear',
+      st: +this.stormTarget.toFixed(2),
+      sh: this.shelter ? 1 : 0,
+      u: +(this._stormPath || 0).toFixed(3),
+      sc: this.stormMesh ? +this.stormMesh.scale.x.toFixed(2) : 0,
+      x: p ? +p.x.toFixed(1) : 0,
+      y: p ? +p.y.toFixed(1) : 0,
+      z: p ? +p.z.toFixed(1) : 0,
+    };
+  }
+
+  /** Client: follow the host storm. No extra spawns or crop damage. */
+  applyNet(snap) {
+    const g = this.game;
+    if (!snap || !snap.k) {
+      this.stormTarget = 0;
+      if (this.shelter) {
+        this.shelter = false;
+        if (g.phase === 'day') g.wakeCrew();
+      }
+      if (this.active && this.active.phase !== 'clear') {
+        this.active.phase = 'clear';
+        this.active.phaseT = 0;
+      }
+      return;
+    }
+    const prev = this.active ? `${this.active.kind}:${this.active.phase}` : '';
+    const next = `${snap.k}:${snap.ph}`;
+    if (!this.active || this.active.kind !== snap.k) {
+      this.active = { kind: snap.k, phase: snap.ph, phaseT: 0, rage: 22, warn: 8 };
+    } else {
+      this.active.phase = snap.ph;
+    }
+    this.stormTarget = typeof snap.st === 'number' ? snap.st : this.stormTarget;
+    const wasShelter = this.shelter;
+    this.shelter = !!snap.sh;
+    if (this.shelter && !wasShelter) g.sendCrewToBed();
+    if (!this.shelter && wasShelter && g.phase === 'day') g.wakeCrew();
+    this._stormPath = snap.u || 0;
+    if (snap.k === 'hurricane' && snap.ph !== 'clear') {
+      if (!this.stormMesh) this.spawnStormMesh();
+      if (this.stormMesh) {
+        this.stormMesh.position.set(snap.x, snap.y, snap.z);
+        if (snap.sc > 0.05) this.stormMesh.scale.setScalar(snap.sc);
+      }
+    }
+    if (prev !== next) this.announcePhase(snap.k, snap.ph);
+  }
+
+  announcePhase(kind, phase) {
+    const g = this.game;
+    if (kind === 'hurricane' && phase === 'warn') {
+      g.hud.banner(t('banner.hurricane'), t('banner.hurricaneWarn'), 3.4);
+      g.talk.sys('sys.hurricaneWarn', null, 'warn');
+      g.audio.sfx('night');
+    } else if (kind === 'hurricane' && phase === 'rage') {
+      g.hud.banner(t('banner.hurricane'), t('banner.hurricaneRage'), 3.0);
+      g.talk.sys('sys.hurricaneShelter', null, 'warn');
+      g.audio.sfx('boss_spawn');
+    } else if (kind === 'hurricane' && phase === 'clear') {
+      g.hud.banner(t('banner.hurricaneClear'), t('banner.hurricaneClearSub'), 2.4);
+      g.talk.sys('sys.hurricaneClear');
+    } else if (kind === 'tide' && phase === 'warn') {
+      g.hud.banner(t('banner.tide'), t('banner.tideWarn'), 3.2);
+      g.talk.sys('sys.tideWarn', null, 'warn');
+    } else if (kind === 'tide' && phase === 'rage') {
+      g.hud.banner(t('banner.tide'), t('banner.tideRage'), 2.8);
+      g.talk.sys('sys.tideRise', null, 'warn');
+    } else if (kind === 'stampede' && phase === 'warn') {
+      g.hud.banner(t('banner.stampede'), t('banner.stampedeWarn'), 2.8);
+      g.talk.sys('sys.stampedeWarn', null, 'warn');
+    } else if (kind === 'stampede' && phase === 'rage') {
+      g.hud.banner(t('banner.stampede'), t('banner.stampedeRage'), 2.6);
+      g.talk.sys('sys.stampede', null, 'warn');
+    }
+  }
+
   update(dt) {
     const g = this.game;
-    if (g.titleMode || g.isNetClient()) {
+    if (g.titleMode) return;
+    if (g.isNetClient()) {
       this.storm = damp(this.storm, this.stormTarget, 2.2, dt);
-      this.updateStormMesh(dt);
+      this.wind = damp(this.wind, this.shelter ? 1 : 0, 3, dt);
+      this.updateStormMesh(dt, true);
       return;
     }
     const clock = g.clock;
@@ -169,23 +255,18 @@ export class ArcadeEvents {
     this._dmgT = 0;
     this._spawned = [];
     const g = this.game;
+    this.announcePhase(ev.kind, 'warn');
     if (ev.kind === 'hurricane') {
-      g.hud.banner(t('banner.hurricane'), t('banner.hurricaneWarn'), 3.4);
-      g.talk.sys('sys.hurricaneWarn', null, 'warn');
-      g.audio.sfx('night');
       this.stormTarget = 0.45;
       this.spawnStormMesh();
     } else if (ev.kind === 'tide') {
-      g.hud.banner(t('banner.tide'), t('banner.tideWarn'), 3.2);
-      g.talk.sys('sys.tideWarn', null, 'warn');
-      g.audio.sfx('boss_spawn');
       this.stormTarget = 0.25;
+      g.audio.sfx('boss_spawn');
     } else if (ev.kind === 'stampede') {
-      g.hud.banner(t('banner.stampede'), t('banner.stampedeWarn'), 2.8);
-      g.talk.sys('sys.stampedeWarn', null, 'warn');
-      g.audio.sfx('mob_spawn');
       this.stormTarget = 0.15;
+      g.audio.sfx('mob_spawn');
     }
+    if (g.isNetHost()) g.pushNetSim(true);
   }
 
   spawnStormMesh() {
@@ -203,7 +284,7 @@ export class ArcadeEvents {
     this.game.scene.add(this.stormMesh);
   }
 
-  updateStormMesh(dt) {
+  updateStormMesh(dt, followHost = false) {
     const mesh = this.stormMesh;
     if (!mesh) return;
     const ev = this.active;
@@ -231,20 +312,24 @@ export class ArcadeEvents {
       return;
     }
 
-    // Travel: beach → fields → past lodge
-    this._stormPath = Math.min(1, this._stormPath + dt / Math.max(12, (ev.rage || 22) * 0.85));
+    // Host drives the path. Clients copy position from the sim snapshot.
+    if (!followHost) {
+      this._stormPath = Math.min(1, this._stormPath + dt / Math.max(12, (ev.rage || 22) * 0.85));
+    }
     const F = LAYOUT.farmZone;
     const H = LAYOUT.house;
     const z0 = F.z1 + 8;
     const z1 = H.z0 - 2;
     const x0 = F.x0 + 2;
     const x1 = F.x1 - 2;
-    const u = this._stormPath;
-    mesh.position.x = x0 + (x1 - x0) * (0.5 + Math.sin(u * Math.PI * 2) * 0.35);
-    mesh.position.z = z0 + (z1 - z0) * u;
-    mesh.position.y = GY + 1 + Math.sin(u * Math.PI) * 1.5;
-    const sc = 0.5 + Math.sin(Math.min(1, u * 1.4) * Math.PI) * 1.6;
-    mesh.scale.setScalar(sc);
+    if (!followHost) {
+      const u = this._stormPath;
+      mesh.position.x = x0 + (x1 - x0) * (0.5 + Math.sin(u * Math.PI * 2) * 0.35);
+      mesh.position.z = z0 + (z1 - z0) * u;
+      mesh.position.y = GY + 1 + Math.sin(u * Math.PI) * 1.5;
+      const sc = 0.5 + Math.sin(Math.min(1, u * 1.4) * Math.PI) * 1.6;
+      mesh.scale.setScalar(sc);
+    }
     mesh.rotation.y += dt * 1.8;
 
     // Debris trail particles
@@ -313,6 +398,7 @@ export class ArcadeEvents {
       g.talk.sys('sys.stampede', null, 'warn');
       this.spawnDinos(ev);
     }
+    if (g.isNetHost()) g.pushNetSim(true);
   }
 
   onClear(ev) {
@@ -328,6 +414,7 @@ export class ArcadeEvents {
     } else if (ev.kind === 'stampede') {
       g.talk.sys('sys.stampedeClear');
     }
+    if (g.isNetHost()) g.pushNetSim(true);
   }
 
   spawnSea(ev) {

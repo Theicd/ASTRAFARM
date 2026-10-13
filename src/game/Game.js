@@ -486,6 +486,7 @@ export class Game {
       phase: this.phase,
       day: this.dayIndex | 0,
       mobs,
+      arc: this.arcade?.netSnapshot() || null,
     });
   }
 
@@ -497,6 +498,7 @@ export class Game {
     if (typeof ev.phase === 'string' && ev.phase !== this.phase) {
       this.applyNetPhase(ev.phase);
     }
+    if (this.isNetClient()) this.arcade?.applyNet(ev.arc || null);
     const list = Array.isArray(ev.mobs) ? ev.mobs : [];
     const seen = new Set();
     for (const d of list) {
