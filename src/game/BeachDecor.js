@@ -163,6 +163,23 @@ function makeSurfboard(mats, hex) {
   return g;
 }
 
+/** Guaranteed-visible sailboat (voxel style) — used offshore so craft always show. */
+function makeSailboat(mats, scale = 1) {
+  const g = new THREE.Group();
+  const hull = mat(0xd8c090, 1.05);
+  const stripe = mat(0xc45a3a, 1.08);
+  const mast = mat(0xe8d8b0, 1.0);
+  const sail = mat(0xf5f0e6, 1.12);
+  box(g, mats, 2.6, 0.55, 1.0, 0, 0.22, 0, hull);
+  box(g, mats, 1.8, 0.35, 0.75, 0.25, 0.48, 0, hull);
+  box(g, mats, 2.65, 0.12, 0.22, 0, 0.5, 0, stripe);
+  box(g, mats, 0.1, 2.6, 0.1, -0.15, 1.55, 0, mast);
+  box(g, mats, 1.55, 2.0, 0.06, 0.55, 1.7, 0, sail);
+  box(g, mats, 0.95, 1.0, 0.05, -0.75, 1.35, 0, sail);
+  g.scale.setScalar(scale);
+  return g;
+}
+
 /** Scan entire sand shelf for prop pads. */
 function mapSandPads(world) {
   const beach = LAYOUT.beach || {
@@ -359,49 +376,109 @@ export class BeachDecor {
     });
   }
 
-  /** True only when this column is open water (ships must never sit on sand). */
-  _isWaterColumn(x, z) {
+  /** Open water: no sand/planks/grass nearby (ships must never hug the shore). */
+  _isDeepWater(x, z, clearance = 5) {
     const w = this.game.world;
-    if (!w.inside(x, SEA, z)) return false;
-    const g = w.get(x, GY, z);
-    if (g === B.SAND || g === B.PATH || g === B.GRASS || g === B.PLANKS) return false;
-    return w.get(x, SEA, z) === B.WATER || w.get(x, SEA - 1, z) === B.WATER || g === B.WATER || g === B.AIR;
+    const ix = Math.floor(x);
+    const iz = Math.floor(z);
+    if (!w.inside(ix, SEA, iz)) return false;
+    for (let dz = -clearance; dz <= clearance; dz++) {
+      for (let dx = -clearance; dx <= clearance; dx++) {
+        if (!w.inside(ix + dx, GY, iz + dz)) continue;
+        const g = w.get(ix + dx, GY, iz + dz);
+        if (g === B.SAND || g === B.PATH || g === B.GRASS || g === B.PLANKS || g === B.FARM || g === B.FARM_WET) {
+          return false;
+        }
+      }
+    }
+    const here = w.get(ix, GY, iz);
+    if (here === B.SAND || here === B.PLANKS || here === B.PATH) return false;
+    return (
+      w.get(ix, SEA, iz) === B.WATER
+      || w.get(ix, SEA - 1, iz) === B.WATER
+      || here === B.WATER
+      || here === B.AIR
+    );
   }
 
-  _placeShip(key, x, z, scale, yaw, bob = 0.05) {
-    if (!this._isWaterColumn(Math.floor(x), Math.floor(z))) return;
-    const mesh = this._clone(key, scale);
-    if (!mesh) return;
-    const baseY = SEA - 0.12;
-    mesh.position.set(x, baseY, z);
-    mesh.rotation.y = yaw;
+  /** Snap toward +Z open water until clearance is satisfied (or give up). */
+  _offshorePoint(x, zHint, clearance = 5) {
+    const waterLine = LAYOUT.waterLineZ ?? ((LAYOUT.beach?.z1 ?? LAYOUT.farmZone.z1 + 30) + 1);
+    let z = Math.max(zHint, waterLine + clearance);
+    z = Math.min(z, WZ - 3);
+    for (let tries = 0; tries < 24; tries++) {
+      if (this._isDeepWater(x, z, clearance)) return [x, z];
+      z += 1;
+      if (z > WZ - 3) break;
+    }
+    // Sideways search at deepest safe z
+    const zFar = Math.min(WZ - 3, waterLine + clearance + 6);
+    for (const dx of [0, -4, 4, -8, 8, -12, 12]) {
+      if (this._isDeepWater(x + dx, zFar, clearance)) return [x + dx, zFar];
+    }
+    return null;
+  }
+
+  _addBobbing(mesh, baseY, bob = 0.05) {
     this.root.add(mesh);
     this._ships.push({ mesh, baseY, phase: Math.random() * 6, bob });
   }
 
+  _placeGltfShip(key, x, z, scale, yaw, bob = 0.05, clearance = 5) {
+    const pt = this._offshorePoint(x, z, clearance);
+    if (!pt) return false;
+    const mesh = this._clone(key, scale);
+    if (!mesh) return false;
+    const baseY = SEA - 0.15;
+    mesh.position.set(pt[0], baseY, pt[1]);
+    mesh.rotation.y = yaw;
+    this._addBobbing(mesh, baseY, bob);
+    return true;
+  }
+
+  _placeSailboat(x, z, scale, yaw, clearance = 5) {
+    const pt = this._offshorePoint(x, z, clearance);
+    if (!pt) return;
+    // Procedural sails — always readable voxel boats (Kenney sail used only on horizon)
+    const mesh = makeSailboat(this._mats, scale);
+    const baseY = SEA - 0.1;
+    mesh.position.set(pt[0], baseY, pt[1]);
+    mesh.rotation.y = yaw;
+    this._addBobbing(mesh, baseY, 0.07);
+  }
+
   _placeShipsAndExtraPalms() {
-    const pier = LAYOUT.pier;
     const beach = LAYOUT.beach;
     const xMid = LAYOUT.pathX;
-    const beachEnd = beach?.z1 ?? (LAYOUT.farmZone.z1 + 30);
+    const waterLine = LAYOUT.waterLineZ ?? ((beach?.z1 ?? LAYOUT.farmZone.z1 + 30) + 1);
 
-    // Docked craft — ONLY past the sand shelf, in water next to pier tip
-    if (pier) {
-      this._placeShip('cargoA', pier.x1 + 7, pier.z1 + 0.5, 1.15, Math.PI / 2 + 0.05, 0.04);
-      this._placeShip('tug', pier.x0 - 5.5, pier.z1 + 0.5, 1.3, -0.55, 0.05);
-      this._placeShip('row', pier.x1 + 4, pier.z1 + 2, 1.45, 0.9, 0.06);
+    // ── Sailboats clearly offshore (never on / against sand) ──
+    this._placeSailboat(xMid - 16, waterLine + 7, 1.15, 0.45, 6);
+    this._placeSailboat(xMid + 4, waterLine + 9, 1.0, -0.35, 6);
+    this._placeSailboat(xMid + 18, waterLine + 8, 1.25, 0.2, 6);
+    // Extra procedural sails if GLB path failed silently — force one more
+    {
+      const pt = this._offshorePoint(xMid - 6, waterLine + 11, 6);
+      if (pt) {
+        const mesh = makeSailboat(this._mats, 1.1);
+        mesh.position.set(pt[0], SEA - 0.1, pt[1]);
+        mesh.rotation.y = -0.15;
+        this._addBobbing(mesh, SEA - 0.1, 0.07);
+      }
     }
-    // Mid-water sailboats just past beach
-    this._placeShip('sail', xMid - 14, beachEnd + 4, 0.9, 0.4, 0.06);
-    this._placeShip('sail', xMid + 12, beachEnd + 5, 0.75, -0.3, 0.06);
 
-    // Horizon freighters — world edge
+    // ── Cargo / tug well past the waterline (large clearance — hulls are long) ──
+    this._placeGltfShip('cargoA', xMid + 14, waterLine + 10, 1.0, Math.PI / 2 + 0.08, 0.04, 7);
+    this._placeGltfShip('tug', xMid - 10, waterLine + 8, 1.2, -0.4, 0.05, 6);
+    this._placeGltfShip('row', xMid + 2, waterLine + 6, 1.4, 0.85, 0.06, 5);
+
+    // ── Horizon freighters ──
     const farZ = WZ - 3;
-    this._placeShip('cargoB', xMid - 28, farZ, 0.65, 0.1, 0.04);
-    this._placeShip('cargoA', xMid + 2, farZ - 1, 0.8, -0.05, 0.04);
-    this._placeShip('cargoB', xMid + 26, farZ, 0.55, 0.18, 0.04);
+    this._placeGltfShip('cargoB', xMid - 26, farZ, 0.7, 0.1, 0.04, 4);
+    this._placeGltfShip('cargoA', xMid + 4, farZ - 1, 0.85, -0.05, 0.04, 4);
+    this._placeGltfShip('cargoB', xMid + 24, farZ, 0.6, 0.18, 0.04, 4);
 
-    // Kenney palms only on confirmed sand pads (interior beach)
+    // Kenney palms on sand only
     const sandY = GY + 0.02;
     const palmKeys = ['palm', 'palmBend', 'palmTall'];
     const bz0 = beach?.z0 ?? LAYOUT.farmZone.z1 + 13;

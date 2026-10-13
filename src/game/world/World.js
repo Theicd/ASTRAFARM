@@ -369,21 +369,18 @@ export class World {
         }
       }
 
-      // Pier from mid-beach OUT into open water past the sand shelf
+      // Pier stays ON the sand shelf — tip at the waterline (no plank runway into the sea)
       const beachEnd = Math.min(WZ - 5, sandStart + depth);
       const pierX0 = xMid + 10;
-      const pierZ0 = sandStart + 10;
-      const pierZ1 = Math.min(WZ - 4, beachEnd + 8); // extends into water
+      const pierZ0 = sandStart + 8;
+      const pierZ1 = beachEnd; // ends at sand edge — boats sit FURTHER out in open water
       for (let z = pierZ0; z <= pierZ1; z++) {
         for (let dx = 0; dx <= 2; dx++) {
           const x = pierX0 + dx;
           if (!this.inside(x, GY, z)) continue;
           for (let y = 1; y < GY; y++) {
             if ((z - pierZ0) % 3 === 0 && (dx === 0 || dx === 2)) put(x, y, z, B.LOG);
-            else if (at(x, y, z) === B.WATER || at(x, y, z) === B.AIR || z > beachEnd) {
-              if (y < SEA) put(x, y, z, B.STONE);
-              else if (at(x, y, z) === B.WATER || at(x, y, z) === B.AIR) put(x, y, z, B.STONE);
-            }
+            else if (at(x, y, z) === B.WATER || at(x, y, z) === B.AIR) put(x, y, z, B.STONE);
           }
           put(x, GY, z, B.PLANKS);
           put(x, GY + 1, z, B.AIR);
@@ -393,6 +390,7 @@ export class World {
       LAYOUT.pier = { x0: pierX0, x1: pierX0 + 2, z0: pierZ0, z1: pierZ1 };
       LAYOUT.beach = { x0: xMid - halfW, x1: xMid + halfW, z0: sandStart, z1: beachEnd };
       LAYOUT.lawnZ1 = lawnZ1;
+      LAYOUT.waterLineZ = beachEnd + 1; // first open-water row past sand
     }
 
     // Re-stamp crop beds
