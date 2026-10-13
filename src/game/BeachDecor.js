@@ -64,6 +64,20 @@ function makeSeagull(mats) {
   return g;
 }
 
+/** Push a Kenney chair toward a beach color. Grey cloth picks it up; strong pink gets softened. */
+function tintGroup(group, hex, strength = 0.7) {
+  if (!group) return;
+  const tint = new THREE.Color(hex);
+  group.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (!m.color) continue;
+      m.color.lerp(tint, strength);
+    }
+  });
+}
+
 function sandOk(world, x, z) {
   if (!world.inside(x, GY, z)) return false;
   const t = world.get(x, GY, z);
@@ -178,28 +192,40 @@ export class BeachDecor {
       [xMid + 16, z1],
     ];
 
+    const bedColors = [0xe85a4a, 0x2f9fe0, 0xf0c040, 0x3cbe8c, 0xff7aa2, 0x6a8cff];
     let si = 0;
     for (const [cx, cz] of sets) {
       if (Math.abs(cx - xMid) < 3) continue;
-      if (!sandOk(w, cx, cz) || !sandOk(w, cx, cz + 3)) continue;
-      // Table+parasol. Raw size 0.35 → scale 6 ≈ 2.1m canopy, clear of the chairs.
+      if (!sandOk(w, cx, cz)) continue;
+      const tint = bedColors[si % bedColors.length];
+
+      // Shade table. Canopy is ~2.1m; furniture stays outside that radius.
       const parasol = this._clone(si % 2 ? 'parasolB' : 'parasolA', 6);
       if (parasol) {
         parasol.position.set(cx + 0.5, sandY, cz + 0.5);
         this.root.add(parasol);
       }
-      // Sunbeds 2.5 blocks seaward of the table (canopy radius is ~1.1)
-      const L1 = this._clone('lounge', 2.2);
-      if (L1 && sandOk(w, cx - 2, cz + 3)) {
-        L1.position.set(cx - 1.1, sandY, cz + 3.1);
-        L1.rotation.y = Math.PI;
-        this.root.add(L1);
+
+      // Two sunbeds side by side, feet toward the sea, clear of the table.
+      for (const ox of [-1.15, 0.85]) {
+        if (!sandOk(w, cx + Math.round(ox), cz + 3)) continue;
+        const bed = this._clone('lounge', 3.15);
+        if (!bed) continue;
+        tintGroup(bed, tint, 0.78);
+        bed.position.set(cx + ox, sandY, cz + 2.45);
+        bed.rotation.y = Math.PI;
+        this.root.add(bed);
       }
-      const L2 = this._clone('deck', 1.8);
-      if (L2 && sandOk(w, cx + 2, cz + 3)) {
-        L2.position.set(cx + 1.6, sandY, cz + 3.1);
-        L2.rotation.y = Math.PI;
-        this.root.add(L2);
+
+      // One upright deck chair beside the table, same set color.
+      if (sandOk(w, cx + 2, cz)) {
+        const chair = this._clone('deck', 1.45);
+        if (chair) {
+          tintGroup(chair, tint, 0.55);
+          chair.position.set(cx + 2.15, sandY, cz + 0.35);
+          chair.rotation.y = -Math.PI / 2;
+          this.root.add(chair);
+        }
       }
       si++;
     }
