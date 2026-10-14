@@ -1006,8 +1006,13 @@ export class SeaBeast {
       this.repathT -= dt;
       if (this.repathT <= 0) {
         this.repathT = 0.55;
+        const nightish = g.phase === 'night' || g.phase === 'dusk';
+        const pig = nightish ? (g.nearestPig?.(p) || null) : null;
         const crop = g.nearestCrop?.(p) || null;
-        if (crop) {
+        if (pig) {
+          this.target = { x: pig.pos.x, z: pig.pos.z, pos: pig.body.pos, pig: true, pigRef: pig };
+          this.path = null;
+        } else if (crop) {
           this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5) };
           const goal = outdoorGoal(this.target.pos.x, this.target.pos.z);
           const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: 0, maxNodes: 2800, blocked: houseCell });
@@ -1024,9 +1029,15 @@ export class SeaBeast {
         const aimX = Math.abs(p.x - LAYOUT.pathX) > 22 ? LAYOUT.pathX : p.x;
         chaseAlong(this, dt, aimX, shore - 5, this.speed);
         moving = true;
-      } else if (this.target) {
+      } else       if (this.target?.pigRef && !this.target.pigRef.dead) this.target.pos.copy(this.target.pigRef.body.pos);
+      if (this.target) {
         const dist = Math.hypot(this.target.pos.x - p.x, this.target.pos.z - p.z);
-        if (dist < 1.1) { this.state = 'eat'; this.eatT = 0; this.stateT = 0; }
+        if (this.target.pig && dist < 1.25 && this.target.pigRef && !this.target.pigRef.dead) {
+          g.removePig(this.target.pigRef);
+          g.talk.sys('sys.seaPig', null, 'warn');
+          this.target = null;
+          this.leave();
+        } else if (dist < 1.1) { this.state = 'eat'; this.eatT = 0; this.stateT = 0; }
         else { chaseAlong(this, dt, this.target.pos.x, this.target.pos.z, this.speed); moving = true; }
       }
     }

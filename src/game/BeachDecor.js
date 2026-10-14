@@ -2,10 +2,10 @@
 // Ships sit ONLY past LAYOUT.waterLineZ — never on sand.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { LAYOUT, GY, SEA, WZ } from './world/World.js';
+import { LAYOUT, GY, SEA, WX, WZ } from './world/World.js';
 
 import { B } from './world/blocks.js';
-import { solidEntityMaterial, setEntityLight } from './world/materials.js';
+import { solidEntityMaterial, mapEntityMaterial, setEntityLight } from './world/materials.js';
 import { takeMobVisual, stepMobVisual } from './mobVisuals.js';
 
 const ASSET = (name) => `./assets/beach/${name}`;
@@ -224,12 +224,56 @@ function dressFurniture(group, hex) {
   });
 }
 
+function painted(key, draw, tint = 0xffffff) {
+  return mapEntityMaterial(canvasTex(key, draw, 1), { colorHex: tint });
+}
+
+function metalTexture() {
+  return painted('pump-metal', (g, w, h) => {
+    g.fillStyle = '#8e98a2';
+    g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 6) {
+      g.fillStyle = y % 12 === 0 ? 'rgba(40,48,56,0.45)' : 'rgba(255,255,255,0.12)';
+      g.fillRect(0, y, w, 2);
+    }
+    g.fillStyle = 'rgba(20,24,28,0.35)';
+    for (let x = 8; x < w; x += 22) g.fillRect(x, 0, 3, h);
+  });
+}
+
+function rustTexture() {
+  return painted('pump-rust', (g, w, h) => {
+    g.fillStyle = '#b85a32';
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 80; i++) {
+      g.fillStyle = i % 2 ? 'rgba(80,30,12,0.55)' : 'rgba(230,160,90,0.35)';
+      g.fillRect((i * 17) % w, (i * 29) % h, 8, 6);
+    }
+  });
+}
+
+function tankTexture() {
+  return painted('pump-tank', (g, w, h) => {
+    g.fillStyle = '#d5dde4';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(40,70,90,0.25)';
+    for (let y = 10; y < h; y += 18) g.fillRect(0, y, w, 4);
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fillRect(8, 8, 10, h - 16);
+  });
+}
+
 function makePump(mats) {
   const g = new THREE.Group();
-  const steel = mat(0x8b949c);
-  const rust = mat(0xc45a32);
-  const tank = mat(0xd8e0e8);
-  const dark = mat(0x3e4650);
+  const steel = metalTexture();
+  const rust = rustTexture();
+  const tank = tankTexture();
+  const dark = painted('pump-dark', (g, w, h) => {
+    g.fillStyle = '#3a4450';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    for (let y = 0; y < h; y += 8) g.fillRect(0, y, w, 2);
+  });
   for (const [x, z] of [[-2.2, -1.6], [2.2, -1.6], [-2.2, 1.6], [2.2, 1.6]]) {
     box(g, mats, 0.32, 4.2, 0.32, x, 1.4, z, steel);
   }
@@ -245,9 +289,20 @@ function makePump(mats) {
 
 function makeBungalow(mats, roofHex = 0xd25a3a) {
   const g = new THREE.Group();
-  const wood = mat(0xc49862);
-  const roof = mat(roofHex);
-  const wall = mat(0xf3e6c8);
+  const wood = mapEntityMaterial(woodTexture(), { colorHex: 0xffffff });
+  const roof = painted('roof-' + roofHex.toString(16), (g, w, h) => {
+    const css = '#' + roofHex.toString(16).padStart(6, '0');
+    g.fillStyle = css;
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(0,0,0,0.18)';
+    for (let y = 0; y < h; y += 10) g.fillRect(0, y, w, 3);
+  });
+  const wall = painted('bungalow-wall', (g, w, h) => {
+    g.fillStyle = '#f3e6c8';
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(120,80,40,0.35)';
+    for (let y = 8; y < h; y += 16) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+  });
   const glass = mat(0x9fd0e8);
   for (const [x, z] of [[-1.8, -1.3], [1.8, -1.3], [-1.8, 1.3], [1.8, 1.3]]) {
     box(g, mats, 0.18, 3.4, 0.18, x, 1.7, z, wood);
@@ -293,6 +348,7 @@ export class BeachDecor {
     this._ships = [];
     this._birds = [];
     this._fish = [];
+    this._critters = [];
     this._loader = new GLTFLoader();
     this._templates = null;
     this._loadId = 0;
@@ -362,6 +418,7 @@ export class BeachDecor {
     this._placeSeagulls();
     this._placeSeaStructures();
     this._placeSeaLife();
+    this._placeBeachAnimals();
     this._ensureTemplates().then(() => {
       if (loadId !== this._loadId) return;
       this._placeKenneyResort();
@@ -523,7 +580,16 @@ export class BeachDecor {
       mesh.position.set(x, seaY, z);
       mesh.rotation.y = yaw;
       this.root.add(mesh);
-      this._ships.push({ mesh, baseY: seaY, phase: past * 0.2, bob: 0.04 });
+      const cruise = key.startsWith('speed') ? 1.15
+        : key.startsWith('sail') ? 0.46
+        : key === 'row' || key === 'rowSmall' || key === 'fish' ? 0.22
+        : key === 'fan' ? 0.62
+        : key.startsWith('tug') ? 0.36
+        : 0;
+      this._ships.push({
+        mesh, baseY: seaY, x, z, yaw, phase: past * 0.17,
+        bob: cruise ? 0.08 : 0.03, cruise, range: cruise ? 7 + cruise * 6 : 0,
+      });
     }
   }
 
@@ -550,20 +616,54 @@ export class BeachDecor {
   _placeSeaLife() {
     this._fish = [];
     const xMid = LAYOUT.pathX;
-    const z0 = (LAYOUT.waterLineZ ?? 82) + 12;
+    const z0 = (LAYOUT.waterLineZ ?? 82) + 4;
     const spots = [
-      [xMid - 18, z0, 1.35, 0.4],
-      [xMid + 26, z0 + 14, 1.15, -0.6],
-      [xMid - 40, z0 + 30, 1.05, 0.2],
-      [xMid + 8, z0 + 48, 1.55, 1.1],
-      [xMid + 55, z0 + 22, 1.2, -0.3],
+      ['Fish', xMid - 16, z0, 2.8, 0.4],
+      ['Fish', xMid + 22, z0 + 6, 3.1, -0.5],
+      ['BlueDemon', xMid - 36, z0 + 8, 3.4, 0.2],
+      ['Fish', xMid + 8, z0 + 3, 3.3, 1.0],
+      ['Fish', xMid + 40, z0 + 7, 2.7, -0.2],
+      ['BlueDemon', xMid - 6, z0 + 10, 3.6, 0.6],
     ];
-    for (const [x, z, sc, yaw] of spots) {
-      const v = takeMobVisual('Fish', sc);
+    const stand = 8.05;
+    for (const [key, x, z, sc, yaw] of spots) {
+      const v = takeMobVisual(key, sc);
       if (!v) continue;
-      v.root.position.set(x, SEA - 0.2, z);
+      v.root.position.set(x, stand, Math.min(WZ - 3, z));
       this.root.add(v.root);
-      this._fish.push({ v, x, z, yaw, r: 5 + sc * 7 });
+      this._fish.push({ v, x, z: Math.min(WZ - 3, z), yaw, bite: 0, fed: false });
+    }
+  }
+
+  _placeBeachAnimals() {
+    this._critters = [];
+    const beach = LAYOUT.beach;
+    const xMid = LAYOUT.pathX;
+    const z0 = (beach?.z0 ?? 70) + 2;
+    const bunnies = [
+      [xMid - 14, z0 + 1],
+      [xMid + 18, z0 + 3],
+      [xMid - 28, z0 + 4],
+      [xMid + 8, z0],
+    ];
+    for (const [x, z] of bunnies) {
+      const v = takeMobVisual('Bunny', 0.85);
+      if (!v) continue;
+      v.root.position.set(x, GY + 1, z);
+      this.root.add(v.root);
+      this._critters.push({ v, x, z, kind: 'bunny' });
+    }
+    const birbs = [
+      [xMid - 20, GY + 8, z0 + 6],
+      [xMid + 30, GY + 11, z0 + 10],
+      [xMid + 4, GY + 14, z0 + 2],
+    ];
+    for (const [x, y, z] of birbs) {
+      const v = takeMobVisual('Birb', 0.7);
+      if (!v) continue;
+      v.root.position.set(x, y, z);
+      this.root.add(v.root);
+      this._critters.push({ v, x, y, z, kind: 'birb' });
     }
   }
 
@@ -592,21 +692,78 @@ export class BeachDecor {
     }
   }
 
-  update() {
+  update(dt = 0.016) {
     const t = performance.now() * 0.001;
     const phase = this.game.phase;
     const birdsOut = phase === 'day' || phase === 'dawn';
+    const nightish = phase === 'night' || phase === 'dusk';
     for (const s of this._ships) {
-      s.mesh.position.y = s.baseY + Math.sin(t * 1.1 + s.phase) * s.bob;
-      s.mesh.rotation.z = Math.sin(t * 0.7 + s.phase) * 0.015;
+      const along = s.cruise ? Math.sin(t * s.cruise * 0.32 + s.phase) * s.range : 0;
+      s.mesh.position.x = s.x + Math.sin(s.yaw) * along;
+      s.mesh.position.z = s.z + Math.cos(s.yaw) * along;
+      s.mesh.position.y = s.baseY + Math.sin(t * (s.cruise ? 1.7 : 0.85) + s.phase) * s.bob;
+      s.mesh.rotation.z = Math.sin(t * 0.7 + s.phase) * (s.cruise ? 0.045 : 0.012);
+      s.mesh.rotation.y = s.yaw + (s.cruise ? Math.sin(t * 0.22 + s.phase) * 0.28 : 0);
     }
+    const player = this.game.player;
+    const pp = player?.body?.pos;
+    const beachZ = LAYOUT.beach?.z0 ?? 70;
     for (const f of this._fish || []) {
-      stepMobVisual(f.v, 0.016, true);
-      const a = t * 0.42 + f.yaw;
-      const nx = f.x + Math.cos(a) * f.r;
-      const nz = f.z + Math.sin(a) * f.r * 0.72;
-      f.v.root.position.set(nx, SEA - 0.15 + Math.sin(a * 2.2) * 0.18, nz);
-      f.v.root.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a) * 0.72);
+      f.bite = Math.max(0, (f.bite || 0) - dt);
+      const pos = f.v.root.position;
+      let tx = f.x, tz = f.z, ty = 8.15, chasing = false;
+      if (nightish && !f.fed) {
+        const pig = this.game.nearestPig?.(pos);
+        if (pig) {
+          tx = pig.pos.x; tz = pig.pos.z; ty = pig.pos.y;
+          chasing = true;
+          if (Math.hypot(tx - pos.x, tz - pos.z) < 1.3) {
+            this.game.removePig(pig);
+            this.game.talk?.sys('sys.seaPig', null, 'warn');
+            f.fed = true;
+          }
+        }
+      } else if (pp && pp.z > beachZ - 1) {
+        const d = Math.hypot(pp.x - pos.x, pp.z - pos.z);
+        if (d < 10) {
+          tx = pp.x; tz = pp.z; ty = pp.y; chasing = true;
+          if (d < 1.45 && f.bite <= 0 && player.alive) {
+            player.damage(2, pos);
+            f.bite = 1.15;
+          }
+        }
+      }
+      if (!chasing) {
+        const a = t * 0.35 + f.yaw;
+        tx = f.x + Math.cos(a) * 4.5;
+        tz = f.z + Math.sin(a) * 3.2;
+        ty = 8.15 + Math.sin(a * 2) * 0.12;
+      }
+      const dx = tx - pos.x, dz = tz - pos.z;
+      const dist = Math.hypot(dx, dz) || 1;
+      const step = Math.min(dist, (chasing ? 3.4 : 1.6) * dt);
+      pos.x += (dx / dist) * step;
+      pos.z += (dz / dist) * step;
+      pos.y += (ty - pos.y) * Math.min(1, dt * 3);
+      f.v.root.rotation.y = Math.atan2(dx, dz);
+      stepMobVisual(f.v, dt, true);
+    }
+    for (const c of this._critters || []) {
+      if (c.kind === 'bunny') {
+        const a = t * 0.45 + c.x;
+        c.v.root.position.x = c.x + Math.sin(a) * 1.6;
+        c.v.root.position.z = c.z + Math.cos(a * 0.7) * 1.1;
+        c.v.root.position.y = GY + 1;
+        c.v.root.rotation.y = a;
+        stepMobVisual(c.v, dt, true);
+      } else {
+        const a = t * 0.55 + c.z;
+        c.v.root.position.x = c.x + Math.cos(a) * 6;
+        c.v.root.position.z = c.z + Math.sin(a * 0.6) * 4;
+        c.v.root.position.y = c.y + Math.sin(a * 1.3) * 0.8;
+        c.v.root.rotation.y = -a;
+        stepMobVisual(c.v, dt, true);
+      }
     }
     for (const b of this._birds) {
       b.mesh.visible = birdsOut;
@@ -634,6 +791,7 @@ export class BeachDecor {
     this._ships = [];
     this._birds = [];
     this._fish = [];
+    this._critters = [];
   }
 
   dispose() {

@@ -9,6 +9,9 @@ const FILES = {
   Dino: './assets/mobs/Dino.gltf',
   Fish: './assets/mobs/Fish.gltf',
   Yeti: './assets/mobs/Yeti.gltf',
+  Bunny: './assets/mobs/Bunny.gltf',
+  Birb: './assets/mobs/Birb.gltf',
+  BlueDemon: './assets/mobs/BlueDemon.gltf',
   Cactoro: './assets/mobs/Cactoro.gltf',
   Frog: './assets/mobs/Frog.gltf',
   Alien: './assets/mobs/Alien.gltf',
@@ -22,17 +25,54 @@ function pickClip(clips, re) {
   return clips.find((c) => re.test(c.name)) || null;
 }
 
+const _paint = new Map();
+
+function paintOf(color) {
+  const key = color.getHexString();
+  if (_paint.has(key)) return _paint.get(key);
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#' + key;
+  g.fillRect(0, 0, 64, 64);
+  for (let i = 0; i < 220; i++) {
+    const x = (i * 13) % 64;
+    const y = (i * 29) % 64;
+    g.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.2)';
+    g.fillRect(x, y, i % 5 === 0 ? 3 : 2, 2);
+  }
+  g.fillStyle = 'rgba(0,0,0,0.1)';
+  for (let y = 4; y < 64; y += 9) g.fillRect(0, y, 64, 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 2);
+  tex.needsUpdate = true;
+  _paint.set(key, tex);
+  return tex;
+}
+
+/** Quaternius stores lit PBR albedos with no image. Lift them and paint grain so they read. */
 function basicMats(root) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     const srcs = Array.isArray(o.material) ? o.material : [o.material];
     const next = srcs.map((src) => {
       const color = src?.color ? src.color.clone() : new THREE.Color(0xffffff);
-      // Some packs ship near-black base colors (ninja cloth). Lift them so the body reads.
-      if (color.r + color.g + color.b < 0.12) color.setRGB(0.22, 0.24, 0.32);
+      const name = (src?.name || '').toLowerCase();
+      const sum = color.r + color.g + color.b;
+      if (name.includes('eye') && name.includes('black')) color.setRGB(0.015, 0.015, 0.02);
+      else if (sum < 0.04) color.setRGB(0.22, 0.2, 0.24);
+      else {
+        const k = Math.min(6, Math.max(1, 0.55 / Math.max(0.08, sum)));
+        color.multiplyScalar(k);
+        color.r = Math.min(1, Math.pow(color.r, 0.8));
+        color.g = Math.min(1, Math.pow(color.g, 0.8));
+        color.b = Math.min(1, Math.pow(color.b, 0.8));
+      }
       return new THREE.MeshBasicMaterial({
-        color,
-        map: src?.map || null,
+        color: 0xffffff,
+        map: src?.map || paintOf(color),
         side: THREE.DoubleSide,
       });
     });

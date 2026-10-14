@@ -372,16 +372,19 @@ export class World {
           }
         }
       }
-      // Drop the map past the sand BELOW the ocean sheet (no voxel-water pool).
-      // The visible sea is the ocean plane, so a WATER block here reads as a boxed pond.
+      // Shallow sea that belongs to the map: one-block steps down from the sand,
+      // then a wading floor at the waterline so you can walk out and back.
+      // No voxel water — that reads as a dark pool above the ocean sheet.
       const seaZ0 = beachEnd + 1;
       for (let z = seaZ0; z < WZ; z++) {
+        const steps = Math.min(2, z - seaZ0);
+        const topY = GY - steps;
         for (let x = 0; x < WX; x++) {
           if (!this.inside(x, GY, z)) continue;
           if (z <= lawnZ1 || inRect(x, z, LAYOUT.farmZone, 0) || inRect(x, z, LAYOUT.house, 1)) continue;
-          for (let y = 1; y <= SEA - 3; y++) put(x, y, z, B.STONE);
-          for (let y = SEA - 2; y < WY - 1; y++) put(x, y, z, B.AIR);
-          top[x + z * WX] = SEA - 3;
+          for (let y = 1; y <= topY; y++) put(x, y, z, y >= topY - 1 ? B.SAND : B.STONE);
+          for (let y = topY + 1; y < WY - 1; y++) put(x, y, z, B.AIR);
+          top[x + z * WX] = topY;
         }
       }
       LAYOUT.pier = null;
@@ -528,15 +531,21 @@ export class World {
     const [cx, cz] = LAYOUT.center;
     this.spawnCells = [];
     this.pigCells = [];
+    const beach = LAYOUT.beach;
+    const shore = LAYOUT.waterLineZ ?? (beach?.z1 ?? 80) + 1;
+    const z0 = Math.max(LAYOUT.house.z1 + 2, (beach?.z0 ?? shore - 8));
+    const z1 = Math.min(WZ - 3, shore + 8);
+    const x0 = Math.max(2, (beach?.x0 ?? 8) + 1);
+    const x1 = Math.min(WX - 3, (beach?.x1 ?? WX - 8) - 1);
     for (let z = 2; z < WZ - 2; z++) for (let x = 2; x < WX - 2; x++) {
       const i = x + z * WX;
       const f = this.floor[i];
       if (f < SEA || this.water[i]) continue;
       if (BLOCKS[this.get(x, f - 1, z)].cutout) continue;
       const r = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
-      // Front of the lodge (+Z) and the sides only — never the woods behind the house.
       if (z < LAYOUT.house.z0) continue;
-      if (r > 22 && r < 38) this.spawnCells.push(i);
+      // Every pest comes out of the shore and the shallows, never from behind the lodge.
+      if (z >= z0 && z <= z1 && x >= x0 && x <= x1) this.spawnCells.push(i);
       if (r > 14 && r < 28 && !inRect(x, z, LAYOUT.farmZone, 2)) this.pigCells.push(i);
     }
   }

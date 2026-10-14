@@ -12,7 +12,7 @@ export class Player {
   constructor(game, camera) {
     this.game = game;
     this.camera = camera;
-    this.body = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), hw: 0.3, h: 1.8, onGround: false, step: 1.05, inWater: false };
+    this.body = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), hw: 0.3, h: 1.8, onGround: false, step: 1.25, inWater: false };
     this.eye = 1.62;
     this.yaw = Math.PI;
     this.pitch = 0;

@@ -151,13 +151,13 @@ export class ArcadeEvents {
           big: dayIndex >= 3 || !!cfg.boss,
         });
       }
-      if (dayIndex >= 2 && (rng() < 0.45 || dayIndex >= 4)) {
+      if (dayIndex >= 1 && (rng() < 0.8 || dayIndex >= 2)) {
         events.push({
           kind: 'stampede',
-          t: dayLen * (0.2 + rng() * 0.4),
+          t: dayLen * (0.18 + rng() * 0.35),
           warn: 5,
-          rage: 26,
-          count: Math.min(4, 2 + (dayIndex >= 4 ? 1 : 0)),
+          rage: 28,
+          count: Math.min(5, 3 + (dayIndex >= 3 ? 1 : 0)),
         });
       }
     }

@@ -233,6 +233,7 @@ export const he = {
   'sys.hurricaneClear': 'הסופה עברה. יוצאים לבדוק את הנזק.',
   'sys.tideWarn': 'הים רוחש… משהו מתקרב לחוף!',
   'sys.tideRise': 'דג הגאות עלה מהמים!',
+  'sys.seaPig': 'מפלצת ים חטפה חזיר!',
   'sys.tideClear': 'הים נרגע.',
   'sys.stampedeWarn': 'דינוזאור מתקרב מהחוף!',
   'sys.stampede': 'הדינוזאור רומס את השדות!',

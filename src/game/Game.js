@@ -445,9 +445,11 @@ export class Game {
   /** Swarm pool — boom-style pests that show up often (not rare events). */
   pickSwarmKind(rng) {
     const r = rng();
-    if (r < 0.34) return 'boom';
-    if (r < 0.62) return 'chomp'; // field muncher
-    if (r < 0.88) return 'hop';   // hole digger
+    if (r < 0.22) return 'boom';
+    if (r < 0.4) return 'chomp';
+    if (r < 0.58) return 'hop';
+    if (r < 0.78) return 'dino';
+    if (r < 0.9) return 'sea';
     return 'boom';
   }
 
@@ -1093,7 +1095,8 @@ export class Game {
     // Guarantee special roles on top of the swarm mix (no dragon at night)
     if (nightSlots.length >= 2) nightSlots[1].kind = 'thief';
     if (nightSlots.length >= 3) nightSlots[2].kind = 'golem';
-    if (nightSlots.length >= 5) nightSlots[4].kind = rng() < 0.5 ? 'thief' : 'chomp';
+    if (nightSlots.length >= 4) nightSlots[3].kind = 'dino';
+    if (nightSlots.length >= 5) nightSlots[4].kind = rng() < 0.5 ? 'sea' : 'dino';
     for (const s of nightSlots) list.push(s);
     if (cfg.boss) list.push({ t: ns + cfg.night * 0.35, big: true, kind: 'boom' });
     return list.sort((a, b) => a.t - b.t);
@@ -1523,6 +1526,16 @@ export class Game {
     this.particles.burst(x, y, z, 0xc4a060, 8, 1);
     this.floats.add('-1', x + 0.5, y + 1.2, z + 0.5, '#ff8080');
     return 1;
+  }
+
+  nearestPig(pos) {
+    let best = null, bd = 1e9;
+    for (const pig of this.pigs) {
+      if (pig.dead || pig.carried) continue;
+      const d = Math.hypot(pig.pos.x - pos.x, pig.pos.z - pos.z);
+      if (d < bd) { bd = d; best = pig; }
+    }
+    return best;
   }
 
   nearestPennedPig(pos) {

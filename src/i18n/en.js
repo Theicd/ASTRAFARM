@@ -297,6 +297,7 @@ export const en = {
   'sys.hurricaneClear': 'Storm over. Check the fields for damage.',
   'sys.tideWarn': 'The sea stirs… something nears the shore!',
   'sys.tideRise': 'A tide fish climbed out of the water!',
+  'sys.seaPig': 'A sea monster snatched a pig!',
   'sys.tideClear': 'The sea settles.',
   'sys.stampedeWarn': 'A dinosaur is coming from the beach!',
   'sys.stampede': 'The dinosaur is trampling the fields!',
