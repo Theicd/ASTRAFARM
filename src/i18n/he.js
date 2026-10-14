@@ -43,6 +43,7 @@ export const he = {
   'pause.title': 'השהיה',
   'pause.resume': 'המשך',
   'pause.strategy': 'מצב אסטרטגיה',
+  'pause.eyes': 'מבט מהעיניים',
   'pause.retry': 'התחל בוקר מחדש',
   'pause.toTitle': 'חזרה לתפריט',
 

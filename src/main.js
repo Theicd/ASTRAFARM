@@ -38,7 +38,12 @@ try {
     onStart: () => { game.start(); },
     onContinue: () => { game.continueGame?.(); lock(); },   // セーブのある作品：screens.setContinue(true) で「つづきから」を出す
     onResume: () => { game.setState('play'); if (!game.strategy?.on) lock(); },
-    onStrategy: () => { game.setState('play'); if (!game.strategy?.on) game.strategy?.toggle(); },
+    onStrategy: () => {
+      const backToEyes = !!game.strategy?.on;
+      game.setState('play');
+      game.strategy?.toggle();
+      if (backToEyes) lock();
+    },
     onRetry: () => { game.retry(); lock(); },
     onToTitle: () => { game.reset(); game.setState('title'); },
     onSettings: (what) => {

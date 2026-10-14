@@ -47,6 +47,7 @@ export const en = {
   'pause.title': 'Paused',
   'pause.resume': 'Resume',
   'pause.strategy': 'Strategy view',
+  'pause.eyes': 'Through my eyes',
   'pause.retry': 'Restart this morning',
   'pause.toTitle': 'Back to title',
 

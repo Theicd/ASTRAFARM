@@ -300,7 +300,14 @@ export class Game {
     this.titleMode = false;
     if (prev !== 'paused') this.updateMusic(true);
   }
-  enter_paused() { this.audio.sfx('pause'); }
+  enter_paused() {
+    this.audio.sfx('pause');
+    const btn = document.querySelector('#m-pause [data-act="strategy"]');
+    if (!btn) return;
+    const key = this.strategy?.on ? 'pause.eyes' : 'pause.strategy';
+    btn.dataset.i18n = key;
+    btn.textContent = t(key);
+  }
   enter_dead() { this.deadT = 0; this.hud.setDead(true); this.audio.sfx('hurt', { big: true }); }
 
   /** PLAY — online quick-play like Kart / Quake (name + matchmake + farm together). */
