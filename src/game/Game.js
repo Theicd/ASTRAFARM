@@ -1414,6 +1414,7 @@ export class Game {
       const i = w.spawnCells[Math.floor(Math.random() * w.spawnCells.length)];
       if (i === undefined) break;
       const x = (i % WX) + 0.5, z = ((i / WX) | 0) + 0.5;
+      if (z < LAYOUT.house.z0) continue;
       const f = w.floor[i];
       const dp = Math.hypot(x - pl.x, z - pl.z), dr = Math.hypot(x - rb.x, z - rb.z);
       if (w.lightAt(x, f, z)[1] >= 8) continue;

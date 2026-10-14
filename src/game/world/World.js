@@ -534,6 +534,8 @@ export class World {
       if (f < SEA || this.water[i]) continue;
       if (BLOCKS[this.get(x, f - 1, z)].cutout) continue;
       const r = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
+      // Front of the lodge (+Z) and the sides only — never the woods behind the house.
+      if (z < LAYOUT.house.z0) continue;
       if (r > 22 && r < 38) this.spawnCells.push(i);
       if (r > 14 && r < 28 && !inRect(x, z, LAYOUT.farmZone, 2)) this.pigCells.push(i);
     }

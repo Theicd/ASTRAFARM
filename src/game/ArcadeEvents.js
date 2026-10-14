@@ -363,12 +363,15 @@ export class ArcadeEvents {
       const dur = Math.max(16, ev.rage || 22);
       this._stormPath = Math.min(1, this._stormPath + dt / dur);
       const F = LAYOUT.farmZone;
+      const H = LAYOUT.house;
       const u = this._stormPath;
-      const zStart = F.z1 + 14;
-      const zEnd = -18;
-      const xMid = (F.x0 + F.x1) * 0.5;
-      mesh.position.x = xMid + Math.sin(u * Math.PI * 2.5) * 7;
-      mesh.position.z = zStart + (zEnd - zStart) * u;
+      // Stay in front of the lodge. The funnel is wide — keep its center south of the door.
+      const zMin = H.z1 + 10;
+      const zBeach = Math.min(WZ - 6, F.z1 + 6);
+      const x0 = F.x0 - 6;
+      const x1 = F.x1 + 6;
+      mesh.position.x = x0 + (x1 - x0) * u;
+      mesh.position.z = zMin + Math.max(0, zBeach - zMin) * Math.sin(u * Math.PI);
       mesh.position.y = GY + 1.2;
       mesh.scale.setScalar(u < 0.08 ? 0.45 + u * 6 : 1.05);
       if (u >= 1) this.disposeStormMesh();

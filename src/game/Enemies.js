@@ -629,6 +629,7 @@ export class CropThief {
       const idx = cells[Math.floor(Math.random() * cells.length)];
       if (idx == null) continue;
       const x = (idx % WX) + 0.5, z = ((idx / WX) | 0) + 0.5;
+      if (z < LAYOUT.house.z0) continue;
       const d = Math.hypot(x - p.x, z - p.z);
       if (d > bd) { bd = d; best = [x, z]; }
     }
@@ -805,11 +806,14 @@ export class Dragon {
         }
       }
     } else if (this.state === 'flee') {
-      // Fly toward map edge
-      const cx = LAYOUT.center[0], cz = LAYOUT.center[1];
-      const dx = this.body.pos.x - cx, dz = this.body.pos.z - cz;
-      const len = Math.hypot(dx, dz) || 1;
-      const dirX = dx / len, dirZ = dz / len;
+      // Leave toward the beach or a side — never back over the lodge.
+      const H = LAYOUT.house;
+      let dirX = this.body.pos.x < LAYOUT.center[0] ? -0.55 : 0.55;
+      let dirZ = 0.85;
+      if (this.body.pos.z < H.z1 + 3) {
+        dirX = this.body.pos.x < (H.x0 + H.x1) * 0.5 ? -1 : 1;
+        dirZ = 0.2;
+      }
       this.yaw = Math.atan2(dirX, dirZ);
       const sp = this.stun > 0 ? this.speed * 0.5 : this.speed * 1.1;
       this.body.pos.x += dirX * sp * dt;
@@ -819,6 +823,7 @@ export class Dragon {
         this.carrying.body.pos.set(this.body.pos.x, this.body.pos.y - 0.9, this.body.pos.z);
         this.carrying.root.position.copy(this.carrying.body.pos);
       }
+      const cx = LAYOUT.center[0], cz = LAYOUT.center[1];
       const edge = Math.hypot(this.body.pos.x - cx, this.body.pos.z - cz) > 34 || this.stateT > 14;
       if (edge) {
         g.onDragonEscaped(this);
