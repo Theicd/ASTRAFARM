@@ -24,6 +24,7 @@
 #hud .rts-bar i { display: block; height: 100%; width: 100%; background: #3ddc6a; }
 #hud .rts-hp { color: #d7e6cf; font-size: 0.85em; }
 #hud.strategy .crosshair, #hud.strategy .hints { display: none; }
+#rts-marquee { position: fixed; z-index: 30; border: 2px solid #d6ff9a; background: rgba(120, 220, 80, 0.18); pointer-events: none; }
 #hud .tl > div:not(.chat) { background: rgba(0, 0, 0, 0.45); padding: 0.25em 0.6em; }
 #hud .day { display: flex; align-items: center; gap: 0.5em; }
 #hud .sunmoon { width: 16px; height: 16px; flex: none; }

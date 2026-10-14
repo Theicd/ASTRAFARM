@@ -25,6 +25,12 @@ export class StrategyMode {
     game.scene.add(this.rings);
     this._ray = new THREE.Raycaster();
     this._hit = new THREE.Vector3();
+    this._proj = new THREE.Vector3();
+    this.marquee = document.createElement('div');
+    this.marquee.id = 'rts-marquee';
+    this.marquee.className = 'hidden';
+    document.body.appendChild(this.marquee);
+    this._buildOverlays();
     const dom = game.renderer.domElement;
     dom.addEventListener('contextmenu', (e) => { if (this.on) e.preventDefault(); });
     dom.addEventListener('pointerdown', (e) => this._pointerDown(e));
@@ -45,6 +51,9 @@ export class StrategyMode {
       g.hud.el.classList.add('strategy');
     } else {
       g.hud.el.classList.remove('strategy');
+      this.marquee.classList.add('hidden');
+      this.frame.visible = false;
+      for (const b of Object.values(this.bars)) b.g.visible = false;
       this.selected = [];
       this.focus = null;
       g.player.order = null;
@@ -83,7 +92,9 @@ export class StrategyMode {
     // Wheel back (positive delta) moves the camera farther away.
     if (g.input.wheel) this.height = Math.max(14, Math.min(52, this.height + Math.sign(g.input.wheel) * 4));
     this._placeRings();
+    this._updateOverlays();
     if (this.focus) g.hud.setRtsCard?.(this._card(this.focus));
+    if (g._lodgeBar) g._lodgeBar.visible = false;
   }
 
   _pointerDown(e) {
@@ -96,32 +107,158 @@ export class StrategyMode {
   _pointerMove(e) {
     if (!this.on || !this._down) return;
     const dx = e.clientX - this._down.x, dy = e.clientY - this._down.y;
+    this._cur = { x: e.clientX, y: e.clientY };
     if (dx * dx + dy * dy > 16) this._drag = true;
     if (!this._drag) return;
-    const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
-    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
-    if (this._down.button === 2) this.yaw -= dx * 0.008;
-    else if (this._down.button === 0) {
-      const s = this.height * 0.0022;
-      this.cx -= (dx * rx + dy * fx) * s;
-      this.cz -= (dx * rz + dy * fz) * s;
-      this.cx = Math.max(6, Math.min(90, this.cx));
-      this.cz = Math.max(6, Math.min(90, this.cz));
-    }
+    if (this._down.button === 0) this._showMarquee();
+    else if (this._down.button === 2) this.yaw -= dx * 0.008;
+    else if (this._down.button === 1) this._pan(dx, dy);
     this._down.x = e.clientX;
     this._down.y = e.clientY;
+  }
+
+  /** Mouse drag matches the arrow keys: up moves the view forward, right moves it right. */
+  _pan(dx, dy) {
+    const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+    const s = this.height * 0.0024;
+    const mx = dx;
+    const my = -dy;
+    this.cx = Math.max(6, Math.min(90, this.cx + (mx * rx + my * fx) * s));
+    this.cz = Math.max(6, Math.min(90, this.cz + (mx * rz + my * fz) * s));
+  }
+
+  _showMarquee() {
+    const x0 = Math.min(this._down.x, this._cur.x);
+    const y0 = Math.min(this._down.y, this._cur.y);
+    const x1 = Math.max(this._down.x, this._cur.x);
+    const y1 = Math.max(this._down.y, this._cur.y);
+    this.marquee.classList.remove('hidden');
+    this.marquee.style.left = x0 + 'px';
+    this.marquee.style.top = y0 + 'px';
+    this.marquee.style.width = (x1 - x0) + 'px';
+    this.marquee.style.height = (y1 - y0) + 'px';
   }
 
   _pointerUp(e) {
     if (!this.on || !this._down || e.button !== this._down.button) return;
     const click = !this._drag;
     const down = this._down;
+    const cur = this._cur;
     this._down = null;
+    this.marquee.classList.add('hidden');
+    if (!click && down.button === 0 && cur) {
+      this._boxSelect(down, cur);
+      return;
+    }
     if (!click) return;
     const p = this._ground(down.x, down.y);
     if (!p) return;
     if (down.button === 2) this._command(p.x, p.z);
     else this._select(p.x, p.z, down.shift);
+  }
+
+  _boxSelect(down, cur) {
+    const x0 = Math.min(down.x, cur.x), y0 = Math.min(down.y, cur.y);
+    const x1 = Math.max(down.x, cur.x), y1 = Math.max(down.y, cur.y);
+    const hit = this._allUnits().filter((u) => {
+      const p = u.kind === 'player' ? u.ref.pos : u.ref.body.pos;
+      const s = this._project(p.x, p.y + 1, p.z);
+      return s && s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1;
+    });
+    if (!down.shift) this.selected = hit;
+    else for (const u of hit) if (!this.selected.some((s) => s.ref === u.ref)) this.selected.push(u);
+    this.focus = null;
+    this.game.hud.setRtsCard?.(hit.length ? this._cardUnits() : null);
+    this._syncRings();
+  }
+
+  _allUnits() {
+    const g = this.game;
+    const list = [];
+    if (g.player.alive) list.push({ kind: 'player', ref: g.player });
+    const crew = [g.robot, ...g.helpers];
+    for (const r of crew) if (r && r.root?.visible !== false && r.state !== 'kidnapped') list.push({ kind: 'robot', ref: r });
+    return list;
+  }
+
+  _project(x, y, z) {
+    const dom = this.game.renderer.domElement;
+    const r = dom.getBoundingClientRect();
+    this._proj.set(x, y, z).project(this.game.camera);
+    if (this._proj.z > 1) return null;
+    return {
+      x: r.left + (this._proj.x * 0.5 + 0.5) * r.width,
+      y: r.top + (-this._proj.y * 0.5 + 0.5) * r.height,
+    };
+  }
+
+  _footprint(kind) {
+    if (kind === 'lodge') {
+      const H = LAYOUT.house;
+      return { x0: H.x0, z0: H.z0, x1: H.x1 + 1, z1: H.z1 + 1, y: GY + 7.2 };
+    }
+    if (kind === 'pen') {
+      const P = LAYOUT.pigPen;
+      return { x0: P.x0, z0: P.z0, x1: P.x1 + 1, z1: P.z1 + 1, y: GY + 3.4 };
+    }
+    const [px, pz] = LAYOUT.pond;
+    return { x0: px - 3.4, z0: pz - 3.4, x1: px + 3.4, z1: pz + 3.4, y: GY + 2.8 };
+  }
+
+  _buildOverlays() {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffe25a, depthTest: false });
+    this.frame = new THREE.Group();
+    this.frame.renderOrder = 5;
+    for (let i = 0; i < 4; i++) {
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(1, 0.16, 0.16), mat);
+      edge.renderOrder = 5;
+      this.frame.add(edge);
+    }
+    this.frame.visible = false;
+    this.game.scene.add(this.frame);
+    this.bars = {};
+    for (const [kind, width] of [['lodge', 5.2], ['pen', 3.6], ['pond', 2.8]]) {
+      const g = new THREE.Group();
+      const bg = new THREE.Mesh(new THREE.BoxGeometry(width, 0.42, 0.08), new THREE.MeshBasicMaterial({ color: 0x141414 }));
+      const fill = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.24, 0.12), new THREE.MeshBasicMaterial({ color: 0x3ddc6a }));
+      fill.position.z = 0.06;
+      g.add(bg, fill);
+      g.visible = false;
+      this.game.scene.add(g);
+      this.bars[kind] = { g, fill, width: width - 0.2 };
+    }
+  }
+
+  _updateOverlays() {
+    const show = this.on;
+    for (const kind of ['lodge', 'pen', 'pond']) {
+      const fp = this._footprint(kind);
+      const bar = this.bars[kind];
+      bar.g.visible = show;
+      bar.g.position.set((fp.x0 + fp.x1) * 0.5, fp.y, (fp.z0 + fp.z1) * 0.5);
+      const cam = this.game.camera.position;
+      bar.g.rotation.set(0, Math.atan2(cam.x - bar.g.position.x, cam.z - bar.g.position.z), 0);
+      const stat = this._stats(kind);
+      const k = Math.max(0, Math.min(1, (stat?.hp ?? 0) / (stat?.max || 1)));
+      bar.fill.scale.x = Math.max(0.04, k);
+      bar.fill.position.x = (k - 1) * bar.width * 0.5;
+      bar.fill.material.color.setHex(k > 0.55 ? 0x3ddc6a : k > 0.28 ? 0xf0c040 : 0xe23b3b);
+      if (this.focus === kind) {
+        const y = GY + 1.2;
+        this.frame.visible = true;
+        this.frame.children.forEach((edge, i) => {
+          if (i < 2) {
+            edge.scale.set(fp.x1 - fp.x0, 1, 1);
+            edge.position.set((fp.x0 + fp.x1) * 0.5, y, i === 0 ? fp.z0 : fp.z1);
+          } else {
+            edge.scale.set(1, 1, fp.z1 - fp.z0);
+            edge.position.set(i === 2 ? fp.x0 : fp.x1, y, (fp.z0 + fp.z1) * 0.5);
+          }
+        });
+      }
+    }
+    if (!this.focus) this.frame.visible = false;
   }
 
   _ground(clientX, clientY) {

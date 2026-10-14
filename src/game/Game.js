@@ -2512,8 +2512,13 @@ export class Game {
     // Fog closer on low/mobile presets (fewer far chunks shaded); tighter in arcade storms
     const night = 1 - shared.uSky.value;
     const far = (this.fogFar || 105) * (1 - storm * 0.42);
-    shared.uFogNear.value = lerp(far * 0.4, far * 0.22, Math.max(night, storm * 0.85));
-    shared.uFogFar.value = lerp(far, far * 0.62, Math.max(night, storm * 0.9));
+    if (this.strategy?.on) {
+      shared.uFogNear.value = 1400;
+      shared.uFogFar.value = 2200;
+    } else {
+      shared.uFogNear.value = lerp(far * 0.4, far * 0.22, Math.max(night, storm * 0.85));
+      shared.uFogFar.value = lerp(far, far * 0.62, Math.max(night, storm * 0.9));
+    }
     if (this.state !== 'paused' && this.state !== 'report' && this.state !== 'ending') {
       this.particles.update(dt);
       this.floats.update(dt);
