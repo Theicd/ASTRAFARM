@@ -1,7 +1,7 @@
 // プレイヤー：一人称の移動（歩く・走る・跳ぶ・泳ぐ）、体力、手に持つ物（剣・クワ・じゃがいも・火薬）と振る動き。
 import * as THREE from 'three';
 import { moveBody, applyGravity } from './physics.js';
-import { itemMesh, blockItemGeometry } from './models.js';
+import { itemMesh, blockItemGeometry, createAstraModel } from './models.js';
 import { entityMaterial, setEntityLight } from './world/materials.js';
 import { clamp, damp, dampAngle } from '../core/math.js';
 import { BLOCKS } from './world/blocks.js';
@@ -24,6 +24,10 @@ export class Player {
     this.hand = new THREE.Group();
     this.hand.name = 'viewHand';
     camera.add(this.hand);
+    this.bodyRoot = createAstraModel({ tint: 0x3d8dff, seed: 77 }).root;
+    this.bodyRoot.name = 'farmer';
+    this.bodyRoot.visible = false;
+    game.scene.add(this.bodyRoot);
     // 持ちもの：剣・クワ・じゃがいも・火薬はドット絵に厚み、土は小さなブロック
     this.items = {};
     for (const n of ['sword', 'hoe', 'seed', 'potato', 'wheat', 'carrot', 'corn', 'powder', 'turret']) {
@@ -173,6 +177,12 @@ export class Player {
     this.showT -= dt;
     if (this.showT <= 0) this.held = this.tool;
     this.equipT = Math.max(0, (this.equipT || 0) - dt);
+    const showBody = !!this.game.strategy?.on && this.alive;
+    this.bodyRoot.visible = showBody;
+    if (showBody) {
+      this.bodyRoot.position.copy(b.pos);
+      this.bodyRoot.rotation.y = this.yaw;
+    }
   }
 
   /** カメラと手の位置。 */
