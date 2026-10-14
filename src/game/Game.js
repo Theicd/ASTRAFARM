@@ -103,6 +103,8 @@ export class Game {
     this.chargeBay = null;
     this.beachDecor = null;
     this.mobs = [];
+    this.lodge = { hp: 140, max: 140 };
+    this._lodgeWarn = false;
     this.pigs = [];
     this.arcade = new ArcadeEvents(this);
     this.drops = new Drops(this);
@@ -245,6 +247,7 @@ export class Game {
     this.chargeBay = new ChargeBay(this);
     this.beachDecor?.dispose();
     this.beachDecor = new BeachDecor(this);
+    this._buildLodgeBar();
     this.spawnPigs();
     this.robot.reset();
     this.player.reset(LAYOUT.spawn);
@@ -776,6 +779,9 @@ export class Game {
     this.pigGates = new PigGates(this);
     this.chargeBay = new ChargeBay(this);
     this.beachDecor = new BeachDecor(this);
+    this.lodge = { hp: 140, max: 140 };
+    this._lodgeWarn = false;
+    this._buildLodgeBar();
     this.spawnPigs();
     this.talk.reset();
     this.hud.clearChat();
@@ -804,6 +810,10 @@ export class Game {
     const turrets = Math.min(MAX_TURRETS, r.turrets | 0);
     for (let i = 0; i < turrets; i++) this.placeTurret(true);
     this.tut = null;
+    if (r.lodgeHp != null && this.lodge) {
+      this.lodge.hp = Math.max(0, Math.min(this.lodge.max, r.lodgeHp | 0));
+      this.refreshLodgeBar();
+    }
     this.syncHelpers(true);
   }
 
@@ -814,6 +824,7 @@ export class Game {
       helpers: this.helpers.length, turrets: this.turrets.length,
       powder: this.powder, green: this.green,
       totals: { ...this.totals }, diff: this.world.diff(),
+      lodgeHp: this.lodge?.hp ?? 140,
     };
     this.save.save();
   }
@@ -2090,6 +2101,87 @@ export class Game {
     }
   }
 
+  nearHouse(r = 3.2) {
+    const p = this.player?.pos;
+    if (!p) return false;
+    const H = LAYOUT.house;
+    const x = Math.max(H.x0, Math.min(H.x1 + 1, p.x));
+    const z = Math.max(H.z0, Math.min(H.z1 + 1, p.z));
+    return Math.hypot(p.x - x, p.z - z) <= r;
+  }
+
+  _buildLodgeBar() {
+    if (this._lodgeBar) {
+      this.scene.remove(this._lodgeBar);
+      this._lodgeBar.traverse((o) => o.geometry?.dispose?.());
+    }
+    const H = LAYOUT.house;
+    const g = new THREE.Group();
+    g.name = 'lodgeBar';
+    g.position.set((H.x0 + H.x1) * 0.5 + 0.5, GY + 7.4, H.z1 + 0.85);
+    const bg = new THREE.Mesh(
+      new THREE.BoxGeometry(4.4, 0.34, 0.08),
+      new THREE.MeshBasicMaterial({ color: 0x141414 }),
+    );
+    const fill = new THREE.Mesh(
+      new THREE.BoxGeometry(4.1, 0.2, 0.1),
+      new THREE.MeshBasicMaterial({ color: 0x3ddc6a }),
+    );
+    fill.position.set(0, 0, 0.04);
+    g.add(bg, fill);
+    g.visible = false;
+    this.scene.add(g);
+    this._lodgeBar = g;
+    this._lodgeFill = fill;
+    this.refreshLodgeBar();
+  }
+
+  refreshLodgeBar() {
+    if (!this._lodgeFill || !this.lodge) return;
+    const k = Math.max(0, Math.min(1, this.lodge.hp / this.lodge.max));
+    this._lodgeBar.visible = k < 0.995;
+    this._lodgeFill.scale.x = Math.max(0.04, k);
+    this._lodgeFill.position.x = (k - 1) * 2.05;
+    const col = k > 0.55 ? 0x3ddc6a : k > 0.28 ? 0xf0c040 : 0xe23b3b;
+    this._lodgeFill.material.color.setHex(col);
+  }
+
+  /** Cactoro club hits. Returns false when the lodge is already down. */
+  damageLodge(amount) {
+    if (!this.lodge) this.lodge = { hp: 140, max: 140 };
+    if (this.lodge.hp <= 0) return false;
+    this.lodge.hp = Math.max(0, this.lodge.hp - amount);
+    this.refreshLodgeBar();
+    const H = LAYOUT.house;
+    const x = H.door[0] + 0.5, y = GY + 3.2, z = H.z1 + 0.15;
+    this.particles.burst(x, y, z, 0xc4a060, 8, 1.1);
+    this.shake = Math.max(this.shake || 0, 0.22);
+    this.audio.sfx('hit', { pos: { x, y, z }, pitch: 0.55 });
+    this.floats.add(String(-amount), x, y + 0.8, z + 0.4, '#ffb4b4');
+    if (this.lodge.hp <= 0) this.talk.sys('sys.lodgeDown', null, 'warn');
+    else if (!this._lodgeWarn && this.lodge.hp < this.lodge.max * 0.85) {
+      this._lodgeWarn = true;
+      this.talk.sys('sys.lodgeHit', null, 'warn');
+    }
+    return this.lodge.hp > 0;
+  }
+
+  repairLodge(n = 16) {
+    if (!this.lodge || this.lodge.hp >= this.lodge.max) return false;
+    const wasDown = this.lodge.hp <= 0;
+    this.lodge.hp = Math.min(this.lodge.max, this.lodge.hp + n);
+    this.refreshLodgeBar();
+    const H = LAYOUT.house;
+    const x = H.door[0] + 0.5, y = GY + 2.4, z = H.z1 + 0.4;
+    this.particles.burst(x, y, z, 0xd8c090, 6, 0.8);
+    this.audio.sfx('place', { pos: { x, y, z }, pitch: 1.15 });
+    if (this.lodge.hp >= this.lodge.max) {
+      this._lodgeWarn = false;
+      this.talk.sys('sys.lodgeFixed');
+    } else if (wasDown) this.talk.sys('sys.lodgePatch', null, 'warn');
+    return true;
+  }
+
   decideUse() {
     if (this.targetPig) {
       return this.targetPig.penned
@@ -2098,8 +2190,9 @@ export class Game {
     }
     if (this.targetRobot) return { act: this.robot.state === 'sulk' ? 'cheer' : 'talk' };
     const tg = this.target;
+    if (tg && isRipe(tg.id)) return { act: 'harvest' };
+    if (this.lodge && this.lodge.hp < this.lodge.max && this.nearHouse(3.6)) return { act: 'repairHouse' };
     if (!tg) return null;
-    if (isRipe(tg.id)) return { act: 'harvest' };
     const u = this.useFor(this.tool, tg);
     if (u) return u;
     for (const k of TOOLS) {
@@ -2265,6 +2358,7 @@ export class Game {
       }
       case 'till': pl.swingHand(); return this.syncFarm(() => this.till(tg.x, tg.y, tg.z, 'player'));
       case 'fertilize': pl.swingHand(); return this.syncFarm(() => this.fertilize(tg.x, tg.y, tg.z));
+      case 'repairHouse': pl.swingHand(); return this.repairLodge(16);
       case 'fill': pl.swingHand(); return this.syncFarm(() => this.repair(...u.at, 'player'));
       case 'placeTurret': pl.swingHand(); return this.tryPlaceTurret(u.x, u.z);
       case 'sellPig': if (fresh) { pl.swingHand(); return this.sellPig(this.targetPig); } return false;

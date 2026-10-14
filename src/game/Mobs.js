@@ -47,17 +47,14 @@ export class Green {
   get pos() { return this.body.pos; }
   get center() { return new THREE.Vector3(this.body.pos.x, this.body.pos.y + this.body.h * 0.5, this.body.pos.z); }
 
-  /** 狙うもの：近いプレイヤーかアストラ、いなければ畑の作物。 */
+  /** The lodge door, just outside the wall. */
+  houseSpot() {
+    const H = LAYOUT.house;
+    return new THREE.Vector3(H.door[0] + 0.5, GY + 1, H.z1 + 1.4);
+  }
+
   pickTarget() {
-    const g = this.game, p = this.body.pos;
-    const cands = [];
-    if (g.player.alive) cands.push({ kind: 'player', pos: g.player.pos, d: p.distanceTo(g.player.pos) });
-    if (g.robot.exposed) cands.push({ kind: 'robot', pos: g.robot.body.pos, d: p.distanceTo(g.robot.body.pos) });
-    cands.sort((a, b) => a.d - b.d);
-    if (cands.length && cands[0].d < 16) return cands[0];
-    const crop = g.nearestCrop(p);
-    if (crop) return { kind: 'crop', pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5), d: 0 };
-    return { kind: 'farm', pos: new THREE.Vector3(LAYOUT.fieldA.water[0] + 0.5, GY + 1, LAYOUT.fieldA.water[1] + 2.5), d: 0 };
+    return { kind: 'house', pos: this.houseSpot() };
   }
 
   hit(dmg, from, knock = 1) {
@@ -71,7 +68,7 @@ export class Green {
     d.normalize().multiplyScalar((this.big ? 3 : 8.5) * knock);
     this.body.vel.set(d.x, this.big ? 3 : 5.5, d.z);
     this.body.onGround = false;
-    if (this.state === 'fuse') this.state = 'chase';
+    if (this.state === 'fuse' || this.state === 'bash') this.state = 'chase';
     if (this.hp <= 0) { this.dead = true; this.state = 'dead'; }
     return true;
   }
@@ -131,20 +128,21 @@ export class Green {
       this.pathI = 0;
     }
     const t = this.target;
-    if (this.state === 'chase' && t && this.stun <= 0) {
-      const dist = t.kind === 'crop' || t.kind === 'farm' ? Math.hypot(t.pos.x - p.x, t.pos.z - p.z) : p.distanceTo(t.pos);
-      const close = t.kind === 'crop' ? dist < 0.9 : t.kind === 'farm' ? dist < 1.5 : dist < (this.big ? 3.0 : 2.3);
-      if (close) {
-        this.state = 'fuse';
+    const spot = this.houseSpot();
+    if (this.state === 'chase' && this.stun <= 0) {
+      const dist = Math.hypot(spot.x - p.x, spot.z - p.z);
+      if (dist < (this.big ? 2.5 : 2.05)) {
+        this.state = 'bash';
         this.stateT = 0;
-        g.onFuse(this);
+        this.bashT = 0.15;
+        this.body.vel.x = 0;
+        this.body.vel.z = 0;
       } else {
-        // 道をたどる（道がなければまっすぐ）
-        let tx = t.pos.x, tz = t.pos.z;
+        let tx = spot.x, tz = spot.z;
         if (this.path && this.pathI < this.path.length) {
           const [cx, cz] = this.path[this.pathI];
           tx = cx + 0.5; tz = cz + 0.5;
-          if (Math.hypot(tx - p.x, tz - p.z) < 0.4) this.pathI++;
+          if (Math.hypot(tx - p.x, tz - p.z) < 0.45) this.pathI++;
         }
         const dx = tx - p.x, dz = tz - p.z;
         const d = Math.hypot(dx, dz) || 1;
@@ -154,17 +152,22 @@ export class Green {
         moving = true;
       }
     }
-    if (this.state === 'fuse') {
+    if (this.state === 'bash') {
       this.body.vel.x = damp(this.body.vel.x, 0, 10, dt);
       this.body.vel.z = damp(this.body.vel.z, 0, 10, dt);
-      if (t) this.yaw = dampAngle(this.yaw, Math.atan2(t.pos.x - p.x, t.pos.z - p.z), 8, dt);
-      // 狙った相手が離れたら、やめて追いかける
-      const away = t && (t.kind === 'player' || t.kind === 'robot') && p.distanceTo(t.pos) > (this.big ? 6 : 4.5);
-      if (away) {
-        this.fuse -= dt * 1.5;
-        if (this.fuse <= 0) { this.fuse = 0; this.state = 'chase'; g.onDefuse(this); }
-      } else this.fuse += dt;
-      if (this.fuse >= this.fuseTime) { g.explode(this); return; }
+      const hx = (LAYOUT.house.x0 + LAYOUT.house.x1) * 0.5;
+      const hz = (LAYOUT.house.z0 + LAYOUT.house.z1) * 0.5;
+      this.yaw = dampAngle(this.yaw, Math.atan2(hx - p.x, hz - p.z), 10, dt);
+      const dist = Math.hypot(spot.x - p.x, spot.z - p.z);
+      if (dist > 3.4) { this.state = 'chase'; this.stateT = 0; }
+      else {
+        this.bashT = (this.bashT ?? 0) - dt;
+        if (this.bashT <= 0) {
+          this.bashT = this.big ? 0.62 : 0.8;
+          const up = g.damageLodge(this.big ? 10 : 6, this);
+          if (!up) this.leave();
+        }
+      }
     }
     if (this.stun > 0) {
       this.body.vel.x *= Math.exp(-2.5 * dt);
@@ -180,9 +183,10 @@ export class Green {
 
   animate(dt, moving) {
     const M = this.model;
-    if (stepMobVisual(M, dt, moving || this.state === 'fuse')) {
+    if (stepMobVisual(M, dt, moving || this.state === 'bash' || this.state === 'fuse')) {
       let s = visualScale(M);
-      if (this.state === 'fuse') {
+      if (this.state === 'bash') s *= 1 + Math.sin(this.t * 14) * 0.07;
+      else if (this.state === 'fuse') {
         const k = this.fuse / this.fuseTime;
         s *= 1 + k * 0.18 + Math.sin(this.t * 30) * 0.02 * k;
       }
