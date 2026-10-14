@@ -358,8 +358,8 @@ export class BeachDecor {
         const bed = this._clone('lounge', 3.15);
         if (!bed) continue;
         dressFurniture(bed, tint);
-        bed.position.set(cx + ox, sandY, cz + 2.45);
-        bed.rotation.y = Math.PI;
+        bed.position.set(cx + ox, sandY, cz + 4.4);
+        bed.rotation.y = 0;
         this.root.add(bed);
       }
 
