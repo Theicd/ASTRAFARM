@@ -33,7 +33,7 @@ import { Golem, CropThief, Dragon, Chomper, Hopper, SeaBeast, Dino } from './Ene
 import { ArcadeEvents } from './ArcadeEvents.js';
 import { BeachDecor } from './BeachDecor.js';
 import { Drops } from './items.js';
-import { Particles, FloatTexts, selectionBox } from './fx.js';
+import { Particles, FloatTexts, selectionBox, threatFrame, pulseThreatFrame } from './fx.js';
 import { Talk } from './talk.js';
 import { drawFace } from './models.js';
 import { GameHud } from '../ui/GameHud.js';
@@ -421,14 +421,20 @@ export class Game {
   }
 
   makeMob(kind, x, z, { big = false } = {}) {
-    if (kind === 'golem') return new Golem(this, x, z);
-    if (kind === 'thief') return new CropThief(this, x, z);
-    if (kind === 'dragon') return new Dragon(this, x, z);
-    if (kind === 'chomp') return new Chomper(this, x, z);
-    if (kind === 'hop') return new Hopper(this, x, z);
-    if (kind === 'sea' || kind === 'leviathan') return new SeaBeast(this, x, z, { big: big || kind === 'leviathan' });
-    if (kind === 'dino') return new Dino(this, x, z);
-    return new Green(this, x, z, { big, night: this.phase === 'night' });
+    let m;
+    if (kind === 'golem') m = new Golem(this, x, z);
+    else if (kind === 'thief') m = new CropThief(this, x, z);
+    else if (kind === 'dragon') m = new Dragon(this, x, z);
+    else if (kind === 'chomp') m = new Chomper(this, x, z);
+    else if (kind === 'hop') m = new Hopper(this, x, z);
+    else if (kind === 'sea' || kind === 'leviathan') m = new SeaBeast(this, x, z, { big: big || kind === 'leviathan' });
+    else if (kind === 'dino') m = new Dino(this, x, z);
+    else m = new Green(this, x, z, { big, night: this.phase === 'night' });
+    if (m?.root) {
+      m.frame = threatFrame(m.kind, m.big);
+      m.root.add(m.frame);
+    }
+    return m;
   }
 
   /** Swarm pool — boom-style pests that show up often (not rare events). */
@@ -2266,6 +2272,11 @@ export class Game {
     this.chargeBay?.update(dt);
     this.beachDecor?.update(dt);
     for (const m of [...this.mobs]) {
+      if (m.frame) {
+        const hot = m.state === 'fuse' || m.state === 'windup' || m.state === 'smash';
+        m.frame.visible = !m.dead && m.state !== 'leave';
+        if (m.frame.visible) pulseThreatFrame(m.frame, this.time + (m.phase || 0), hot);
+      }
       m.update(dt);
       if (m.dead && this.mobs.includes(m)) this.removeMob(m);
     }
