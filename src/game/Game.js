@@ -32,6 +32,7 @@ import { Green, Pig } from './Mobs.js';
 import { Golem, CropThief, Dragon, Chomper, Hopper, SeaBeast, Dino } from './Enemies.js';
 import { ArcadeEvents } from './ArcadeEvents.js';
 import { BeachDecor } from './BeachDecor.js';
+import { StrategyMode } from './Strategy.js';
 import { preloadMobVisuals } from './mobVisuals.js';
 import { Drops } from './items.js';
 import { Particles, FloatTexts, selectionBox, threatFrame, pulseThreatFrame } from './fx.js';
@@ -104,7 +105,10 @@ export class Game {
     this.beachDecor = null;
     this.mobs = [];
     this.lodge = { hp: 140, max: 140 };
+    this.penHp = { hp: 90, max: 90 };
+    this.pondHp = { hp: 70, max: 70 };
     this._lodgeWarn = false;
+    this.strategy = new StrategyMode(this);
     this.pigs = [];
     this.arcade = new ArcadeEvents(this);
     this.drops = new Drops(this);
@@ -125,6 +129,7 @@ export class Game {
       drawFace,
       glyphCtx: () => ({ device: input.device, padType: settings.padType === 'auto' ? input.padType : settings.padType }),
       onSlot: (k) => { if (this.state === 'play') this.selectTool(k); },
+      onStrategy: () => this.strategy?.toggle(),
     });
     this.talk = new Talk({
       onLine: (text) => {
@@ -782,6 +787,8 @@ export class Game {
     this.chargeBay = new ChargeBay(this);
     this.beachDecor = new BeachDecor(this);
     this.lodge = { hp: 140, max: 140 };
+    this.penHp = { hp: 90, max: 90 };
+    this.pondHp = { hp: 70, max: 70 };
     this._lodgeWarn = false;
     this._buildLodgeBar();
     this.spawnPigs();
@@ -1898,6 +1905,7 @@ export class Game {
         cleared.push(w.idx(x, yy, z));
       }
     }
+    this._chipStructures(c.x, c.z, r, m.big ? 16 : 7);
     const lb = this.lightBright(c.x, c.y + 1, c.z);
     this.particles.smoke(c.x, c.y, c.z, m.big ? 60 : 36, r * 0.5, Math.max(0.35, lb), m.big ? 1.8 : 1.2);
     removed.slice(0, 22).forEach(([x, y, z, id]) => this.particles.burst(x, y, z, BLOCKS[id].particle, 4, lb, 1));
@@ -2026,9 +2034,14 @@ export class Game {
     const input = this.input;
     if (input.pressed('pause') || input.menu.start) { this.setState('paused'); return; }
     this.grace = Math.max(0, this.grace - dt);
-    this.player.update(dt, input, true);
-    this.updateTargeting();
-    this.handleActions(dt);
+    if (this.strategy?.on) {
+      this.strategy.update(dt);
+      this.player.update(dt, input, false);
+    } else {
+      this.player.update(dt, input, true);
+      this.updateTargeting();
+      this.handleActions(dt);
+    }
     this.updateDay(dt);
     if (!this.player.alive && this.state === 'play') this.setState('dead');
   }
@@ -2177,6 +2190,46 @@ export class Game {
       this.talk.sys('sys.lodgeHit', null, 'warn');
     }
     return this.lodge.hp > 0;
+  }
+
+  structureFull(kind) {
+    const s = kind === 'lodge' ? this.lodge : kind === 'pen' ? this.penHp : this.pondHp;
+    return !s || s.hp >= s.max;
+  }
+
+  repairPen(n = 16) {
+    return this._repairStat(this.penHp, n, 'sys.penFixed');
+  }
+
+  repairPond(n = 14) {
+    return this._repairStat(this.pondHp, n, 'sys.pondFixed');
+  }
+
+  _chipStructures(x, z, radius, amount) {
+    const H = LAYOUT.house;
+    const hc = [(H.x0 + H.x1) * 0.5, (H.z0 + H.z1) * 0.5];
+    if (Math.hypot(x - hc[0], z - hc[1]) < radius + 6) this.damageLodge(amount);
+    const P = LAYOUT.pigPen;
+    const pc = [(P.x0 + P.x1) * 0.5, (P.z0 + P.z1) * 0.5];
+    if (Math.hypot(x - pc[0], z - pc[1]) < radius + 4 && this.penHp) {
+      this.penHp.hp = Math.max(0, this.penHp.hp - amount);
+      if (this.penHp.hp <= 0) this.talk.sys('sys.penDown', null, 'warn');
+    }
+    const [px, pz] = LAYOUT.pond;
+    if (Math.hypot(x - px, z - pz) < radius + 3 && this.pondHp) {
+      this.pondHp.hp = Math.max(0, this.pondHp.hp - amount);
+      if (this.pondHp.hp <= 0) this.talk.sys('sys.pondDown', null, 'warn');
+    }
+    if (this.strategy?.focus) this.hud.setRtsCard?.(this.strategy._card(this.strategy.focus));
+  }
+
+  _repairStat(stat, n, doneKey) {
+    if (!stat || stat.hp >= stat.max) return false;
+    stat.hp = Math.min(stat.max, stat.hp + n);
+    this.audio.sfx('place', { pitch: 1.1 });
+    if (stat.hp >= stat.max) this.talk.sys(doneKey);
+    if (this.strategy?.focus) this.hud.setRtsCard?.(this.strategy._card(this.strategy.focus));
+    return true;
   }
 
   repairLodge(n = 16) {
@@ -2440,9 +2493,10 @@ export class Game {
   /** カメラ・空・粒・表示（止まっているときも描けるように毎回）。 */
   updateView(dt) {
     const tm = this.titleMode && (this.state === 'title' || this.state === 'intro');
-    if (tm) this.updateTitleCamera(dt);
+    if (this.strategy?.on && this.state === 'play') this.strategy.applyCamera();
+    else if (tm) this.updateTitleCamera(dt);
     else this.player.updateCamera(dt, this.time);
-    this.player.hand.visible = !tm && (this.state === 'play' || this.state === 'dead' || this.state === 'paused');
+    this.player.hand.visible = !tm && !this.strategy?.on && (this.state === 'play' || this.state === 'dead' || this.state === 'paused');
     // 揺れ
     if (this.shake > 0.001) {
       const s = this.shake * 0.22;

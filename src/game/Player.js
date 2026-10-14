@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { moveBody, applyGravity } from './physics.js';
 import { itemMesh, blockItemGeometry } from './models.js';
 import { entityMaterial, setEntityLight } from './world/materials.js';
-import { clamp, damp } from '../core/math.js';
+import { clamp, damp, dampAngle } from '../core/math.js';
 import { BLOCKS } from './world/blocks.js';
 
 const WALK = 4.3, SPRINT = 5.9, JUMP = 8.6;
@@ -97,11 +97,25 @@ export class Player {
 
   update(dt, input, allowMove = true) {
     const b = this.body;
-    if (allowMove && this.alive) {
+    const ordered = this.order && this.alive && this.game.strategy?.on;
+    if (allowMove && this.alive && !ordered) {
       this.yaw -= input.look.x;
       this.pitch = clamp(this.pitch - input.look.y, -1.55, 1.55);
     }
-    const mv = allowMove && this.alive ? input.move : { x: 0, y: 0 };
+    if (ordered) {
+      const dx = this.order.x - b.pos.x, dz = this.order.z - b.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d <= (this.order.near || 0.8)) {
+        const job = this.order.job;
+        this.order = null;
+        if (job) this.game.strategy.finishPlayerJob(job);
+      } else {
+        b.vel.x = damp(b.vel.x, (dx / d) * WALK, 10, dt);
+        b.vel.z = damp(b.vel.z, (dz / d) * WALK, 10, dt);
+        this.yaw = dampAngle(this.yaw, Math.atan2(dx, dz), 8, dt);
+      }
+    }
+    const mv = allowMove && this.alive && !ordered ? input.move : { x: 0, y: 0 };
     const len = Math.hypot(mv.x, mv.y);
     this.sprinting = allowMove && (input.down('sprint') || (input.device === 'touch' && len > 0.95)) && mv.y > 0.3;
     const sp = (this.sprinting ? SPRINT : WALK) * (b.inWater ? 0.55 : 1);
@@ -109,8 +123,10 @@ export class Player {
     const rx = -fz, rz = fx;
     const wx = (fx * mv.y + rx * mv.x) * sp, wz = (fz * mv.y + rz * mv.x) * sp;
     const k = b.onGround ? 14 : b.inWater ? 4 : 3.2;
-    b.vel.x = damp(b.vel.x, wx, k, dt);
-    b.vel.z = damp(b.vel.z, wz, k, dt);
+    if (!ordered) {
+      b.vel.x = damp(b.vel.x, wx, k, dt);
+      b.vel.z = damp(b.vel.z, wz, k, dt);
+    }
     if (allowMove && this.alive && input.down('jump')) {
       if (b.inWater) b.vel.y = Math.max(b.vel.y, 3.2);
       else if (b.onGround && !this.game.grace) { b.vel.y = JUMP; b.onGround = false; this.game.audio.sfx('jump'); }

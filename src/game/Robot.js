@@ -278,6 +278,21 @@ export class Robot {
     const near = task.type === 'repair' ? 1.6 : 1.25;
     if (!this.goTo(task.x + 0.5, task.z + 0.5, near)) { this.endTask(); this.thinkT = 1.5; }
   }
+  /** Strategy view: walk here, or work the clicked field / building. */
+  assignOrder(order) {
+    if (this.state === 'kidnapped' || this.captive) return;
+    if (this.state !== 'work') this.setState('work');
+    this.endTask();
+    const task = {
+      type: order.type === 'move' ? 'wander' : order.type,
+      x: order.x, z: order.z, y: order.y || GY + 1,
+      what: order.what, crop: order.crop, phase: 'go',
+    };
+    this.task = task;
+    const near = order.type === 'move' ? 0.7 : order.type === 'mend' ? 1.6 : 1.2;
+    if (!this.goTo(order.x + 0.5, order.z + 0.5, near)) { this.endTask(); this.thinkT = 0.4; }
+  }
+
   endTask() {
     if (this.task) this.game.reserve(this.task.x, this.task.z, false);
     this.task = null;
@@ -298,6 +313,11 @@ export class Robot {
       }
     } else if (t.type === 'till') run(() => g.till(t.x, t.y, t.z, 'robot'));
     else if (t.type === 'repair') run(() => g.repair(t.x, t.y, t.z, 'robot'));
+    else if (t.type === 'mend') {
+      if (t.what === 'lodge') g.repairLodge(18);
+      else if (t.what === 'pen') g.repairPen(16);
+      else if (t.what === 'pond') g.repairPond(14);
+    }
   }
 
   // ------------------------------------------------------------------ できごと
@@ -496,6 +516,7 @@ export class Robot {
     if (!this.helper && this.talkT <= 0) { this.talkT = 26 + Math.random() * 22; g.say('astra.idle', { random: true }); }
     if (!t) {
       this.wantVel(0, 0, dt);
+      if (g.strategy?.on) return 0;
       this.thinkT -= dt;
       if (this.thinkT <= 0) {
         const nt = this.restNext ? null : this.findTask();
@@ -531,6 +552,10 @@ export class Robot {
     t.actT -= dt;
     if (t.actT <= 0) {
       this.doTask(t);
+      if (t.type === 'mend' && !this.game.structureFull?.(t.what)) {
+        t.actT = 0.65;
+        return 0;
+      }
       this.endTask();
       // Helpers rest less so the crew keeps the fields moving
       this.thinkT = (this.helper ? 0.25 : 0.7) + Math.random() * (this.helper ? 0.35 : 0.8);

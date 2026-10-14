@@ -5,9 +5,10 @@ import { getNet } from '../net/SosNet.js';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class GameHud {
-  constructor(root, { atlas, drawFace, glyphCtx, onSlot }) {
+  constructor(root, { atlas, drawFace, glyphCtx, onSlot, onStrategy }) {
     this.atlas = atlas;
     this.onSlot = onSlot;
+    this.onStrategy = onStrategy;
     this.drawFace = drawFace;
     this.glyphCtx = glyphCtx;
     const icon = (n) => atlas.iconURL(n);
@@ -19,6 +20,8 @@ export class GameHud {
   <div class="crosshair"></div>
   <div class="prompt hidden"><span class="pg"></span><b></b></div>
   <div class="tl">
+    <button type="button" id="rts-toggle" class="rts-btn" data-i18n="rts.btn">${t('rts.btn')}</button>
+    <div class="rts-card hidden"><b class="rts-name"></b><div class="rts-bar"><i></i></div><span class="rts-hp"></span></div>
     <div class="day"><span class="sunmoon"></span><b class="dayname"></b><span class="clock"><i></i></span></div>
     <div class="goal"><span class="lbl" data-i18n="hud.goal">${t('hud.goal')}</span><b class="goalval"></b><div class="bar"><i></i></div></div>
     <div class="obj hidden"></div>
@@ -69,7 +72,10 @@ export class GameHud {
       banner: q('.banner'), bh: q('.banner h2'), bp: q('.banner p'), dead: q('.deadmsg'), slotname: q('.slotname'),
       wh: q('.warehouse'), whMoney: q('.wh-money'), whStock: q('.wh-stock'),
       whHelpers: q('.wh-helpers'), whHoe: q('.wh-hoe'),
+      rtsBtn: q('#rts-toggle'), rtsCard: q('.rts-card'), rtsName: q('.rts-name'), rtsFill: q('.rts-bar i'), rtsHp: q('.rts-hp'),
     };
+    this.$.rtsBtn?.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); });
+    this.$.rtsBtn?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.onStrategy?.(); });
     this.faceCtx = this.$.face.getContext('2d');
     for (const sl of el.querySelectorAll('.slot[data-n]')) {
       sl.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.onSlot?.(sl.dataset.k); });
@@ -255,6 +261,29 @@ export class GameHud {
       a.classList.toggle('fuse', !!it.fuse);
       a.classList.toggle('big', !!it.big);
     });
+  }
+
+  setStrategy(on) {
+    this.$.rtsBtn?.classList.toggle('on', !!on);
+    this.$.rtsBtn?.setAttribute('data-i18n', on ? 'rts.btnOn' : 'rts.btn');
+    if (this.$.rtsBtn) this.$.rtsBtn.textContent = t(on ? 'rts.btnOn' : 'rts.btn');
+    if (!on) this.setRtsCard(null);
+  }
+
+  setRtsCard(card) {
+    const el = this.$.rtsCard;
+    if (!el) return;
+    if (!card) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    this.$.rtsName.textContent = card.name;
+    const show = card.hp != null && card.max;
+    this.$.rtsFill.parentElement.style.display = show ? '' : 'none';
+    this.$.rtsHp.textContent = show ? `${card.hp} / ${card.max}` : (card.hint || '');
+    if (show) {
+      const k = Math.max(0, Math.min(1, card.hp / card.max));
+      this.$.rtsFill.style.width = (k * 100) + '%';
+      this.$.rtsFill.style.background = k > 0.55 ? '#3ddc6a' : k > 0.28 ? '#f0c040' : '#e23b3b';
+    }
   }
 
   update(dt) {

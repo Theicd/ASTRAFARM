@@ -57,8 +57,8 @@ try {
   game.lockPointer = lock;
   input.onDevice = () => refreshGlyphs(input, settings);
   if (POINTER_LOCK) {
-    renderer.domElement.addEventListener('click', () => { if (game.state === 'play') input.lockPointer(); });
-    input.onPointerLock = (locked) => { if (!locked && game.state === 'play' && input.device === 'kb') game.setState('paused'); };
+    renderer.domElement.addEventListener('click', () => { if (game.state === 'play' && !game.strategy?.on) input.lockPointer(); });
+    input.onPointerLock = (locked) => { if (!locked && game.state === 'play' && input.device === 'kb' && !game.strategy?.on) game.setState('paused'); };
   }
   applyDom();
   refreshGlyphs(input, settings);
