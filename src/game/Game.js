@@ -32,6 +32,7 @@ import { Green, Pig } from './Mobs.js';
 import { Golem, CropThief, Dragon, Chomper, Hopper, SeaBeast, Dino } from './Enemies.js';
 import { ArcadeEvents } from './ArcadeEvents.js';
 import { BeachDecor } from './BeachDecor.js';
+import { preloadMobVisuals } from './mobVisuals.js';
 import { Drops } from './items.js';
 import { Particles, FloatTexts, selectionBox, threatFrame, pulseThreatFrame } from './fx.js';
 import { Talk } from './talk.js';
@@ -235,6 +236,7 @@ export class Game {
   /** 読み込み：世界を作って、最初の形を作る。 */
   async init() {
     await document.fonts?.ready;
+    await preloadMobVisuals();
     this.world.generate();
     this.sky.setSouthShore(LAYOUT.waterLineZ ?? 80);
     this.rebuildCrops();

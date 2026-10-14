@@ -6,6 +6,7 @@ import { LAYOUT, GY, SEA, WZ } from './world/World.js';
 
 import { B } from './world/blocks.js';
 import { solidEntityMaterial, setEntityLight } from './world/materials.js';
+import { takeMobVisual, stepMobVisual } from './mobVisuals.js';
 
 const ASSET = (name) => `./assets/beach/${name}`;
 
@@ -223,6 +224,60 @@ function dressFurniture(group, hex) {
   });
 }
 
+function makePump(mats) {
+  const g = new THREE.Group();
+  const steel = mat(0x8b949c);
+  const rust = mat(0xc45a32);
+  const tank = mat(0xd8e0e8);
+  const dark = mat(0x3e4650);
+  for (const [x, z] of [[-2.2, -1.6], [2.2, -1.6], [-2.2, 1.6], [2.2, 1.6]]) {
+    box(g, mats, 0.32, 4.2, 0.32, x, 1.4, z, steel);
+  }
+  box(g, mats, 5.2, 0.28, 3.8, 0, 3.5, 0, rust);
+  box(g, mats, 2.2, 1.8, 2.2, -0.6, 4.6, 0, tank);
+  box(g, mats, 1.2, 1.1, 1.2, 1.5, 4.2, 0.4, dark);
+  box(g, mats, 0.35, 3.2, 0.35, -0.6, 6.4, 0, steel);
+  box(g, mats, 3.4, 0.22, 0.22, 1.1, 7.8, 0, rust);
+  box(g, mats, 0.55, 2.4, 0.55, 2.6, 2.2, 0.8, steel);
+  g.scale.setScalar(2.6);
+  return g;
+}
+
+function makeBungalow(mats, roofHex = 0xd25a3a) {
+  const g = new THREE.Group();
+  const wood = mat(0xc49862);
+  const roof = mat(roofHex);
+  const wall = mat(0xf3e6c8);
+  const glass = mat(0x9fd0e8);
+  for (const [x, z] of [[-1.8, -1.3], [1.8, -1.3], [-1.8, 1.3], [1.8, 1.3]]) {
+    box(g, mats, 0.18, 3.4, 0.18, x, 1.7, z, wood);
+  }
+  box(g, mats, 4.4, 0.16, 3.2, 0, 3.45, 0, wood);
+  box(g, mats, 3.4, 1.5, 2.4, 0, 4.3, 0, wall);
+  box(g, mats, 0.85, 0.7, 0.08, 0, 4.25, 1.22, glass);
+  box(g, mats, 4.6, 0.22, 3.4, 0, 5.15, 0, roof);
+  box(g, mats, 3.1, 0.16, 2.2, 0, 5.4, 0, roof);
+  box(g, mats, 1.6, 0.12, 1.2, 0, 5.58, 0, roof);
+  return g;
+}
+
+function makeStiltVillage(mats) {
+  const g = new THREE.Group();
+  const wood = mat(0xb88858);
+  const a = makeBungalow(mats, 0xd25a3a);
+  const b = makeBungalow(mats, 0x2f6f86);
+  b.position.set(7.4, 0, 1.6);
+  b.rotation.y = 0.35;
+  const c = makeBungalow(mats, 0xe0a040);
+  c.position.set(3.6, 0, -5.2);
+  c.rotation.y = -0.5;
+  g.add(a, b, c);
+  box(g, mats, 7.2, 0.14, 1.15, 3.6, 3.45, 0.7, wood);
+  box(g, mats, 1.15, 0.14, 5.4, 2.2, 3.45, -2.4, wood);
+  g.scale.setScalar(2.15);
+  return g;
+}
+
 function sandOk(world, x, z) {
   if (!world.inside(x, GY, z)) return false;
   const t = world.get(x, GY, z);
@@ -237,6 +292,7 @@ export class BeachDecor {
     this._mats = [];
     this._ships = [];
     this._birds = [];
+    this._fish = [];
     this._loader = new GLTFLoader();
     this._templates = null;
     this._loadId = 0;
@@ -304,6 +360,8 @@ export class BeachDecor {
     this.disposeMeshes();
     const loadId = ++this._loadId;
     this._placeSeagulls();
+    this._placeSeaStructures();
+    this._placeSeaLife();
     this._ensureTemplates().then(() => {
       if (loadId !== this._loadId) return;
       this._placeKenneyResort();
@@ -469,6 +527,46 @@ export class BeachDecor {
     }
   }
 
+  _placeSeaStructures() {
+    const mats = this._mats;
+    const xMid = LAYOUT.pathX;
+    const z0 = (LAYOUT.waterLineZ ?? 82) + 36;
+    const y = SEA - 1 + 14 / 16;
+    const spots = [
+      [xMid - 46, z0, 'pump', 0.35],
+      [xMid + 38, z0 + 18, 'village', -0.25],
+      [xMid - 8, z0 + 62, 'pump', -0.5],
+      [xMid + 18, z0 + 96, 'village', 0.4],
+      [xMid - 34, z0 + 130, 'pump', 0.15],
+    ];
+    for (const [x, z, kind, yaw] of spots) {
+      const g = kind === 'pump' ? makePump(mats) : makeStiltVillage(mats);
+      g.position.set(x, y - 0.35, z);
+      g.rotation.y = yaw;
+      this.root.add(g);
+    }
+  }
+
+  _placeSeaLife() {
+    this._fish = [];
+    const xMid = LAYOUT.pathX;
+    const z0 = (LAYOUT.waterLineZ ?? 82) + 12;
+    const spots = [
+      [xMid - 18, z0, 1.35, 0.4],
+      [xMid + 26, z0 + 14, 1.15, -0.6],
+      [xMid - 40, z0 + 30, 1.05, 0.2],
+      [xMid + 8, z0 + 48, 1.55, 1.1],
+      [xMid + 55, z0 + 22, 1.2, -0.3],
+    ];
+    for (const [x, z, sc, yaw] of spots) {
+      const v = takeMobVisual('Fish', sc);
+      if (!v) continue;
+      v.root.position.set(x, SEA - 0.2, z);
+      this.root.add(v.root);
+      this._fish.push({ v, x, z, yaw, r: 5 + sc * 7 });
+    }
+  }
+
   _placeSeagulls() {
     const mats = this._mats;
     const beach = LAYOUT.beach;
@@ -502,6 +600,14 @@ export class BeachDecor {
       s.mesh.position.y = s.baseY + Math.sin(t * 1.1 + s.phase) * s.bob;
       s.mesh.rotation.z = Math.sin(t * 0.7 + s.phase) * 0.015;
     }
+    for (const f of this._fish || []) {
+      stepMobVisual(f.v, 0.016, true);
+      const a = t * 0.42 + f.yaw;
+      const nx = f.x + Math.cos(a) * f.r;
+      const nz = f.z + Math.sin(a) * f.r * 0.72;
+      f.v.root.position.set(nx, SEA - 0.15 + Math.sin(a * 2.2) * 0.18, nz);
+      f.v.root.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a) * 0.72);
+    }
     for (const b of this._birds) {
       b.mesh.visible = birdsOut;
       if (!birdsOut) continue;
@@ -527,6 +633,7 @@ export class BeachDecor {
     this._mats = [];
     this._ships = [];
     this._birds = [];
+    this._fish = [];
   }
 
   dispose() {

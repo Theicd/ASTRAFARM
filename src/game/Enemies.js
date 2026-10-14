@@ -10,6 +10,7 @@ import {
 import { findPath, houseFootprintBlocked, outdoorGoal } from './nav.js';
 import { moveBody, applyGravity } from './physics.js';
 import { damp, dampAngle } from '../core/math.js';
+import { stepMobVisual, visualScale } from './mobVisuals.js';
 import { setEntityLight } from './world/materials.js';
 import { LAYOUT, GY, WX, WZ, SEA } from './world/World.js';
 
@@ -65,10 +66,12 @@ function emergeLeave(self, dt, g) {
 }
 
 function lightRoot(self) {
+  const mat = self.model?.mat;
+  if (!mat?.uniforms?.uLight) return;
   const p = self.body.pos;
   const [sk, bl] = self.game.world.lightAt(p.x, p.y + 0.5, p.z);
-  setEntityLight(self.model.mat, sk, bl);
-  if (self.model.mat.uniforms?.uHurt) self.model.mat.uniforms.uHurt.value = self.hurt > 0 ? 1 : 0;
+  setEntityLight(mat, sk, bl);
+  if (mat.uniforms.uHurt) mat.uniforms.uHurt.value = self.hurt > 0 ? 1 : 0;
 }
 
 // ───────────────────────────────────────────────────────────────── Chomper (swarm eater)
@@ -191,6 +194,13 @@ export class Chomper {
 
   animate(dt, moving) {
     const M = this.model;
+    if (stepMobVisual(M, dt, moving || this.state === 'eat')) {
+      const chew = this.state === 'eat' ? 1.08 : 1;
+      M.scale.scale.setScalar(visualScale(M) * chew);
+      this.root.rotation.y = this.yaw;
+      lightRoot(this);
+      return;
+    }
     this.phase += dt * (this.state === 'eat' ? 18 : moving ? 10 : 2);
     const sw = Math.sin(this.phase);
     if (M.legs) {
@@ -199,7 +209,7 @@ export class Chomper {
       M.legs[1].rotation.x = -sw * amp; M.legs[2].rotation.x = -sw * amp;
     }
     const chew = this.state === 'eat' ? 1 + Math.abs(Math.sin(this.phase)) * 0.18 : 1;
-    M.scale.scale.set(M.baseScale * chew, M.baseScale * (2 - chew * 0.15), M.baseScale * chew);
+    M.scale.scale.set(visualScale(M) * chew, visualScale(M) * (2 - chew * 0.15), visualScale(M) * chew);
     this.root.rotation.y = this.yaw;
     lightRoot(this);
   }
@@ -299,9 +309,16 @@ export class Hopper {
 
   animate(dt, airborne) {
     const M = this.model;
+    if (stepMobVisual(M, dt, true)) {
+      const squash = airborne ? 1.12 : 1;
+      M.scale.scale.set(visualScale(M) / squash, visualScale(M) * squash, visualScale(M) / squash);
+      this.root.rotation.y = this.yaw;
+      lightRoot(this);
+      return;
+    }
     this.phase += dt * (airborne ? 14 : 4);
     const squash = airborne ? 0.85 : 1 + Math.sin(this.phase) * 0.08;
-    M.scale.scale.set(M.baseScale / squash, M.baseScale * squash, M.baseScale / squash);
+    M.scale.scale.set(visualScale(M) / squash, visualScale(M) * squash, visualScale(M) / squash);
     if (M.legs?.[0]) {
       M.legs[0].rotation.x = airborne ? -0.8 : Math.sin(this.phase) * 0.3;
       M.legs[1].rotation.x = airborne ? -0.8 : -Math.sin(this.phase) * 0.3;
@@ -479,10 +496,12 @@ export class Golem {
 
   animate(dt, moving) {
     const M = this.model;
+    stepMobVisual(M, dt, moving);
     this.phase += dt * (moving ? 5 : 1.5);
     const sw = Math.sin(this.phase) * (moving ? 0.45 : 0.05);
     if (M.legs?.[0]) { M.legs[0].rotation.x = sw; M.legs[1].rotation.x = -sw; }
-    M.scale.scale.setScalar(M.baseScale * (1 + (this.state === 'windup' ? Math.sin(this.t * 12) * 0.03 : 0)));
+    if (!M.scale?.scale) { this.root.rotation.y = this.yaw; return; }
+    M.scale.scale.setScalar(visualScale(M) * (1 + (this.state === 'windup' ? Math.sin(this.t * 12) * 0.03 : 0)));
     this.root.rotation.y = this.yaw;
     lightRoot(this);
   }
@@ -639,9 +658,11 @@ export class CropThief {
 
   animate(dt, moving) {
     const M = this.model;
+    stepMobVisual(M, dt, moving);
     this.phase += dt * (moving ? 14 : 3);
     const sw = Math.sin(this.phase) * (moving ? 0.75 : 0.08);
     if (M.legs?.[0]) { M.legs[0].rotation.x = sw; M.legs[1].rotation.x = -sw; }
+    if (!M.body) { this.root.rotation.y = this.yaw; return; }
     M.body.rotation.z = Math.sin(this.t * 8) * (moving ? 0.12 : 0.03);
     if (M.sack?.visible) M.sack.rotation.z = Math.sin(this.t * 10) * 0.2;
     this.root.rotation.y = this.yaw;
@@ -851,7 +872,7 @@ export class Dragon {
     if (M.wings?.[0]) M.wings[0].rotation.z = 0.35 + flap;
     if (M.wings?.[1]) M.wings[1].rotation.z = -0.35 - flap;
     if (M.head) M.head.rotation.x = Math.sin(this.t * 3) * 0.1;
-    M.scale.scale.setScalar(M.baseScale * (1 + Math.sin(this.t * 6) * 0.03));
+    M.scale.scale.setScalar(visualScale(M) * (1 + Math.sin(this.t * 6) * 0.03));
     this.root.rotation.y = this.yaw;
     lightRoot(this);
   }
@@ -981,11 +1002,13 @@ export class SeaBeast {
 
   animate(dt, moving) {
     const M = this.model;
+    stepMobVisual(M, dt, moving);
     this.phase += dt * (moving ? 8 : 3);
     const und = Math.sin(this.phase) * 0.12;
+    if (!M.scale?.scale) { this.root.rotation.y = this.yaw; return; }
     if (M.tail) M.tail.rotation.y = und * 2;
     if (M.head) M.head.rotation.x = Math.sin(this.t * 4) * 0.08;
-    M.scale.scale.setScalar(M.baseScale * (1 + Math.sin(this.t * 5) * 0.03));
+    M.scale.scale.setScalar(visualScale(M) * (1 + Math.sin(this.t * 5) * 0.03));
     this.root.rotation.y = this.yaw;
     lightRoot(this);
   }
@@ -1076,9 +1099,10 @@ export class Dino {
 
   animate(dt, moving) {
     const M = this.model;
+    stepMobVisual(M, dt, moving);
     this.phase += dt * (moving ? 14 : 3);
     const sw = Math.sin(this.phase);
-    if (M.legs) {
+    if (M.legs?.length) {
       for (let i = 0; i < M.legs.length; i++) M.legs[i].rotation.x = sw * (i % 2 ? -0.7 : 0.7) * (moving ? 1 : 0.1);
     }
     if (M.head) M.head.rotation.x = moving ? -0.25 : Math.sin(this.t * 3) * 0.08;

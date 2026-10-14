@@ -3,6 +3,7 @@
 // モデルは +Z を向き、足もとが y = 0。
 import * as THREE from 'three';
 import { entityMaterial } from './world/materials.js';
+import { takeMobVisual } from './mobVisuals.js';
 import { mulberry32 } from '../core/rng.js';
 
 const PX = 1 / 16;
@@ -255,6 +256,8 @@ export function createAstraModel({ tint = 0xffffff, seed = 101 } = {}) {
 
 // ------------------------------------------------------------------ 緑のアレ
 export function createGreenModel({ big = false } = {}) {
+  const vis = takeMobVisual(big ? 'Alien' : 'Cactoro', big ? 2.55 : 1.75, big ? 2.4 : 1.5);
+  if (vis) return vis;
   const skin = new Skin(64, 32, big ? 303 : 202);
   const greens = ['#6cbc4c', '#5cae40', '#78c858', '#52a03a', '#66b448', '#88d466'];
   const Bd = skin.boxNoise(0, 0, 10, 9, 8, greens);
@@ -283,6 +286,8 @@ export function createGreenModel({ big = false } = {}) {
 
 // ------------------------------------------------------------------ אוכלן שדות (נחיל כמו בום־בום — אוכל במקום להתפוצץ)
 export function createChomperModel() {
+  const vis = takeMobVisual('MushroomKing', 1.95, 1.45);
+  if (vis) return vis;
   const skin = new Skin(64, 32, 808);
   const orange = ['#f0a040', '#e89030', '#f8b050', '#d87828'];
   const Bd = skin.boxNoise(0, 0, 12, 10, 10, orange);
@@ -312,6 +317,8 @@ export function createChomperModel() {
 
 // ------------------------------------------------------------------ קופצן (חופר בורות קטנים — בלגן כמו בום־בום)
 export function createHopperModel() {
+  const vis = takeMobVisual('Frog', 1.2, 1.4);
+  if (vis) return vis;
   const skin = new Skin(64, 32, 909);
   const blue = ['#48a0e8', '#3890d8', '#58b0f0', '#2880c8'];
   const Bd = skin.boxNoise(0, 0, 8, 8, 8, blue);
@@ -339,6 +346,8 @@ export function createHopperModel() {
 
 // ------------------------------------------------------------------ איש האבנים (גולם כבד)
 export function createGolemModel() {
+  const vis = takeMobVisual('Orc', 2.35, 1.85);
+  if (vis) return vis;
   const skin = new Skin(64, 48, 505);
   const rock = ['#8a8680', '#7a7670', '#9a9690', '#6e6a64', '#a8a49c'];
   const Bd = skin.boxNoise(0, 0, 14, 16, 10, rock);
@@ -372,6 +381,8 @@ export function createGolemModel() {
 
 // ------------------------------------------------------------------ גנב הגידולים (רזה + שק)
 export function createThiefModel() {
+  const vis = takeMobVisual('Ninja', 1.7, 1.35);
+  if (vis) return vis;
   const skin = new Skin(64, 32, 606);
   const purp = ['#7a4ab0', '#6a3a9a', '#8a5ac0', '#5a2a8a'];
   const Bd = skin.boxNoise(0, 0, 8, 10, 6, purp);
@@ -438,6 +449,8 @@ export function createDragonModel() {
 
 // ------------------------------------------------------------------ מפלצת ים / לוויתן — גדולה, ראש בולט מהמים
 export function createSeaBeastModel(big = false) {
+  const vis = takeMobVisual(big ? 'Yeti' : 'Fish', big ? 3.2 : 2.3, big ? 3.4 : 2.6);
+  if (vis) return vis;
   const skin = new Skin(64, 48, 616);
   const teal = ['#2a8a9a', '#1e7080', '#3aa0b0', '#186070', '#48b0c0'];
   const Bd = skin.boxNoise(0, 0, 16, 10, 22, teal);
@@ -466,6 +479,8 @@ export function createSeaBeastModel(big = false) {
 
 // ------------------------------------------------------------------ עדר רובוטריקים (משאית־רובוט כחולה/אדומה) — kind נשאר 'dino' בלוח הזמנים
 export function createDinoModel() {
+  const vis = takeMobVisual('Dino', 2.2, 1.7);
+  if (vis) return vis;
   const skin = new Skin(64, 48, 918);
   const blue = ['#2a6ad8', '#1e58c0', '#3a7ce8', '#1848a8'];
   const red = ['#e03828', '#c02820', '#f04838'];

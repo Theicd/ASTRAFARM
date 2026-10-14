@@ -1,6 +1,7 @@
 // 緑のアレ（近づいて、シューッといって、爆発する）と、ブタ（ただ歩いている）。
 import * as THREE from 'three';
 import { createGreenModel, createPigModel } from './models.js';
+import { stepMobVisual, visualScale } from './mobVisuals.js';
 import { findPath, houseFootprintBlocked, outdoorGoal } from './nav.js';
 import { moveBody, applyGravity } from './physics.js';
 import { damp, dampAngle } from '../core/math.js';
@@ -179,6 +180,16 @@ export class Green {
 
   animate(dt, moving) {
     const M = this.model;
+    if (stepMobVisual(M, dt, moving || this.state === 'fuse')) {
+      let s = visualScale(M);
+      if (this.state === 'fuse') {
+        const k = this.fuse / this.fuseTime;
+        s *= 1 + k * 0.18 + Math.sin(this.t * 30) * 0.02 * k;
+      }
+      M.scale.scale.setScalar(s);
+      this.root.rotation.y = this.yaw;
+      return;
+    }
     this.phase += dt * (moving ? 9 : 2);
     const sw = Math.sin(this.phase);
     const amp = moving ? 0.6 : 0.05;
