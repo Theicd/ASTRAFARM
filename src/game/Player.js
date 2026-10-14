@@ -103,11 +103,22 @@ export class Player {
       this.pitch = clamp(this.pitch - input.look.y, -1.55, 1.55);
     }
     if (ordered) {
-      const dx = this.order.x - b.pos.x, dz = this.order.z - b.pos.z;
-      const d = Math.hypot(dx, dz);
-      if (d <= (this.order.near || 0.8)) {
+      let tx = this.order.x, tz = this.order.z;
+      const path = this.order.path;
+      if (path && this.order.pathI < path.length) {
+        const cell = path[this.order.pathI];
+        tx = cell[0] + 0.5;
+        tz = cell[1] + 0.5;
+        if (Math.hypot(tx - b.pos.x, tz - b.pos.z) < 0.45) this.order.pathI++;
+      }
+      const dx = tx - b.pos.x, dz = tz - b.pos.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const goal = Math.hypot(this.order.x - b.pos.x, this.order.z - b.pos.z);
+      if (goal <= (this.order.near || 0.8)) {
         const job = this.order.job;
         this.order = null;
+        b.vel.x = damp(b.vel.x, 0, 10, dt);
+        b.vel.z = damp(b.vel.z, 0, 10, dt);
         if (job) this.game.strategy.finishPlayerJob(job);
       } else {
         b.vel.x = damp(b.vel.x, (dx / d) * WALK, 10, dt);

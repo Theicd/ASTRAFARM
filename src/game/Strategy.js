@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { t } from '../core/i18n.js';
 import { LAYOUT, GY, inRect } from './world/World.js';
+import { findPath } from './nav.js';
 import { B, isCrop, isFarm } from './world/blocks.js';
 import { isRipe } from './crops.js';
 
@@ -83,6 +84,7 @@ export class StrategyMode {
 
   update(dt) {
     const g = this.game;
+    this._edgeScroll(dt);
     const m = g.input.move;
     const pan = this.height * 0.62;
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
@@ -100,14 +102,15 @@ export class StrategyMode {
   _pointerDown(e) {
     if (!this.on || e.button > 2) return;
     if (e.target?.closest?.('#rts-toggle, .rts-card, .slot, button')) return;
-    this._down = { x: e.clientX, y: e.clientY, button: e.button, shift: e.shiftKey };
+    this._down = { x: e.clientX, y: e.clientY, ax: e.clientX, ay: e.clientY, button: e.button, shift: e.shiftKey };
+    this._cur = { x: e.clientX, y: e.clientY };
     this._drag = false;
   }
 
   _pointerMove(e) {
+    if (this.on) this._cur = { x: e.clientX, y: e.clientY };
     if (!this.on || !this._down) return;
     const dx = e.clientX - this._down.x, dy = e.clientY - this._down.y;
-    this._cur = { x: e.clientX, y: e.clientY };
     if (dx * dx + dy * dy > 16) this._drag = true;
     if (!this._drag) return;
     if (this._down.button === 0) this._showMarquee();
@@ -128,11 +131,35 @@ export class StrategyMode {
     this.cz = Math.max(6, Math.min(90, this.cz + (mx * rz + my * fz) * s));
   }
 
+  /** Mouse at the screen edge scrolls the map the same way as the arrow keys. Corners scroll diagonally. */
+  _edgeScroll(dt) {
+    if (!this._cur) return;
+    const dom = this.game.renderer.domElement;
+    const r = dom.getBoundingClientRect();
+    const margin = 36;
+    const lx = this._cur.x - r.left;
+    const ly = this._cur.y - r.top;
+    if (lx < 0 || ly < 0 || lx > r.width || ly > r.height) return;
+    let mx = 0, my = 0;
+    if (lx < margin) mx = -((margin - lx) / margin);
+    else if (lx > r.width - margin) mx = (lx - (r.width - margin)) / margin;
+    if (ly < margin) my = (margin - ly) / margin;
+    else if (ly > r.height - margin) my = -((ly - (r.height - margin)) / margin);
+    if (!mx && !my) return;
+    const el = document.elementFromPoint(this._cur.x, this._cur.y);
+    if (el?.closest?.('button, .rts-card, .warehouse, .bottom, .hotbar')) return;
+    const pan = this.height * 0.9;
+    const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+    this.cx = Math.max(6, Math.min(90, this.cx + (mx * rx + my * fx) * pan * dt));
+    this.cz = Math.max(6, Math.min(90, this.cz + (mx * rz + my * fz) * pan * dt));
+  }
+
   _showMarquee() {
-    const x0 = Math.min(this._down.x, this._cur.x);
-    const y0 = Math.min(this._down.y, this._cur.y);
-    const x1 = Math.max(this._down.x, this._cur.x);
-    const y1 = Math.max(this._down.y, this._cur.y);
+    const x0 = Math.min(this._down.ax, this._cur.x);
+    const y0 = Math.min(this._down.ay, this._cur.y);
+    const x1 = Math.max(this._down.ax, this._cur.x);
+    const y1 = Math.max(this._down.ay, this._cur.y);
     this.marquee.classList.remove('hidden');
     this.marquee.style.left = x0 + 'px';
     this.marquee.style.top = y0 + 'px';
@@ -159,8 +186,8 @@ export class StrategyMode {
   }
 
   _boxSelect(down, cur) {
-    const x0 = Math.min(down.x, cur.x), y0 = Math.min(down.y, cur.y);
-    const x1 = Math.max(down.x, cur.x), y1 = Math.max(down.y, cur.y);
+    const x0 = Math.min(down.ax, cur.x), y0 = Math.min(down.ay, cur.y);
+    const x1 = Math.max(down.ax, cur.x), y1 = Math.max(down.ay, cur.y);
     const hit = this._allUnits().filter((u) => {
       const p = u.kind === 'player' ? u.ref.pos : u.ref.body.pos;
       const s = this._project(p.x, p.y + 1, p.z);
@@ -309,15 +336,24 @@ export class StrategyMode {
       order = { type: 'mend', what: structure, x: this._door(structure).x, z: this._door(structure).z, y: GY + 1 };
     } else if (farm) order = farm;
     else order = { type: 'move', x: Math.floor(x), z: Math.floor(z), y: GY + 1 };
-    for (const u of this.selected) {
-      if (u.kind === 'robot') u.ref.assignOrder?.(order);
-      else {
-        const spot = order.type === 'move'
-          ? { x: x, z }
-          : { x: order.x + 0.5, z: order.z + 0.5 };
-        u.ref.order = { ...spot, near: order.type === 'move' ? 0.7 : 1.3, job: order.type === 'move' ? null : order };
+    const n = this.selected.length;
+    this.selected.forEach((u, i) => {
+      const ang = n > 1 ? (i / n) * Math.PI * 2 : 0;
+      const spread = n > 1 ? 0.9 : 0;
+      const ox = Math.cos(ang) * spread, oz = Math.sin(ang) * spread;
+      const gx = (order.type === 'move' ? x : order.x + 0.5) + ox;
+      const gz = (order.type === 'move' ? z : order.z + 0.5) + oz;
+      if (u.kind === 'robot') {
+        u.ref.assignOrder?.({ ...order, x: Math.floor(gx), z: Math.floor(gz) });
+        return;
       }
-    }
+      const path = findPath(this.game.world, u.ref.pos.x, u.ref.pos.z, gx, gz, { near: 0.4, maxNodes: 2500 });
+      u.ref.order = {
+        x: gx, z: gz, path: path.path, pathI: 0,
+        near: order.type === 'move' ? 0.75 : 1.35,
+        job: order.type === 'move' ? null : order,
+      };
+    });
   }
 
   finishPlayerJob(job) {
