@@ -37,7 +37,8 @@ try {
     onClick: (act) => audio.sfx(act === 'back' ? 'ui_back' : 'ui_ok'),
     onStart: () => { game.start(); },
     onContinue: () => { game.continueGame?.(); lock(); },   // セーブのある作品：screens.setContinue(true) で「つづきから」を出す
-    onResume: () => { game.setState('play'); lock(); },
+    onResume: () => { game.setState('play'); if (!game.strategy?.on) lock(); },
+    onStrategy: () => { game.setState('play'); if (!game.strategy?.on) game.strategy?.toggle(); },
     onRetry: () => { game.retry(); lock(); },
     onToTitle: () => { game.reset(); game.setState('title'); },
     onSettings: (what) => {

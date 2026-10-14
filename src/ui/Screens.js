@@ -49,6 +49,7 @@ export class Screens {
 <section id="m-pause" class="modal hidden"><div class="card">
   <h2 data-i18n="pause.title">${t('pause.title')}</h2>
   <button data-act="resume" data-i18n="pause.resume">${t('pause.resume')}</button>
+  <button data-act="strategy" data-i18n="pause.strategy">${t('pause.strategy')}</button>
   <button data-act="howto" data-i18n="title.howto">${t('title.howto')}</button>
   <button data-act="settings" data-i18n="title.settings">${t('title.settings')}</button>
   <button data-act="retry" data-i18n="pause.retry">${t('pause.retry')}</button>
@@ -124,6 +125,7 @@ export class Screens {
       else if (act === 'howto') this.open('howto');
       else if (act === 'settings') this.open('settings');
       else if (act === 'resume') cb.onResume?.();
+      else if (act === 'strategy') cb.onStrategy?.();
       else if (act === 'retry') cb.onRetry?.();
       else if (act === 'toTitle') cb.onToTitle?.();
       else if (act === 'back') this.back();
