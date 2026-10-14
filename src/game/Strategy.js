@@ -53,7 +53,6 @@ export class StrategyMode {
     } else {
       g.hud.el.classList.remove('strategy');
       this.marquee.classList.add('hidden');
-      this.frame.visible = false;
       for (const b of Object.values(this.bars)) b.g.visible = false;
       this.selected = [];
       this.focus = null;
@@ -242,16 +241,6 @@ export class StrategyMode {
   }
 
   _buildOverlays() {
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffe25a, depthTest: false });
-    this.frame = new THREE.Group();
-    this.frame.renderOrder = 5;
-    for (let i = 0; i < 4; i++) {
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(1, 0.2, 1), mat);
-      edge.renderOrder = 5;
-      this.frame.add(edge);
-    }
-    this.frame.visible = false;
-    this.game.scene.add(this.frame);
     this.bars = {};
     for (const [kind, width] of [['lodge', 5.2], ['pen', 3.6], ['pond', 2.8]]) {
       const g = new THREE.Group();
@@ -284,23 +273,7 @@ export class StrategyMode {
       bar.fill.scale.x = Math.max(0.04, k);
       bar.fill.position.x = (k - 1) * bar.width * 0.5;
       bar.fill.material.color.setHex(k > 0.55 ? 0x3ddc6a : k > 0.28 ? 0xf0c040 : 0xe23b3b);
-      if (selected) {
-        const pad = 0.7;
-        const x0 = fp.x0 - pad, x1 = fp.x1 + pad, z0 = fp.z0 - pad, z1 = fp.z1 + pad;
-        const y = GY + 1.05;
-        this.frame.visible = true;
-        this.frame.children.forEach((edge, i) => {
-          if (i < 2) {
-            edge.scale.set(x1 - x0, 1, 0.22);
-            edge.position.set((x0 + x1) * 0.5, y, i === 0 ? z0 : z1);
-          } else {
-            edge.scale.set(0.22, 1, z1 - z0);
-            edge.position.set(i === 2 ? x0 : x1, y, (z0 + z1) * 0.5);
-          }
-        });
-      }
     }
-    if (!this.focus) this.frame.visible = false;
   }
 
   _ground(clientX, clientY) {
