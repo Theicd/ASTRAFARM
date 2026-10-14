@@ -469,13 +469,15 @@ export class ArcadeEvents {
   spawnSea(ev) {
     const g = this.game;
     if (g.isNetClient()) return;
-    const [x, z] = beachXZ(Math.random, 10);
+    const shore = LAYOUT.waterLineZ ?? 80;
+    const x = LAYOUT.pathX + (Math.random() - 0.5) * 18;
+    const z = Math.min(WZ - 4, shore + 3 + Math.random() * 7);
     const m = g.makeMob(ev.big ? 'leviathan' : 'sea', x, z, { big: !!ev.big });
     if (!m) return;
     m.netId = g._mobNetSeq++;
-    // Breach: body in the water, head clearly above the surface
-    m.body.pos.set(x, SEA - 0.35, z);
-    m.body.h = Math.max(m.body.h, 2.8);
+    // Breach on the ocean sheet, then wade onto the sand.
+    m.body.pos.set(x, SEA - 0.15, z);
+    m.body.inWater = true;
     m.state = 'emerge';
     m.stateT = 0;
     m.afterEmerge = 'hunt';

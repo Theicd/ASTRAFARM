@@ -892,10 +892,17 @@ export class SeaBeast {
     this.model = createSeaBeastModel(big);
     this.root = this.model.root;
     game.scene.add(this.root);
-    const s = this.model.baseScale;
+    const shore = LAYOUT.waterLineZ ?? 80;
+    const stand = game.world.floor[Math.floor(x) + Math.floor(z) * WX];
+    const inSea = z >= shore - 0.5 || !(stand >= GY);
     this.body = {
-      pos: new THREE.Vector3(x, SEA - 0.2, z),
-      vel: new THREE.Vector3(), hw: 0.7 * s, h: 1.35 * s, onGround: false, step: 1.35, inWater: true,
+      pos: new THREE.Vector3(x, inSea ? SEA - 0.15 : stand, z),
+      vel: new THREE.Vector3(),
+      hw: big ? 0.72 : 0.55,
+      h: big ? 1.85 : 1.45,
+      onGround: false,
+      step: 1.35,
+      inWater: inSea,
     };
     this.hp = big ? 32 : 18;
     this.maxHp = this.hp;
@@ -939,9 +946,10 @@ export class SeaBeast {
 
     if (this.state === 'retreat') {
       // Slide back into the farm-facing sea (+Z past the fields)
-      const tz = Math.min(WZ - 3, LAYOUT.farmZone.z1 + 16);
+      const tz = Math.min(WZ - 3, (LAYOUT.waterLineZ ?? 80) + 6);
       chaseAlong(this, dt, p.x, tz, this.speed * 1.3);
-      applyGravity(this.body, dt);
+      this._rideSea();
+      if (!this.body.inWater) applyGravity(this.body, dt);
       moveBody(g.world, this.body, dt);
       if (p.z > LAYOUT.farmZone.z1 + 10 || this.stateT > 12) {
         this.state = 'leave';
@@ -981,7 +989,14 @@ export class SeaBeast {
           this.path = null;
         }
       }
-      if (this.target) {
+      const shore = LAYOUT.waterLineZ ?? 80;
+      if (p.z >= shore - 0.4) {
+        // The sea floor is a cliff. Swim straight at the sand before pathing inland.
+        this.path = null;
+        const aimX = Math.abs(p.x - LAYOUT.pathX) > 22 ? LAYOUT.pathX : p.x;
+        chaseAlong(this, dt, aimX, shore - 5, this.speed);
+        moving = true;
+      } else if (this.target) {
         const dist = Math.hypot(this.target.pos.x - p.x, this.target.pos.z - p.z);
         if (dist < 1.1) { this.state = 'eat'; this.eatT = 0; this.stateT = 0; }
         else { chaseAlong(this, dt, this.target.pos.x, this.target.pos.z, this.speed); moving = true; }
@@ -992,12 +1007,42 @@ export class SeaBeast {
       this.body.vel.x *= Math.exp(-2 * dt);
       this.body.vel.z *= Math.exp(-2 * dt);
     }
-    applyGravity(this.body, dt);
-    if (this.body.inWater) this.body.vel.y = Math.max(this.body.vel.y, 1.5);
+    const riding = this._rideSea();
+    if (!riding) {
+      applyGravity(this.body, dt);
+      if (this.body.inWater) this.body.vel.y = Math.max(this.body.vel.y, 1.5);
+    }
     const r = moveBody(g.world, this.body, dt);
-    if ((r.hitX || r.hitZ) && this.body.onGround && moving) this.body.vel.y = 8;
+    if ((r.hitX || r.hitZ) && this.body.onGround && moving && !riding) this.body.vel.y = 8;
     this.root.position.copy(p);
     this.animate(dt, moving);
+  }
+
+  /**
+   * The open sea is a sheet over a trench. Swim on the surface, then step
+   * onto the sand instead of staying stuck against the cliff.
+   */
+  _rideSea() {
+    const shore = LAYOUT.waterLineZ ?? 80;
+    const p = this.body.pos;
+    if (p.z < shore - 0.35) return false;
+    const headingIn = this.body.vel.z <= 0.15;
+    const ix = Math.max(0, Math.min(WX - 1, Math.floor(p.x)));
+    const iz = Math.max(0, Math.min(WZ - 1, Math.floor(shore) - 1));
+    const stand = this.game.world.floor[ix + iz * WX];
+    if (headingIn && p.z <= shore + 1.6 && stand >= GY) {
+      p.y = stand;
+      p.z = Math.min(p.z, shore - 0.45);
+      this.body.vel.y = 0;
+      this.body.onGround = true;
+      this.body.inWater = false;
+      return false;
+    }
+    p.y = SEA - 0.15;
+    this.body.vel.y = 0;
+    this.body.onGround = true;
+    this.body.inWater = true;
+    return true;
   }
 
   animate(dt, moving) {
