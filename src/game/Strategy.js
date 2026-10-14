@@ -89,8 +89,9 @@ export class StrategyMode {
     const pan = this.height * 0.62;
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
-    this.cx = Math.max(6, Math.min(90, this.cx + (m.x * rx + m.y * fx) * pan * dt));
-    this.cz = Math.max(6, Math.min(90, this.cz + (m.x * rz + m.y * fz) * pan * dt));
+    this.cx += (m.x * rx + m.y * fx) * pan * dt;
+    this.cz += (m.x * rz + m.y * fz) * pan * dt;
+    this._clampView();
     // Wheel back (positive delta) moves the camera farther away.
     if (g.input.wheel) this.height = Math.max(14, Math.min(52, this.height + Math.sign(g.input.wheel) * 4));
     this._placeRings();
@@ -127,8 +128,14 @@ export class StrategyMode {
     const s = this.height * 0.0024;
     const mx = dx;
     const my = -dy;
-    this.cx = Math.max(6, Math.min(90, this.cx + (mx * rx + my * fx) * s));
-    this.cz = Math.max(6, Math.min(90, this.cz + (mx * rz + my * fz) * s));
+    this.cx += (mx * rx + my * fx) * s;
+    this.cz += (mx * rz + my * fz) * s;
+    this._clampView();
+  }
+
+  _clampView() {
+    this.cx = Math.max(-80, Math.min(176, this.cx));
+    this.cz = Math.max(2, Math.min(420, this.cz));
   }
 
   /** Mouse at the screen edge scrolls the map the same way as the arrow keys. Corners scroll diagonally. */
@@ -151,8 +158,9 @@ export class StrategyMode {
     const pan = this.height * 0.9;
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
-    this.cx = Math.max(6, Math.min(90, this.cx + (mx * rx + my * fx) * pan * dt));
-    this.cz = Math.max(6, Math.min(90, this.cz + (mx * rz + my * fz) * pan * dt));
+    this.cx += (mx * rx + my * fx) * pan * dt;
+    this.cz += (mx * rz + my * fz) * pan * dt;
+    this._clampView();
   }
 
   _showMarquee() {
@@ -238,7 +246,7 @@ export class StrategyMode {
     this.frame = new THREE.Group();
     this.frame.renderOrder = 5;
     for (let i = 0; i < 4; i++) {
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(1, 0.16, 0.16), mat);
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(1, 0.2, 1), mat);
       edge.renderOrder = 5;
       this.frame.add(edge);
     }
@@ -247,9 +255,11 @@ export class StrategyMode {
     this.bars = {};
     for (const [kind, width] of [['lodge', 5.2], ['pen', 3.6], ['pond', 2.8]]) {
       const g = new THREE.Group();
-      const bg = new THREE.Mesh(new THREE.BoxGeometry(width, 0.42, 0.08), new THREE.MeshBasicMaterial({ color: 0x141414 }));
-      const fill = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.24, 0.12), new THREE.MeshBasicMaterial({ color: 0x3ddc6a }));
-      fill.position.z = 0.06;
+      const bg = new THREE.Mesh(new THREE.PlaneGeometry(width, 0.72), new THREE.MeshBasicMaterial({ color: 0x141414, depthTest: false }));
+      const fill = new THREE.Mesh(new THREE.PlaneGeometry(width - 0.22, 0.4), new THREE.MeshBasicMaterial({ color: 0x3ddc6a, depthTest: false }));
+      fill.position.z = 0.03;
+      bg.renderOrder = 6;
+      fill.renderOrder = 7;
       g.add(bg, fill);
       g.visible = false;
       this.game.scene.add(g);
@@ -262,25 +272,30 @@ export class StrategyMode {
     for (const kind of ['lodge', 'pen', 'pond']) {
       const fp = this._footprint(kind);
       const bar = this.bars[kind];
-      bar.g.visible = show;
-      bar.g.position.set((fp.x0 + fp.x1) * 0.5, fp.y, (fp.z0 + fp.z1) * 0.5);
+      const selected = show && this.focus === kind;
+      bar.g.visible = selected;
+      const cx = (fp.x0 + fp.x1) * 0.5;
+      const cz = (fp.z0 + fp.z1) * 0.5;
+      bar.g.position.set(cx, fp.y + 2.4, cz);
       const cam = this.game.camera.position;
-      bar.g.rotation.set(0, Math.atan2(cam.x - bar.g.position.x, cam.z - bar.g.position.z), 0);
+      bar.g.rotation.set(0, Math.atan2(cam.x - cx, cam.z - cz), 0);
       const stat = this._stats(kind);
       const k = Math.max(0, Math.min(1, (stat?.hp ?? 0) / (stat?.max || 1)));
       bar.fill.scale.x = Math.max(0.04, k);
       bar.fill.position.x = (k - 1) * bar.width * 0.5;
       bar.fill.material.color.setHex(k > 0.55 ? 0x3ddc6a : k > 0.28 ? 0xf0c040 : 0xe23b3b);
-      if (this.focus === kind) {
-        const y = GY + 1.2;
+      if (selected) {
+        const pad = 0.7;
+        const x0 = fp.x0 - pad, x1 = fp.x1 + pad, z0 = fp.z0 - pad, z1 = fp.z1 + pad;
+        const y = GY + 1.05;
         this.frame.visible = true;
         this.frame.children.forEach((edge, i) => {
           if (i < 2) {
-            edge.scale.set(fp.x1 - fp.x0, 1, 1);
-            edge.position.set((fp.x0 + fp.x1) * 0.5, y, i === 0 ? fp.z0 : fp.z1);
+            edge.scale.set(x1 - x0, 1, 0.22);
+            edge.position.set((x0 + x1) * 0.5, y, i === 0 ? z0 : z1);
           } else {
-            edge.scale.set(1, 1, fp.z1 - fp.z0);
-            edge.position.set(i === 2 ? fp.x0 : fp.x1, y, (fp.z0 + fp.z1) * 0.5);
+            edge.scale.set(0.22, 1, z1 - z0);
+            edge.position.set(i === 2 ? x0 : x1, y, (z0 + z1) * 0.5);
           }
         });
       }

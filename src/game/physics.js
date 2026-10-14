@@ -97,14 +97,26 @@ function sweep(world, body, axis, d) {
   return hit;
 }
 
+// The open sea past the voxel island is still walkable, out to the ships.
+const SEA_X0 = -90;
+const SEA_X1 = WX + 90;
+const SEA_Z1 = 440;
+const SEA_FLOOR = 8;
+
 function clampWorld(body) {
   const p = body.pos, v = body.vel;
   const m = body.hw + 0.2;
-  if (p.x < m) { p.x = m; v.x = Math.max(0, v.x); }
-  if (p.x > WX - m) { p.x = WX - m; v.x = Math.min(0, v.x); }
+  if (p.x < SEA_X0 + m) { p.x = SEA_X0 + m; v.x = Math.max(0, v.x); }
+  if (p.x > SEA_X1 - m) { p.x = SEA_X1 - m; v.x = Math.min(0, v.x); }
   if (p.z < m) { p.z = m; v.z = Math.max(0, v.z); }
-  if (p.z > WZ - m) { p.z = WZ - m; v.z = Math.min(0, v.z); }
-  if (p.y < -4) { p.y = 12; v.y = 0; }
+  if (p.z > SEA_Z1 - m) { p.z = SEA_Z1 - m; v.z = Math.min(0, v.z); }
+  const x = Math.floor(p.x), z = Math.floor(p.z);
+  const offMap = x < 0 || z < 0 || x >= WX || z >= WZ;
+  if (offMap && z >= 70 && p.y < SEA_FLOOR) {
+    p.y = SEA_FLOOR;
+    v.y = 0;
+    body.onGround = true;
+  } else if (p.y < -4) { p.y = 12; v.y = 0; }
 }
 
 /**
@@ -115,6 +127,12 @@ export function moveBody(world, body, dt) {
   const p = body.pos, v = body.vel;
   // Keep big characters able to slip past a trunk. The model stays large.
   if (body.hw > 0.48) body.hw = 0.48;
+  const gx = Math.floor(p.x), gz = Math.floor(p.z);
+  if ((gx < 0 || gx >= WX || gz >= WZ) && gz >= 70 && p.y <= SEA_FLOOR + 0.2 && v.y <= 0) {
+    p.y = SEA_FLOOR;
+    v.y = 0;
+    body.onGround = true;
+  }
   const wasGround = body.onGround;
   const hy = sweep(world, body, 'y', v.y * dt);
   body.onGround = hy && v.y <= 0;
