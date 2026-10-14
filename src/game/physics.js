@@ -45,8 +45,10 @@ function overlaps(world, x0, y0, z0, x1, y1, z1, cb) {
   const by0 = Math.floor(y0) - 1, by1 = Math.floor(y1 - EPS);
   const bz0 = Math.floor(z0), bz1 = Math.floor(z1 - EPS);
   for (let y = by0; y <= by1; y++) for (let z = bz0; z <= bz1; z++) for (let x = bx0; x <= bx1; x++) {
-    const b = BLOCKS[world.get(x, y, z)];
-    if (!b?.solid) continue;
+    const id = world.get(x, y, z);
+    const b = BLOCKS[id];
+    // Foliage is visual. Solid leaves pin tall bodies inside the canopy.
+    if (!b?.solid || id === B.LEAVES) continue;
     forSolidParts(b, x, y, z, x0, y0, z0, x1, y1, z1, (bx, by, bz, top, sx0, sx1, sz0, sz1, yBot) => {
       if (y0 + EPS >= top) return; // standing on this surface
       // Skip hairline XZ overlaps (player on one stair clipping the next)
@@ -111,6 +113,8 @@ function clampWorld(body) {
  */
 export function moveBody(world, body, dt) {
   const p = body.pos, v = body.vel;
+  // Keep big characters able to slip past a trunk. The model stays large.
+  if (body.hw > 0.48) body.hw = 0.48;
   const wasGround = body.onGround;
   const hy = sweep(world, body, 'y', v.y * dt);
   body.onGround = hy && v.y <= 0;

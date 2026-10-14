@@ -261,7 +261,7 @@ export class Robot {
     for (let z = R.z0; z <= R.z1; z++) for (let x = R.x0; x <= R.x1; x++) {
       if (g.isReserved(x, z)) continue;
       const hole = this.holeAt(x, z);
-      if (hole >= 0) consider('repair', x, hole, z, Math.hypot(x + 0.5 - p.x, z + 0.5 - p.z) + 1.2 + stripBias(x));
+      if (hole >= 0) consider('repair', x, hole, z, Math.hypot(x + 0.5 - p.x, z + 0.5 - p.z) - 2 + stripBias(x));
     }
     return best;
   }

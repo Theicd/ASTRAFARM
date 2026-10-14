@@ -550,8 +550,21 @@ export class CropThief {
 
   hit(dmg, from, knock = 1) {
     const ok = commonHit(this, dmg, from, knock, 9);
-    if (this.dead && this.loot > 0) this.game.onThiefDropped(this);
+    if (this.dead) {
+      this.releasePig();
+      if (this.loot > 0) this.game.onThiefDropped(this);
+    }
     return ok;
+  }
+
+  releasePig() {
+    const pig = this.carriedPig;
+    if (!pig || pig.dead) { this.carriedPig = null; return; }
+    pig.carried = null;
+    pig.body.pos.copy(this.body.pos);
+    pig.root.position.copy(pig.body.pos);
+    pig.root.visible = true;
+    this.carriedPig = null;
   }
 
   update(dt) {
@@ -573,10 +586,16 @@ export class CropThief {
 
     if (this.state === 'hunt') {
       this.repathT -= dt;
-      if (this.repathT <= 0 && this.stun <= 0) {
+      if (this.repathT <= 0 && this.stun <= 0 && !(this.target?.pig && this.target.pigRef && !this.target.pigRef.dead)) {
         this.repathT = 0.45;
+        const pig = !this.carriedPig && Math.random() < 0.65 ? g.nearestPennedPig(p) : null;
         const crop = g.nearestCrop(p);
-        if (crop) {
+        if (pig) {
+          this.target = { pig: true, pigRef: pig, pos: pig.body.pos.clone(), crop: false };
+          const goal = outdoorGoal(pig.body.pos.x, pig.body.pos.z);
+          const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: 1, maxNodes: 2800, blocked: houseCell });
+          this.path = r.path; this.pathI = 0;
+        } else if (crop) {
           this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5), crop: true };
           const goal = outdoorGoal(this.target.pos.x, this.target.pos.z);
           const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: 0, maxNodes: 2800, blocked: houseCell });
@@ -590,9 +609,17 @@ export class CropThief {
         }
       }
       const t = this.target;
+      if (t?.pigRef && !t.pigRef.dead) t.pos.copy(t.pigRef.body.pos);
       if (t && this.stun <= 0) {
         const dist = Math.hypot(t.pos.x - p.x, t.pos.z - p.z);
-        if (dist < 0.85) {
+        if (t.pig && dist < 1.15 && t.pigRef && !t.pigRef.dead && !t.pigRef.carried) {
+          t.pigRef.carried = this;
+          t.pigRef.penned = false;
+          this.carriedPig = t.pigRef;
+          g.talk.sys('sys.thiefPig', null, 'warn');
+          g.audio.sfx('pig', { pos: p, pitch: 1.3 });
+          this.beginFlee();
+        } else if (!t.pig && dist < 0.85) {
           const stole = t.crop ? g.stealCrop(t.x, t.z, this) : 0;
           if (stole > 0) {
             this.loot += stole;
@@ -620,6 +647,7 @@ export class CropThief {
       moving = true;
       if (Math.hypot(fx - p.x, fz - p.z) < 2.2 || this.stateT > 18) {
         g.onThiefEscaped(this);
+        this.carriedPig = null;
         this.dead = true;
         this.state = 'dead';
         return;

@@ -757,7 +757,7 @@ export class Game {
   }
 
   newWorld() {
-    for (const m of this.mobs) m.dispose();
+    for (const m of this.mobs) { m.releasePig?.(); m.dispose(); }
     this.mobs = [];
     this.clearHired();
     if (this.pigGates) { this.pigGates.dispose(); this.pigGates = null; }
@@ -862,7 +862,7 @@ export class Game {
     this.phase = 'day';
     this._turretNightApplied = false;
     this.today = this.freshToday();
-    for (const m of this.mobs) m.dispose();
+    for (const m of this.mobs) { m.releasePig?.(); m.dispose(); }
     this.mobs = [];
     this.schedule = this.buildSchedule(this.cfg, i);
     this.arcade.planDay(i, this.cfg);
@@ -1246,7 +1246,7 @@ export class Game {
     if (this.isNetClient() && !fromNet) return;
     const c = this.cfg;
     const ok = this.today.harvest >= c.goal;
-    for (const m of this.mobs) m.dispose();
+    for (const m of this.mobs) { m.releasePig?.(); m.dispose(); }
     this.mobs = [];
     const last = this.lastDay;
     if (this.mode === 'endless') {
@@ -1262,9 +1262,10 @@ export class Game {
         saved: this.today.rescued | 0,
       });
     }
+    const holes = this.countHoles();
+    if (holes > 0) line = t('astra.report.holes', { n: holes });
     fillReport(this.screens, { day: this.dayIndex + 1, harvest: this.today.harvest, kills: this.today.kills, booms: this.today.booms, goal: c.goal, line, last, endless: this.mode === 'endless' });
-    // Overnight hole fill — host broadcasts the patch so clients match
-    this.syncFarm(() => this.repairAll());
+    // Craters stay. Players fill them, or the robots do it as a morning job.
     if (!last) {
       // つぎの日の朝として保存（いま「つづきから」を選ぶと、つぎの日から）
       const keep = this.dayIndex;
@@ -1356,6 +1357,7 @@ export class Game {
     const alive = this.pigs.filter((p) => !p.dead).length;
     if (alive >= MAX_PIGS) return;
     // Empty island respawns a bit faster so the farm is never pig-less for long.
+    if ((this._pigHold || 0) > 0) { this._pigHold -= dt; return; }
     this._pigRespawnT = (this._pigRespawnT ?? PIG_RESPAWN_MIN) - dt * (alive === 0 ? 1.75 : 1);
     if (this._pigRespawnT > 0) return;
     this._pigRespawnT = PIG_RESPAWN_MIN + Math.random() * (PIG_RESPAWN_MAX - PIG_RESPAWN_MIN);
@@ -1512,11 +1514,37 @@ export class Game {
     return 1;
   }
 
-  onThiefEscaped(thief) {
-    if (thief.loot > 0) {
-      this.talk.sys('sys.thiefEscaped', { n: thief.loot }, 'warn');
-      this.audio.sfx('hurt', { pitch: 1.4 });
+  nearestPennedPig(pos) {
+    let best = null, bd = 1e9;
+    for (const pig of this.pigs) {
+      if (pig.dead || !pig.penned || pig.carried) continue;
+      const d = Math.hypot(pig.pos.x - pos.x, pig.pos.z - pos.z);
+      if (d < bd) { bd = d; best = pig; }
     }
+    return best;
+  }
+
+  /** Ninja got away with a pig. It does not pop back during this night. */
+  removePig(pig) {
+    if (!pig || pig.dead) return;
+    pig.carried = null;
+    pig.dead = true;
+    pig.dispose();
+    this.pigs = this.pigs.filter((x) => x !== pig);
+    this._pigHold = Math.max(this._pigHold || 0, 240);
+    this.syncHelpers(false);
+  }
+
+  onThiefEscaped(thief) {
+    if (thief.carriedPig) {
+      this.removePig(thief.carriedPig);
+      thief.carriedPig = null;
+      thief.loot = Math.max(thief.loot | 0, 1);
+      this.talk.sys('sys.thiefPigGone', null, 'warn');
+    } else if (thief.loot > 0) {
+      this.talk.sys('sys.thiefEscaped', { n: thief.loot }, 'warn');
+    }
+    if (thief.loot > 0) this.audio.sfx('hurt', { pitch: 1.4 });
   }
 
   onThiefDropped(thief) {
@@ -1741,6 +1769,15 @@ export class Game {
     this.particles.burst(x, y + 0.9, z, BLOCKS[id].particle, 6, this.lightBright(x, y + 1, z), 1);
     if (who === 'player' && this.tut) this.tut.fill = (this.tut.fill || 0) + 1;
     return true;
+  }
+
+  /** How many blast craters are still open. */
+  countHoles() {
+    let n = 0;
+    for (let y = 1; y < 24; y++) for (let z = 0; z < WZ; z++) for (let x = 0; x < WX; x++) {
+      if (this.isHole(x, y, z)) n++;
+    }
+    return n;
   }
 
   /** 島じゅうの穴を全部埋める（夜のあいだにアストラがやっておく）。穴に植えた作物はじゃがいもに戻す。 */

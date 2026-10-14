@@ -253,6 +253,14 @@ export class Pig {
   update(dt) {
     const g = this.game;
     if (this.dead) return;
+    if (this.carried) {
+      const p = this.carried.body.pos;
+      this.body.pos.set(p.x, p.y + 0.85, p.z);
+      this.body.vel.set(0, 0, 0);
+      this.root.position.copy(this.body.pos);
+      this.root.rotation.y = this.carried.yaw || 0;
+      return;
+    }
     this.t += dt;
     this.hurt = Math.max(0, this.hurt - dt);
     this.run = Math.max(0, this.run - dt);
