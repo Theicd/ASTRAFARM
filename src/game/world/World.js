@@ -387,7 +387,22 @@ export class World {
           top[x + z * WX] = topY;
         }
       }
-      LAYOUT.pier = null;
+      // Wooden pier from the sand path out over the shallows, with posts.
+      const pierZ0 = Math.max(sandStart, beachEnd - 1);
+      const pierZ1 = Math.min(WZ - 3, seaZ0 + 14);
+      for (let z = pierZ0; z <= pierZ1; z++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const x = xMid + dx;
+          if (!this.inside(x, GY, z)) continue;
+          if ((z - pierZ0) % 3 === 0) {
+            for (let y = 5; y < GY; y++) put(x, y, z, B.LOG);
+          }
+          put(x, GY, z, B.PLANKS);
+          for (let y = GY + 1; y < WY - 1; y++) if (at(x, y, z) !== B.AIR) put(x, y, z, B.AIR);
+          top[x + z * WX] = GY;
+        }
+      }
+      LAYOUT.pier = { x: xMid, z0: pierZ0, z1: pierZ1 };
       LAYOUT.beach = { x0: xMid - halfW, x1: xMid + halfW, z0: sandStart, z1: beachEnd };
       LAYOUT.lawnZ1 = lawnZ1;
       LAYOUT.waterLineZ = seaZ0;

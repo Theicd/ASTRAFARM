@@ -58,6 +58,7 @@ export class StrategyMode {
       this.focus = null;
       g.player.order = null;
       g.camera.fov = 72;
+      g.camera.far = 420;
       g.camera.updateProjectionMatrix();
       g.hud.setRtsCard?.(null);
       this._syncRings();
@@ -75,10 +76,9 @@ export class StrategyMode {
     );
     cam.up.set(0, 1, 0);
     cam.lookAt(this.cx, GY + 1, this.cz);
-    if (Math.abs(cam.fov - 46) > 0.2) {
-      cam.fov = 46;
-      cam.updateProjectionMatrix();
-    }
+    if (Math.abs(cam.fov - 46) > 0.2) cam.fov = 46;
+    if (cam.far < 900) cam.far = 980;
+    cam.updateProjectionMatrix();
   }
 
   update(dt) {
@@ -92,7 +92,7 @@ export class StrategyMode {
     this.cz += (m.x * rz + m.y * fz) * pan * dt;
     this._clampView();
     // Wheel back (positive delta) moves the camera farther away.
-    if (g.input.wheel) this.height = Math.max(14, Math.min(52, this.height + Math.sign(g.input.wheel) * 4));
+    if (g.input.wheel) this.height = Math.max(14, Math.min(150, this.height + Math.sign(g.input.wheel) * 7));
     this._placeRings();
     this._updateOverlays();
     if (this.focus) g.hud.setRtsCard?.(this._card(this.focus));
@@ -196,8 +196,8 @@ export class StrategyMode {
     const x0 = Math.min(down.ax, cur.x), y0 = Math.min(down.ay, cur.y);
     const x1 = Math.max(down.ax, cur.x), y1 = Math.max(down.ay, cur.y);
     const hit = this._allUnits().filter((u) => {
-      const p = u.kind === 'player' ? u.ref.pos : u.ref.body.pos;
-      const s = this._project(p.x, p.y + 1, p.z);
+      const p = this._unitPos(u);
+      const s = this._project(p.x, p.y + 1.2, p.z);
       return s && s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1;
     });
     if (!down.shift) this.selected = hit;
@@ -213,7 +213,14 @@ export class StrategyMode {
     if (g.player.alive) list.push({ kind: 'player', ref: g.player });
     const crew = [g.robot, ...g.helpers];
     for (const r of crew) if (r && r.root?.visible !== false && r.state !== 'kidnapped') list.push({ kind: 'robot', ref: r });
+    for (const s of g.beachDecor?._ships || []) if (s.armed) list.push({ kind: 'ship', ref: s });
     return list;
+  }
+
+  _unitPos(u) {
+    if (u.kind === 'ship') return u.ref.mesh.position;
+    if (u.kind === 'player') return u.ref.pos;
+    return u.ref.body.pos;
   }
 
   _project(x, y, z) {
@@ -317,6 +324,15 @@ export class StrategyMode {
 
   _command(x, z) {
     if (!this.selected.length) return;
+    const mob = this._mobAt(x, z);
+    if (mob && this.selected.some((u) => u.kind === 'ship')) {
+      for (const u of this.selected) {
+        if (u.kind !== 'ship') continue;
+        u.ref.order = { x: mob.pos.x, z: mob.pos.z, attack: true, mob };
+        u.ref.cruise = 0;
+      }
+      return;
+    }
     const structure = this._structureAt(x, z);
     const farm = this._farmOrder(Math.floor(x), Math.floor(z));
     let order;
@@ -331,6 +347,11 @@ export class StrategyMode {
       const ox = Math.cos(ang) * spread, oz = Math.sin(ang) * spread;
       const gx = (order.type === 'move' ? x : order.x + 0.5) + ox;
       const gz = (order.type === 'move' ? z : order.z + 0.5) + oz;
+      if (u.kind === 'ship') {
+        u.ref.order = { x: gx, z: gz, attack: !!order.attack, mob: order.mob || null };
+        u.ref.cruise = 0;
+        return;
+      }
       if (u.kind === 'robot') {
         u.ref.assignOrder?.({ ...order, x: Math.floor(gx), z: Math.floor(gz) });
         return;
@@ -357,6 +378,16 @@ export class StrategyMode {
     }
   }
 
+  _mobAt(x, z) {
+    let best = null, bd = 3.6;
+    for (const m of this.game.mobs) {
+      if (!m || m.dead || m.state === 'leave') continue;
+      const d = Math.hypot(m.pos.x - x, m.pos.z - z);
+      if (d < bd) { bd = d; best = m; }
+    }
+    return best;
+  }
+
   _unitAt(x, z) {
     const g = this.game;
     let best = null, bd = 1.5;
@@ -364,6 +395,11 @@ export class StrategyMode {
       const d = Math.hypot(px - x, pz - z);
       if (d < bd) { bd = d; best = { kind, ref }; }
     };
+    for (const s of g.beachDecor?._ships || []) {
+      if (!s.armed) continue;
+      const d = Math.hypot(s.mesh.position.x - x, s.mesh.position.z - z);
+      if (d < Math.max(bd, 3.2)) { bd = d; best = { kind: 'ship', ref: s }; }
+    }
     if (g.player.alive) test('player', g.player, g.player.pos.x, g.player.pos.z);
     test('robot', g.robot, g.robot.body.pos.x, g.robot.body.pos.z);
     for (const h of g.helpers) if (!h.dead && h.root?.visible !== false) test('robot', h, h.body.pos.x, h.body.pos.z);
@@ -427,17 +463,22 @@ export class StrategyMode {
   _cardUnits() {
     const n = this.selected.length;
     const robots = this.selected.filter((s) => s.kind === 'robot').length;
-    const player = n - robots;
-    const name = player && robots ? t('rts.both', { n }) : player ? t('rts.player') : t('rts.robots', { n: robots });
-    return { name, hp: null, hint: t('rts.orderHint') };
+    const ships = this.selected.filter((s) => s.kind === 'ship').length;
+    const player = this.selected.filter((s) => s.kind === 'player').length;
+    const name = ships && !robots && !player ? t('rts.boats', { n: ships })
+      : player && robots ? t('rts.both', { n })
+      : player ? t('rts.player')
+      : t('rts.robots', { n: robots || n });
+    return { name, hp: null, hint: ships ? t('rts.boatHint') : t('rts.orderHint') };
   }
 
   _syncRings() {
     while (this.rings.children.length) this.rings.remove(this.rings.children[0]);
     const geo = new THREE.RingGeometry(0.45, 0.62, 20);
+    const shipGeo = new THREE.RingGeometry(1.5, 1.85, 24);
     const mat = new THREE.MeshBasicMaterial({ color: 0x7dff6a, side: THREE.DoubleSide, depthTest: false });
     for (const u of this.selected) {
-      const mesh = new THREE.Mesh(geo, mat);
+      const mesh = new THREE.Mesh(u.kind === 'ship' ? shipGeo : geo, mat);
       mesh.rotation.x = -Math.PI / 2;
       mesh.renderOrder = 4;
       this.rings.add(mesh);
@@ -449,8 +490,8 @@ export class StrategyMode {
     this.selected.forEach((u, i) => {
       const mesh = this.rings.children[i];
       if (!mesh) return;
-      const p = u.kind === 'player' ? u.ref.pos : u.ref.body.pos;
-      mesh.position.set(p.x, p.y + 0.08, p.z);
+      const p = this._unitPos(u);
+      mesh.position.set(p.x, p.y + 0.15, p.z);
     });
   }
 }

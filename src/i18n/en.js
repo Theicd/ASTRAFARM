@@ -167,6 +167,8 @@ export const en = {
   'rts.robots': 'Robots ({n})',
   'rts.both': 'Squad ({n})',
   'rts.orderHint': 'Right-click: move, repair, or tend a field',
+  'rts.boats': 'Boats ({n})',
+  'rts.boatHint': 'Right-click: sail. Right-click an enemy: fire cannons',
 
   'hud.day': 'Day {n}',
   'hud.goal': "Today's goal",

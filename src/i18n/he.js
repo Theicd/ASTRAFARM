@@ -152,6 +152,8 @@ export const he = {
   'rts.robots': 'רובוטים ({n})',
   'rts.both': 'יחידה ({n})',
   'rts.orderHint': 'לחיצה ימנית: ללכת, לתקן או לטפל בשדה',
+  'rts.boats': 'סירות ({n})',
+  'rts.boatHint': 'קליק ימני: הפלגה. קליק על אויב: ירי תותח',
   'hud.day': 'יום {n}',
   'hud.goal': 'מטרת היום',
   'hud.goalVal': '{n} / {m}',

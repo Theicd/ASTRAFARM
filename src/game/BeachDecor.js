@@ -349,6 +349,7 @@ export class BeachDecor {
     this._birds = [];
     this._fish = [];
     this._critters = [];
+    this._shots = [];
     this._loader = new GLTFLoader();
     this._templates = null;
     this._loadId = 0;
@@ -586,9 +587,40 @@ export class BeachDecor {
         : key === 'fan' ? 0.62
         : key.startsWith('tug') ? 0.36
         : 0;
+      const heavy = key.startsWith('liner') || key.startsWith('cargo') || key.startsWith('ship');
       this._ships.push({
         mesh, baseY: seaY, x, z, yaw, phase: past * 0.17,
         bob: cruise ? 0.08 : 0.03, cruise, range: cruise ? 7 + cruise * 6 : 0,
+        armed: true, heavy, maxSpeed: heavy ? 1.1 : (cruise ? Math.max(cruise * 2.2, 1.6) : 2.2),
+        gunRange: heavy ? 22 : 16, dmg: heavy ? 9 : 5, cool: Math.random(),
+        order: null,
+      });
+    }
+    this._dockAtPier(seaY);
+  }
+
+  _dockAtPier(seaY) {
+    const pier = LAYOUT.pier;
+    if (!pier) return;
+    const slips = [
+      ['row', pier.x - 4.2, pier.z0 + 3, 0],
+      ['rowSmall', pier.x + 4.2, pier.z0 + 3, Math.PI],
+      ['fish', pier.x - 4.4, pier.z0 + 7, 0],
+      ['sail', pier.x + 4.4, pier.z0 + 7, Math.PI],
+      ['tug', pier.x - 5.1, pier.z1 - 2, 0.15],
+      ['speedA', pier.x + 5.1, pier.z1 - 2, Math.PI - 0.15],
+    ];
+    for (const [key, x, z, yaw] of slips) {
+      const mesh = this._clone(key, key === 'sail' ? 1.15 : 0.95);
+      if (!mesh) continue;
+      mesh.position.set(x, seaY, z);
+      mesh.rotation.y = yaw;
+      this.root.add(mesh);
+      this._ships.push({
+        mesh, baseY: seaY, x, z, yaw, phase: z * 0.1,
+        bob: 0.035, cruise: 0, range: 0,
+        armed: true, heavy: false, maxSpeed: 2.4,
+        gunRange: 16, dmg: 5, cool: 0.4, order: null, docked: true,
       });
     }
   }
@@ -698,13 +730,37 @@ export class BeachDecor {
     const birdsOut = phase === 'day' || phase === 'dawn';
     const nightish = phase === 'night' || phase === 'dusk';
     for (const s of this._ships) {
-      const along = s.cruise ? Math.sin(t * s.cruise * 0.32 + s.phase) * s.range : 0;
-      s.mesh.position.x = s.x + Math.sin(s.yaw) * along;
-      s.mesh.position.z = s.z + Math.cos(s.yaw) * along;
-      s.mesh.position.y = s.baseY + Math.sin(t * (s.cruise ? 1.7 : 0.85) + s.phase) * s.bob;
-      s.mesh.rotation.z = Math.sin(t * 0.7 + s.phase) * (s.cruise ? 0.045 : 0.012);
-      s.mesh.rotation.y = s.yaw + (s.cruise ? Math.sin(t * 0.22 + s.phase) * 0.28 : 0);
+      s.cool = Math.max(0, (s.cool || 0) - dt);
+      if (s.order) {
+        const mob = s.order.mob;
+        if (s.order.attack && mob && !mob.dead) {
+          s.order.x = mob.pos.x;
+          s.order.z = mob.pos.z;
+        }
+        const dx = s.order.x - s.x, dz = s.order.z - s.z;
+        const dist = Math.hypot(dx, dz) || 1;
+        const step = Math.min(dist, (s.maxSpeed || 1.5) * dt);
+        if (dist > 1.5) {
+          s.x += (dx / dist) * step;
+          s.z += (dz / dist) * step;
+          s.yaw = Math.atan2(dx, dz);
+        }
+        if (s.order.attack && dist < (s.gunRange || 16)) this._cannon(s, s.order.x, s.order.z);
+        if (!s.order.attack && dist < 1.5) s.order = null;
+        else if (s.order.attack && (!mob || mob.dead) && dist < 2) s.order = null;
+        s.mesh.position.set(s.x, s.baseY + Math.sin(t * 1.1 + s.phase) * s.bob, s.z);
+        s.mesh.rotation.y = s.yaw;
+        s.mesh.rotation.z = Math.sin(t * 0.6 + s.phase) * 0.02;
+      } else {
+        const along = s.cruise ? Math.sin(t * s.cruise * 0.32 + s.phase) * s.range : 0;
+        s.mesh.position.x = s.x + Math.sin(s.yaw) * along;
+        s.mesh.position.z = s.z + Math.cos(s.yaw) * along;
+        s.mesh.position.y = s.baseY + Math.sin(t * (s.cruise ? 1.7 : 0.85) + s.phase) * s.bob;
+        s.mesh.rotation.z = Math.sin(t * 0.7 + s.phase) * (s.cruise ? 0.045 : 0.012);
+        s.mesh.rotation.y = s.yaw + (s.cruise ? Math.sin(t * 0.22 + s.phase) * 0.28 : 0);
+      }
     }
+    this._stepShots(dt);
     const player = this.game.player;
     const pp = player?.body?.pos;
     const beachZ = LAYOUT.beach?.z0 ?? 70;
@@ -792,6 +848,46 @@ export class BeachDecor {
     this._birds = [];
     this._fish = [];
     this._critters = [];
+    for (const shot of this._shots || []) shot.mesh.removeFromParent();
+    this._shots = [];
+  }
+
+  _cannon(ship, tx, tz) {
+    if (ship.cool > 0) return;
+    ship.cool = ship.heavy ? 1.6 : 1.05;
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(0.28, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0x2a2a2a }),
+    );
+    const x = ship.mesh.position.x, z = ship.mesh.position.z;
+    ball.position.set(x, ship.baseY + 1.3, z);
+    this.root.add(ball);
+    this._shots.push({ mesh: ball, x, z, y: ship.baseY + 1.3, tx, tz, t: 0, dur: 0.55, dmg: ship.dmg || 5 });
+    this.game.audio?.sfx('hit', { pos: ball.position, pitch: 0.45 });
+  }
+
+  _stepShots(dt) {
+    for (let i = this._shots.length - 1; i >= 0; i--) {
+      const s = this._shots[i];
+      s.t += dt;
+      const k = Math.min(1, s.t / s.dur);
+      const arc = Math.sin(k * Math.PI) * 3.2;
+      s.mesh.position.set(
+        s.x + (s.tx - s.x) * k,
+        s.y + arc,
+        s.z + (s.tz - s.z) * k,
+      );
+      if (k < 1) continue;
+      const x = s.tx, z = s.tz, y = s.y;
+      this.game.particles?.burst(x, y, z, 0xc8d8e8, 12, 1.4);
+      this.game.audio?.sfx('explode', { pos: { x, y, z }, pitch: 1.4, dur: 0.35 });
+      for (const m of this.game.mobs || []) {
+        if (!m || m.dead) continue;
+        if (Math.hypot(m.pos.x - x, m.pos.z - z) < 2.5) m.hit(s.dmg, { x, z }, 0.6);
+      }
+      s.mesh.removeFromParent();
+      this._shots.splice(i, 1);
+    }
   }
 
   dispose() {
