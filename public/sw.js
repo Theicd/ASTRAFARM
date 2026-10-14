@@ -1,5 +1,5 @@
 // Spud Farm — network-first shell so deploys show up; cache icons for relaunch.
-const CACHE = 'spud-farm-v52';
+const CACHE = 'spud-farm-v53';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();

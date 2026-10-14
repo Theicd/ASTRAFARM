@@ -15,6 +15,7 @@ export class StrategyMode {
     this.cx = LAYOUT.spawn[0];
     this.cz = LAYOUT.spawn[2];
     this.height = 28;
+    this.yaw = 0;
     this.selected = [];
     this.focus = null;
     this._down = null;
@@ -57,7 +58,12 @@ export class StrategyMode {
   applyCamera() {
     const cam = this.game.camera;
     const h = this.height;
-    cam.position.set(this.cx, GY + 1 + h * 0.78, this.cz + h * 0.52);
+    const horiz = h * 0.62;
+    cam.position.set(
+      this.cx + Math.sin(this.yaw) * horiz,
+      GY + 1 + h * 0.78,
+      this.cz + Math.cos(this.yaw) * horiz,
+    );
     cam.up.set(0, 1, 0);
     cam.lookAt(this.cx, GY + 1, this.cz);
     if (Math.abs(cam.fov - 46) > 0.2) {
@@ -70,9 +76,12 @@ export class StrategyMode {
     const g = this.game;
     const m = g.input.move;
     const pan = this.height * 0.62;
-    this.cx = Math.max(6, Math.min(90, this.cx + m.x * pan * dt));
-    this.cz = Math.max(6, Math.min(90, this.cz - m.y * pan * dt));
-    if (g.input.wheel) this.height = Math.max(14, Math.min(48, this.height - Math.sign(g.input.wheel) * 3));
+    const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+    this.cx = Math.max(6, Math.min(90, this.cx + (m.x * rx + m.y * fx) * pan * dt));
+    this.cz = Math.max(6, Math.min(90, this.cz + (m.x * rz + m.y * fz) * pan * dt));
+    // Wheel back (positive delta) moves the camera farther away.
+    if (g.input.wheel) this.height = Math.max(14, Math.min(52, this.height + Math.sign(g.input.wheel) * 4));
     this._placeRings();
     if (this.focus) g.hud.setRtsCard?.(this._card(this.focus));
   }
@@ -87,14 +96,20 @@ export class StrategyMode {
   _pointerMove(e) {
     if (!this.on || !this._down) return;
     const dx = e.clientX - this._down.x, dy = e.clientY - this._down.y;
-    if (dx * dx + dy * dy > 36) this._drag = true;
-    if (this._drag && this._down.button === 0) {
-      const s = this.height * 0.012;
-      this.cx -= dx * s * 0.15;
-      this.cz += dy * s * 0.15;
-      this._down.x = e.clientX;
-      this._down.y = e.clientY;
+    if (dx * dx + dy * dy > 16) this._drag = true;
+    if (!this._drag) return;
+    const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+    if (this._down.button === 2) this.yaw -= dx * 0.008;
+    else if (this._down.button === 0) {
+      const s = this.height * 0.0022;
+      this.cx -= (dx * rx + dy * fx) * s;
+      this.cz -= (dx * rz + dy * fz) * s;
+      this.cx = Math.max(6, Math.min(90, this.cx));
+      this.cz = Math.max(6, Math.min(90, this.cz));
     }
+    this._down.x = e.clientX;
+    this._down.y = e.clientY;
   }
 
   _pointerUp(e) {
