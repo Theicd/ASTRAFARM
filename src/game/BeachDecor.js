@@ -693,6 +693,7 @@ export class BeachDecor {
       this.root.add(v.root);
       this._critters.push({ v, x, z, kind: 'bunny' });
     }
+    this._placeHutch();
     const birbs = [
       [xMid - 20, GY + 8, z0 + 6],
       [xMid + 30, GY + 11, z0 + 10],
@@ -1059,11 +1060,55 @@ export class BeachDecor {
         const side = right ? 1 : -1;
         bone.rotation.x = bone.userData.restX - 0.4;
         bone.rotation.z = bone.userData.restZ + side * (1.15 + Math.sin(t * 22) * 0.18);
+      } else if (mode === 'sleep') {
+        bone.rotation.x = bone.userData.restX + (right ? 0.35 : 0.2);
+        bone.rotation.z = bone.userData.restZ + (right ? 0.25 : -0.25);
       } else {
         bone.rotation.x = bone.userData.restX;
         bone.rotation.z = bone.userData.restZ;
       }
     }
+  }
+
+  _hutchSpot(i) {
+    const H = LAYOUT.house;
+    const x = H.x1 - 1.48;
+    const z = H.z0 + 3.55 + i * 0.48;
+    return { x, z, yaw: -Math.PI / 2 };
+  }
+
+  _placeHutch() {
+    const H = LAYOUT.house;
+    const g = new THREE.Group();
+    g.name = 'hutch';
+    const wood = new THREE.MeshBasicMaterial({ color: 0xc4925a });
+    const woodDark = new THREE.MeshBasicMaterial({ color: 0x8a5a32 });
+    const roof = new THREE.MeshBasicMaterial({ color: 0x6b3a28 });
+    const straw = new THREE.MeshBasicMaterial({ color: 0xd8c06a });
+    const add = (mat, geo, x, y, z) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      g.add(m);
+      return m;
+    };
+    const cx = H.x1 - 1.35;
+    const cz = H.z0 + 4.25;
+    g.position.set(cx, GY + 1, cz);
+    add(woodDark, new THREE.BoxGeometry(0.12, 1.05, 2.2), 0.48, 0.55, 0);
+    add(wood, new THREE.BoxGeometry(0.9, 1.05, 0.1), 0.05, 0.55, 1.05);
+    add(wood, new THREE.BoxGeometry(0.9, 1.05, 0.1), 0.05, 0.55, -1.05);
+    add(wood, new THREE.BoxGeometry(1.05, 0.1, 2.2), 0.08, 1.08, 0);
+    add(straw, new THREE.BoxGeometry(0.85, 0.06, 2.0), 0.02, 0.06, 0);
+    const slope = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 2.45), roof);
+    slope.position.set(0.02, 1.22, 0);
+    slope.rotation.z = -0.22;
+    g.add(slope);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.38, 0.52, 28), wood);
+    ring.position.set(-0.38, 0.5, 0);
+    ring.rotation.y = Math.PI / 2;
+    g.add(ring);
+    this.root.add(g);
+    this._hutch = g;
   }
 
   _bunnyFlee(c, dt) {
@@ -1074,19 +1119,18 @@ export class BeachDecor {
       c.job = null;
       c.act = 0;
       c.flee = 'home';
-      const H = LAYOUT.house;
+      c.fleeT = 0;
       const i = Math.max(0, (this._critters || []).filter((x) => x.kind === 'bunny').indexOf(c));
-      const tx = H.x0 + 2.4 + (i % 2) * 1.5;
-      const tz = H.z0 + 2.2 + Math.floor(i / 2) * 1.15;
-      c.home = { x: tx, z: tz };
-      const path = findPath(g.world, pos.x, pos.z, tx, tz, { near: 0.7, maxNodes: 2500 });
+      c.home = this._hutchSpot(i);
+      const path = findPath(g.world, pos.x, pos.z, c.home.x, c.home.z, { near: 0.6, maxNodes: 2500 });
       c.path = path.path;
       c.pathI = 0;
     }
+    c.fleeT = (c.fleeT || 0) + dt;
     const home = c.home;
     const distHome = Math.hypot(home.x - pos.x, home.z - pos.z);
-    let moving = false;
-    if (distHome > 0.7) {
+    const asleep = distHome < 0.45 || c.fleeT > 7;
+    if (!asleep) {
       const goal = c.path && c.pathI < c.path.length ? c.path[c.pathI] : null;
       const tx = goal ? goal[0] + 0.5 : home.x;
       const tz = goal ? goal[1] + 0.5 : home.z;
@@ -1095,13 +1139,17 @@ export class BeachDecor {
       const step = Math.min(dist, 4.4 * dt);
       pos.x += (dx / dist) * step;
       pos.z += (dz / dist) * step;
-      c.v.root.rotation.y = Math.atan2(dx, dz);
-      moving = true;
+      pos.y = GY + 1;
+      c.v.root.rotation.set(0, Math.atan2(dx, dz), 0);
+      stepMobVisual(c.v, dt, true);
       if (goal && dist < 0.45) c.pathI++;
+      return;
     }
-    pos.y = GY + 1;
-    stepMobVisual(c.v, dt, moving);
-    this._bunnyPose(c, 'scare');
+    pos.set(home.x, GY + 0.58, home.z);
+    c.v.root.rotation.set(1.05, home.yaw, 0);
+    stepMobVisual(c.v, dt, false);
+    this._bunnyPose(c, 'sleep');
+    if (c._label) c._label.visible = false;
   }
 
   _bunnyWork(c, dt) {
@@ -1128,6 +1176,9 @@ export class BeachDecor {
       c.flee = null;
       c.path = null;
       c.cool = 0.2;
+      c.v.root.rotation.x = 0;
+      c.v.root.rotation.z = 0;
+      if (c._label) c._label.visible = true;
     }
     if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) {
       pos.y = GY + 1;
