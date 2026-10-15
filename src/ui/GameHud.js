@@ -110,10 +110,10 @@ export class GameHud {
     void max;
   }
 
-  setInventory({ bags, powder, green, stock, turretsAfford = 0, seedTotal = 0, nextSeed = null }) {
+  setInventory({ bags, powder, green, stock, turretsAfford = 0, seedTotal = 0, nextSeed = null, turretOpen = true }) {
     const b = bags || { potato: stock ?? 0, wheat: 0, carrot: 0, corn: 0 };
     const total = seedTotal || ((b.potato | 0) + (b.wheat | 0) + (b.carrot | 0) + (b.corn | 0));
-    this._set('inv', `${total}|${nextSeed || ''}|${powder}|${green}|${turretsAfford}`, () => {
+    this._set('inv', `${total}|${nextSeed || ''}|${powder}|${green}|${turretsAfford}|${turretOpen ? 1 : 0}`, () => {
       const S = this.$.slots;
       if (S.seed) {
         const span = S.seed.querySelector('span');
@@ -128,8 +128,10 @@ export class GameHud {
       S.green.classList.toggle('empty', green <= 0);
       if (S.turret) {
         S.turret.querySelector('span').textContent = turretsAfford;
-        S.turret.classList.toggle('empty', turretsAfford <= 0);
-        S.turret.classList.toggle('ready', turretsAfford > 0);
+        S.turret.classList.toggle('empty', !turretOpen || turretsAfford <= 0);
+        S.turret.classList.toggle('ready', turretOpen && turretsAfford > 0);
+        S.turret.classList.toggle('locked', !turretOpen);
+        if (!turretOpen) S.turret.querySelector('span').textContent = '3';
       }
     });
   }

@@ -54,6 +54,7 @@
 #hud .wh-row b { font-weight: 400; flex: 1; }
 #hud .wh-row em { color: #ffe8a0; font-style: normal; }
 #hud .slot[data-k="turret"].ready { outline: 2px solid #ffe25a; }
+#hud .slot[data-k="turret"].locked { opacity: 0.4; filter: grayscale(0.85); }
 
 /* Police-style rotating alert light */
 #hud .alarm { position: absolute; top: calc(10px + var(--safe-t)); left: 50%; transform: translateX(-50%); width: 54px; height: 54px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 5; }

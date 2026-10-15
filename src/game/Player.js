@@ -1,7 +1,7 @@
 // プレイヤー：一人称の移動（歩く・走る・跳ぶ・泳ぐ）、体力、手に持つ物（剣・クワ・じゃがいも・火薬）と振る動き。
 import * as THREE from 'three';
 import { moveBody, applyGravity } from './physics.js';
-import { itemMesh, blockItemGeometry, createAstraModel } from './models.js';
+import { itemMesh, blockItemGeometry, createAstraModel, createPaintCannon } from './models.js';
 import { entityMaterial, setEntityLight } from './world/materials.js';
 import { clamp, damp, dampAngle } from '../core/math.js';
 import { BLOCKS } from './world/blocks.js';
@@ -30,7 +30,7 @@ export class Player {
     game.scene.add(this.bodyRoot);
     // 持ちもの：剣・クワ・じゃがいも・火薬はドット絵に厚み、土は小さなブロック
     this.items = {};
-    for (const n of ['sword', 'hoe', 'seed', 'potato', 'wheat', 'carrot', 'corn', 'powder', 'turret']) {
+    for (const n of ['hoe', 'seed', 'potato', 'wheat', 'carrot', 'corn', 'powder', 'turret']) {
       const m = itemMesh(game.atlas, 'item_' + n, this.handMat);
       m.visible = false;
       this.hand.add(m);
@@ -41,6 +41,8 @@ export class Player {
     dirt.visible = false;
     this.hand.add(dirt);
     this.items.dirt = dirt;
+    this.items.sword = createPaintCannon();
+    this.hand.add(this.items.sword);
     this.tool = 'sword';   // 選んでいる持ちもの（Game が決める）
     this.held = 'sword';   // 手に見えているもの（食べるときなどは一時的にじゃがいも）
     this.showT = 0;
@@ -212,8 +214,12 @@ export class Player {
     const m = this.items[show];
     if (m) {
       const k = show;
-      const tool = k === 'sword' || k === 'hoe';
-      if (k === 'dirt') {
+      const tool = k === 'hoe';
+      if (k === 'sword') {
+        m.scale.setScalar(0.55);
+        m.rotation.set(-0.08 - sw * 0.2, 0.15, 0.02);
+        m.position.set(0.05, -0.06, 0.05);
+      } else if (k === 'dirt') {
         m.scale.setScalar(0.17);
         m.rotation.set(0.25 - sw * 0.6, 0.75, 0.05);
         m.position.set(-0.02, -0.02, 0);

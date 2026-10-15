@@ -48,9 +48,9 @@ import { names } from '../net/names.js';
 
 // 1 日ごとの設定：目標（収穫する数）、昼と夜の長さ（秒）、出てくる緑のアレの数
 export const DAYS = [
-  { goal: 40, day: 170, night: 50, mobsDay: 1, mobsNight: 3 },
-  { goal: 70, day: 145, night: 55, mobsDay: 2, mobsNight: 4 },
-  { goal: 100, day: 145, night: 60, mobsDay: 3, mobsNight: 6 },
+  { goal: 40, day: 170, night: 50, mobsDay: 1, mobsNight: 2 },
+  { goal: 70, day: 145, night: 55, mobsDay: 1, mobsNight: 3 },
+  { goal: 100, day: 145, night: 60, mobsDay: 2, mobsNight: 5 },
   { goal: 130, day: 145, night: 65, mobsDay: 4, mobsNight: 8 },
   { goal: 160, day: 145, night: 75, mobsDay: 5, mobsNight: 9, boss: true },
 ];
@@ -106,6 +106,7 @@ export class Game {
     this.beachDecor = null;
     this.mobs = [];
     this.bombs = [];
+    this.paints = [];
     this.lodge = { hp: 140, max: 140 };
     this.penHp = { hp: 90, max: 90 };
     this.pondHp = { hp: 70, max: 70 };
@@ -780,6 +781,7 @@ export class Game {
     if (this.beachDecor) { this.beachDecor.dispose(); this.beachDecor = null; }
     this.drops.clear();
     this.clearBombs();
+    this.clearPaints();
     this.particles.clear();
     this.floats.clear();
     this.reserved.clear();
@@ -1034,8 +1036,12 @@ export class Game {
     return t;
   }
 
+  /** Guard towers open on day 3, after the paint cannon has carried the first nights. */
+  turretUnlocked() { return (this.dayIndex | 0) >= 2; }
+
   /** Spend coins and place a guard tower at block xz (player use). */
   tryPlaceTurret(x, z) {
+    if (!this.turretUnlocked()) { this.talk.sys('sys.turretLater'); return false; }
     if (this.turrets.length >= MAX_TURRETS) { this.talk.sys('sys.turretMax'); return false; }
     if (this.money < BUY.turret) { this.talk.sys('sys.noMoney'); return false; }
     if (!this.canPlaceTurret(x, z)) { this.talk.sys('sys.turretBlocked'); return false; }
@@ -1212,7 +1218,9 @@ export class Game {
     // 緑のアレ — night cap rises with towers so the bigger waves can actually land
     let alive = this.mobs.filter((m) => !m.dead && m.state !== 'leave').length;
     const towers = this.turrets.length;
-    const cap = phase === 'night' ? Math.min(14, 5 + towers * 2) : 3;
+    const cap = phase === 'night'
+      ? Math.min(this.dayIndex < 2 ? 3 : 8, 3 + this.dayIndex + towers)
+      : (this.dayIndex < 1 ? 1 : 2);
     let spawned = 0;
     while (this.schedule.length && k >= this.schedule[0].t) {
       if (phase === 'dawn') { this.schedule.shift(); continue; }
@@ -1262,10 +1270,17 @@ export class Game {
       if (T.step === 2) return t('obj.till', { n: Math.min(2, T.till), m: 2 });
       return t('obj.mob');
     }
+    const live = this.mobs.filter((m) => !m.dead && m.state !== 'leave' && m.state !== 'emerge');
+    if (live.length) {
+      const m = live[0];
+      const key = m.kind === 'boom' && m.big ? 'alien' : (m.kind || 'boom');
+      return t('obj.fight', { name: t('mob.name.' + key), n: live.length });
+    }
     if (this.mobs.some((m) => m.big && !m.dead)) return t('obj.boss');
     if (this.phase === 'night' || this.phase === 'dusk') return t('obj.night');
-    if (this.phase === 'dawn') return '';
-    return this.today.goalDone ? t('obj.done') : '';
+    if (this.phase === 'dawn') return t('obj.dawn');
+    if (!this.today.goalDone && this.cfg) return t('obj.grow', { n: this.today.harvest | 0, m: this.cfg.goal });
+    return t('obj.done');
   }
 
   endDay({ fromNet = false } = {}) {
@@ -1585,6 +1600,54 @@ export class Game {
   clearBombs() {
     for (const b of this.bombs || []) b.mesh.removeFromParent();
     this.bombs = [];
+  }
+
+  clearPaints() {
+    for (const p of this.paints || []) p.mesh.removeFromParent();
+    this.paints = [];
+  }
+
+  firePaint() {
+    const { o, d } = this.player.ray();
+    const colors = [0xff3b5c, 0x3dff7a, 0x3aa0ff, 0xffd23a, 0xd15cff, 0xff8a2a];
+    const color = colors[(this._paintI = ((this._paintI | 0) + 1) % colors.length)];
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.16, 8, 6),
+      new THREE.MeshBasicMaterial({ color }),
+    );
+    mesh.position.copy(o).addScaledVector(d, 0.85);
+    this.scene.add(mesh);
+    this.paints.push({ mesh, vel: d.clone().multiplyScalar(28), life: 0, color });
+    this.audio.sfx('turret_pop', { pitch: 1.45, dur: 0.12 });
+  }
+
+  stepPaints(dt) {
+    const targets = [
+      ...this.mobs.filter((m) => !m.dead && m.state !== 'leave'),
+      ...(this.beachDecor?._fish || []).filter((f) => f.v?.root?.visible && f.state !== 'under' && !f.dead),
+    ];
+    for (let i = (this.paints || []).length - 1; i >= 0; i--) {
+      const p = this.paints[i];
+      p.life += dt;
+      p.vel.y -= 6 * dt;
+      p.mesh.position.addScaledVector(p.vel, dt);
+      let hit = null;
+      for (const m of targets) {
+        const c = m.center || m.pos;
+        if (!c) continue;
+        if (p.mesh.position.distanceTo(c) < 1.05) { hit = m; break; }
+      }
+      if (!hit && p.life < 1.15) continue;
+      const x = p.mesh.position.x, y = p.mesh.position.y, z = p.mesh.position.z;
+      this.particles.burst(x, y, z, p.color, 10, 1.1);
+      if (hit?.hit) {
+        hit.hit(2, { x, y, z }, 0.45);
+        if (hit.dead && !hit.sea) this.onMobKilled(hit, 'player');
+        this.audio.sfx('hit', { pos: { x, y, z }, pitch: 1.3 });
+      }
+      p.mesh.removeFromParent();
+      this.paints.splice(i, 1);
+    }
   }
 
   stepBombs(dt) {
@@ -2197,6 +2260,7 @@ export class Game {
         return null;
       }
       case 'turret': {
+        if (!this.turretUnlocked()) return { act: 'turretLater', off: true };
         // Place on top of the looked-at solid block (or the column below a plant).
         let x = tg.x, z = tg.z;
         if (tg.ny === 1 || BLOCKS[id]?.solid || isFarm(id)) {
@@ -2372,6 +2436,7 @@ export class Game {
   /** 持ちものを選ぶ（1〜5・ホイール・LB/RB・持ちもの欄をタップ）。 */
   selectTool(k) {
     if (!TOOLS.includes(k) || this.tool === k) return;
+    if (k === 'turret' && !this.turretUnlocked()) { this.talk.sys('sys.turretLater'); return; }
     this.tool = k;
     this.player.setTool(k);
     this.audio.sfx('ui_move');
@@ -2434,9 +2499,10 @@ export class Game {
     if (this.grace > 0) return;
     // 左：たたく・収穫
     if ((input.down('attack') || input.pressed('attack')) && this.attackCool <= 0) {
-      this.attackCool = 0.36;
+      this.attackCool = this.tool === 'sword' ? 0.22 : 0.36;
       this.player.swingHand();
-      this.doAttack(atk);
+      if (this.tool === 'sword' && atk?.act !== 'harvest' && atk?.act !== 'cut') this.firePaint();
+      else this.doAttack(atk);
     }
     // 右：つかう
     if ((input.down('use') || input.pressed('use')) && this.useCool <= 0 && use) {
@@ -2558,6 +2624,7 @@ export class Game {
     this.chargeBay?.update(dt);
     this.beachDecor?.update(dt);
     this.stepBombs(dt);
+    this.stepPaints(dt);
     for (const m of [...this.mobs]) {
       m.update(dt);
       syncMobLabel(m, this.camera);
@@ -2631,6 +2698,7 @@ export class Game {
     hud.setInventory({
       bags: this.bags, powder: this.powder, green: this.green,
       turretsAfford: this.turretsAfford(), seedTotal: this.seedTotal, nextSeed: this.peekNextSeed(),
+      turretOpen: this.turretUnlocked(),
     });
     hud.setWarehouse({
       money: this.money, bags: this.bags,

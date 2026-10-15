@@ -457,14 +457,12 @@ export const TILES = {
   },
   item_sword(p) {
     p.fill(0, 0);
-    for (let i = 0; i < 9; i++) {
-      p.set(5 + i, 10 - i, 0xe6edf0);
-      p.set(6 + i, 10 - i, 0xb7c2c8);
-      p.set(5 + i, 9 - i, 0xc9d3d8);
-    }
-    p.set(14, 1, 0xe6edf0);
-    for (const [x, y] of [[3, 9], [4, 10], [5, 11], [6, 12], [4, 11]]) p.set(x, y, 0x6b4a2a);
-    for (const [x, y] of [[3, 13], [2, 13], [3, 12], [2, 14]]) p.set(x, y, 0x5a3c20);
+    for (let x = 3; x <= 12; x++) p.set(x, 8, 0x8ea4b8);
+    for (let x = 3; x <= 12; x++) p.set(x, 7, 0xd5e4f0);
+    for (let x = 11; x <= 14; x++) { p.set(x, 6, 0x6a8094); p.set(x, 9, 0x6a8094); }
+    p.set(4, 6, 0xff4d6a); p.set(5, 6, 0x3dff7a); p.set(6, 6, 0x3aa0ff); p.set(7, 6, 0xffd23a);
+    p.set(2, 10, 0x8a5a32); p.set(3, 10, 0x8a5a32); p.set(2, 11, 0x5c3a1e); p.set(3, 11, 0x5c3a1e);
+    p.set(8, 10, 0x8a5a32); p.set(9, 10, 0x8a5a32); p.set(8, 11, 0x5c3a1e); p.set(9, 11, 0x5c3a1e);
     p.outline(0x262a2e);
   },
   item_hoe(p) {

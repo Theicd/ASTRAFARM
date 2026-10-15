@@ -622,3 +622,76 @@ export function blockItemGeometry(atlas, tex) {
   itemGeoCache.set(key, g);
   return g;
 }
+
+function paintTex(draw) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  draw(c.getContext('2d'));
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return new THREE.MeshBasicMaterial({ map: t, color: 0xffffff });
+}
+
+/** First-person paint cannon: metal barrel, paint tank, two wooden wheels. */
+export function createPaintCannon() {
+  const g = new THREE.Group();
+  g.name = 'item_sword';
+  const metal = paintTex((x) => {
+    x.fillStyle = '#8ea4b8';
+    x.fillRect(0, 0, 128, 128);
+    x.fillStyle = '#d5e4f0';
+    x.fillRect(0, 18, 128, 22);
+    x.fillStyle = '#5c7084';
+    for (let i = 0; i < 8; i++) {
+      x.beginPath();
+      x.arc(16 + (i % 4) * 30, 70 + Math.floor(i / 4) * 36, 5, 0, Math.PI * 2);
+      x.fill();
+    }
+    x.strokeStyle = '#3e5164';
+    x.lineWidth = 3;
+    for (let y = 8; y < 128; y += 16) x.strokeRect(2, y, 124, 1);
+  });
+  const wood = paintTex((x) => {
+    x.fillStyle = '#8a5a32';
+    x.fillRect(0, 0, 128, 128);
+    x.strokeStyle = '#5c3a1e';
+    x.lineWidth = 4;
+    for (let i = 0; i < 10; i++) {
+      x.beginPath();
+      x.moveTo(0, i * 14);
+      x.bezierCurveTo(40, i * 14 + 8, 80, i * 14 - 6, 128, i * 14 + 4);
+      x.stroke();
+    }
+  });
+  const tank = paintTex((x) => {
+    const cols = ['#ff4d6a', '#3dff7a', '#3aa0ff', '#ffd23a', '#d15cff'];
+    cols.forEach((col, i) => {
+      x.fillStyle = col;
+      x.fillRect(i * 26, 0, 26, 128);
+    });
+    x.fillStyle = 'rgba(255,255,255,0.35)';
+    x.fillRect(8, 10, 18, 108);
+  });
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, 0.62, 14), metal);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.04, -0.12);
+  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.08, 14), metal);
+  muzzle.rotation.x = Math.PI / 2;
+  muzzle.position.set(0, 0.04, -0.44);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.28), metal);
+  body.position.set(0, -0.02, 0.08);
+  const pot = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), tank);
+  pot.position.set(0, 0.08, 0.16);
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.34, 8), metal);
+  axle.rotation.z = Math.PI / 2;
+  axle.position.set(0, -0.1, 0.12);
+  const wheelGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.04, 16);
+  const wheelL = new THREE.Mesh(wheelGeo, wood);
+  const wheelR = new THREE.Mesh(wheelGeo, wood);
+  wheelL.rotation.z = wheelR.rotation.z = Math.PI / 2;
+  wheelL.position.set(-0.16, -0.1, 0.12);
+  wheelR.position.set(0.16, -0.1, 0.12);
+  g.add(barrel, muzzle, body, pot, axle, wheelL, wheelR);
+  return g;
+}
