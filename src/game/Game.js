@@ -105,6 +105,7 @@ export class Game {
     this.chargeBay = null;
     this.beachDecor = null;
     this.mobs = [];
+    this.bombs = [];
     this.lodge = { hp: 140, max: 140 };
     this.penHp = { hp: 90, max: 90 };
     this.pondHp = { hp: 70, max: 70 };
@@ -778,6 +779,7 @@ export class Game {
     if (this.chargeBay) { this.chargeBay.dispose(); this.chargeBay = null; }
     if (this.beachDecor) { this.beachDecor.dispose(); this.beachDecor = null; }
     this.drops.clear();
+    this.clearBombs();
     this.particles.clear();
     this.floats.clear();
     this.reserved.clear();
@@ -1557,6 +1559,81 @@ export class Game {
       if (d < bd) { bd = d; best = pig; }
     }
     return best;
+  }
+
+  /** A small charge the ninja leaves in the doorway. It pops on its own. */
+  plantBomb(x, z) {
+    if (this.isNetClient?.()) return;
+    const mesh = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.36, 0.28, 0.36),
+      new THREE.MeshBasicMaterial({ color: 0x2c2c2c }),
+    );
+    const fuse = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.24, 0.08),
+      new THREE.MeshBasicMaterial({ color: 0xff5a28 }),
+    );
+    fuse.position.y = 0.24;
+    mesh.add(body, fuse);
+    mesh.position.set(x, GY + 1.08, z);
+    this.scene.add(mesh);
+    this.bombs.push({ mesh, fuse, x, z, t: 0, dur: 2.35 });
+    this.talk.sys('sys.thiefBomb', null, 'warn');
+    this.audio.sfx('hiss', { pos: mesh.position, refDistance: 5 });
+  }
+
+  clearBombs() {
+    for (const b of this.bombs || []) b.mesh.removeFromParent();
+    this.bombs = [];
+  }
+
+  stepBombs(dt) {
+    for (let i = (this.bombs || []).length - 1; i >= 0; i--) {
+      const b = this.bombs[i];
+      b.t += dt;
+      const k = b.t / b.dur;
+      b.fuse.material.color.setHex(Math.sin(b.t * 18) > 0 ? 0xffe14a : 0xff3a1a);
+      b.mesh.position.y = GY + 1.08 + Math.sin(b.t * 10) * 0.04;
+      b.mesh.scale.setScalar(1 + k * 0.18);
+      if (k < 1) continue;
+      this.detonateBomb(b);
+      b.mesh.removeFromParent();
+      this.bombs.splice(i, 1);
+    }
+  }
+
+  detonateBomb(b) {
+    const x = b.x, z = b.z, y = GY + 1.2;
+    this.damageLodge(22);
+    this.particles.burst(x, y, z, 0xffc48a, 16, 1.3);
+    this.particles.smoke?.(x, y, z, 10, 0.45);
+    this.audio.sfx('explode', { pos: { x, y, z }, pitch: 1.35, dur: 0.45 });
+    this.talk.sys('sys.thiefBoom', null, 'warn');
+    this.shake = Math.max(this.shake || 0, 0.45);
+    const p = this.player.pos;
+    if (this.player.alive && Math.hypot(p.x - x, p.z - z) < 2.4) {
+      this.player.damage(5, { x, z });
+      this.hud.hurt(0.45);
+    }
+  }
+
+  /** Bunny crew: nudge a growing carrot forward. */
+  tendCarrot(x, z) {
+    const w = this.world;
+    const y = GY + 1;
+    const id = w.get(x, y, z);
+    const def = cropDefOf(id);
+    if (!def || def.id !== 'carrot' || isRipe(id)) return false;
+    const i = w.idx(x, y, z);
+    const prog = (this.crops.get(i) || 0) + 0.42;
+    if (prog >= 1) {
+      const next = nextStageId(id);
+      if (next == null) return false;
+      w.set(x, y, z, next);
+      this.crops.set(i, 0);
+    } else this.crops.set(i, prog);
+    this.particles.sparkle(x, y, z, 3, def.sparkle);
+    return true;
   }
 
   /** Ninja got away with a pig. It does not pop back during this night. */
@@ -2474,6 +2551,7 @@ export class Game {
     this.pigGates?.update(dt);
     this.chargeBay?.update(dt);
     this.beachDecor?.update(dt);
+    this.stepBombs(dt);
     for (const m of [...this.mobs]) {
       m.update(dt);
       syncMobLabel(m, this.camera);

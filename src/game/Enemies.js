@@ -345,7 +345,7 @@ export class Golem {
       vel: new THREE.Vector3(), hw: 0.55 * s, h: 1.15 * s, onGround: false, step: 1.2, inWater: false,
     };
     this.hp = 10; this.maxHp = 10;
-    this.speed = 1.35;
+    this.speed = 2.05;
     this.fuse = 0;
     this.state = 'emerge';
     this.afterEmerge = 'chase';
@@ -359,49 +359,49 @@ export class Golem {
     this.phase = Math.random() * 6;
     this.t = 0;
     this.dead = false;
-    this.smashT = 0;
-    this.marker = null;
+    this.carriedPig = null;
+    this.fleeTo = null;
     this.root.position.copy(this.body.pos);
   }
 
   get pos() { return this.body.pos; }
   get center() { return new THREE.Vector3(this.body.pos.x, this.body.pos.y + this.body.h * 0.5, this.body.pos.z); }
 
-  leave() { if (!this.dead && this.state !== 'leave') { this.state = 'leave'; this.stateT = 0; this.clearMarker(); } }
+  leave() { if (!this.dead && this.state !== 'leave') { this.state = 'leave'; this.stateT = 0; } }
 
-  hit(dmg, from, knock = 1) { return commonHit(this, dmg, from, knock, 3.5); }
-
-  pickTurret() {
-    let best = null, bd = Infinity;
-    for (const tr of this.game.turrets) {
-      if (tr.dead) continue;
-      const d = Math.hypot(tr.root.position.x - this.body.pos.x, tr.root.position.z - this.body.pos.z);
-      if (d < bd) { bd = d; best = tr; }
-    }
-    return best;
+  hit(dmg, from, knock = 1) {
+    const ok = commonHit(this, dmg, from, knock, 3.5);
+    if (this.dead) this.releasePig();
+    return ok;
   }
 
-  clearMarker() {
-    if (this.marker) {
-      this.game.scene.remove(this.marker);
-      this.marker.geometry?.dispose();
-      this.marker.material?.dispose();
-      this.marker = null;
-    }
+  releasePig() {
+    const pig = this.carriedPig;
+    if (!pig || pig.dead) { this.carriedPig = null; return; }
+    pig.carried = null;
+    pig.body.pos.copy(this.body.pos);
+    pig.root.position.copy(pig.body.pos);
+    pig.root.visible = true;
+    this.carriedPig = null;
   }
 
-  showMarker(x, z) {
-    this.clearMarker();
-    const geo = new THREE.RingGeometry(0.55, 0.9, 20);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xff6040, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false,
-    });
-    const m = new THREE.Mesh(geo, mat);
-    m.rotation.x = -Math.PI / 2;
-    const y = (this.game.world.floorAt?.(x, z) ?? GY + 1) + 0.06;
-    m.position.set(x, y, z);
-    this.game.scene.add(m);
-    this.marker = m;
+  beginFlee() {
+    this.state = 'flee';
+    this.stateT = 0;
+    const cells = this.game.world.spawnCells;
+    let best = null, bd = -1;
+    const p = this.body.pos;
+    for (let i = 0; i < 24; i++) {
+      const idx = cells[Math.floor(Math.random() * Math.max(1, cells.length))];
+      if (idx == null) continue;
+      const x = (idx % WX) + 0.5, z = ((idx / WX) | 0) + 0.5;
+      if (z < LAYOUT.house.z0) continue;
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (d > bd) { bd = d; best = [x, z]; }
+    }
+    const shore = LAYOUT.waterLineZ ?? 80;
+    this.fleeTo = best || [LAYOUT.pathX, shore + 4];
+    this.path = null;
   }
 
   update(dt) {
@@ -420,61 +420,48 @@ export class Golem {
     const p = this.body.pos;
     let moving = false;
 
-    if (this.state === 'windup') {
-      this.body.vel.x = damp(this.body.vel.x, 0, 10, dt);
-      this.body.vel.z = damp(this.body.vel.z, 0, 10, dt);
-      const k = Math.min(1, this.stateT / 1.1);
-      if (this.marker?.material) this.marker.material.opacity = 0.35 + k * 0.45;
-      if (this.model.arms?.[0]) this.model.arms[0].rotation.x = -k * 1.4;
-      if (this.model.arms?.[1]) this.model.arms[1].rotation.x = -k * 1.1;
-      if (this.stateT >= 1.1) {
-        this.state = 'smash';
-        this.stateT = 0;
-      }
-    } else if (this.state === 'smash') {
-      const tr = this.target?.turret && !this.target.turret.dead ? this.target.turret : null;
-      if (this.model.arms?.[0]) this.model.arms[0].rotation.x = 0.9;
-      if (this.model.arms?.[1]) this.model.arms[1].rotation.x = 0.7;
-      if (this.stateT < 0.08) {
-        g.particles.burst(p.x - 0.4, p.y, p.z - 0.4, 0x8a8680, 14, 1.2);
-        g.audio.sfx('explode', { pos: p, refDistance: 5, pitch: 0.55, dur: 0.5 });
-        if (tr) {
-          const hit = tr.hit(3);
-          g.talk.sys(hit && tr.dead ? 'sys.golemBroke' : 'sys.golemHit', null, 'warn');
-          if (hit && !tr.dead) g.floats.add('!', tr.root.position.x, tr.root.position.y + 3.2, tr.root.position.z, '#ff8060');
+    if (this.state === 'flee') {
+      if (!this.fleeTo) this.beginFlee();
+      const [fx, fz] = this.fleeTo;
+      chaseAlong(this, dt, fx, fz, this.speed * 1.15);
+      moving = true;
+      if (Math.hypot(fx - p.x, fz - p.z) < 2.2 || this.stateT > 22) {
+        if (this.carriedPig) {
+          g.removePig(this.carriedPig);
+          this.carriedPig = null;
+          g.talk.sys('sys.golemPigGone', null, 'warn');
         }
-        this.clearMarker();
-      }
-      if (this.stateT >= 0.55) {
-        if (this.model.arms) for (const a of this.model.arms) a.rotation.x = 0;
-        this.state = 'chase';
-        this.stateT = 0;
-        this.smashT = 1.8;
+        this.dead = true;
+        this.state = 'dead';
+        return;
       }
     } else {
-      this.smashT = Math.max(0, this.smashT - dt);
       this.repathT -= dt;
-      if (this.repathT <= 0 && this.stun <= 0) {
-        this.repathT = 0.9;
-        const tr = this.pickTurret();
-        if (tr) {
-          this.target = { kind: 'turret', turret: tr, pos: tr.root.position.clone() };
-          const r = findPath(g.world, p.x, p.z, tr.root.position.x, tr.root.position.z, { near: 1.2, maxNodes: 2800, blocked: houseCell });
-          this.path = r.path; this.pathI = 0;
-        } else {
-          // No towers — lumber toward farm center and sulk-smash the dirt
-          this.target = { kind: 'farm', pos: new THREE.Vector3(LAYOUT.center[0], GY + 1, LAYOUT.center[1]) };
-          this.path = null;
-        }
+      const live = this.target?.pigRef && !this.target.pigRef.dead && !this.target.pigRef.carried;
+      if (this.repathT <= 0 && this.stun <= 0 && !live && !this.carriedPig) {
+        this.repathT = 0.7;
+        const pig = g.nearestPennedPig(p);
+        const P = LAYOUT.pigPen;
+        const px = pig ? pig.body.pos.x : (P.x0 + P.x1) * 0.5;
+        const pz = pig ? pig.body.pos.z : (P.z0 + P.z1) * 0.5;
+        this.target = pig
+          ? { pig: true, pigRef: pig, pos: pig.body.pos.clone() }
+          : { pig: false, pos: new THREE.Vector3(px, GY + 1, pz) };
+        const goal = outdoorGoal(px, pz);
+        const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: 1, maxNodes: 2800, blocked: houseCell });
+        this.path = r.path; this.pathI = 0;
       }
       const t = this.target;
+      if (t?.pigRef && !t.pigRef.dead) t.pos.copy(t.pigRef.body.pos);
       if (t && this.stun <= 0) {
         const dist = Math.hypot(t.pos.x - p.x, t.pos.z - p.z);
-        if (t.kind === 'turret' && dist < 2.4 && this.smashT <= 0) {
-          this.state = 'windup';
-          this.stateT = 0;
-          this.showMarker(t.pos.x, t.pos.z);
-          g.talk.sys('sys.golemWind', null, 'warn');
+        if (t.pig && dist < 1.25 && t.pigRef && !t.pigRef.dead && !t.pigRef.carried) {
+          t.pigRef.carried = this;
+          t.pigRef.penned = false;
+          this.carriedPig = t.pigRef;
+          g.talk.sys('sys.golemPig', null, 'warn');
+          g.audio.sfx('pig', { pos: p, pitch: 0.85 });
+          this.beginFlee();
         } else {
           chaseAlong(this, dt, t.pos.x, t.pos.z, this.speed);
           moving = true;
@@ -501,12 +488,12 @@ export class Golem {
     const sw = Math.sin(this.phase) * (moving ? 0.45 : 0.05);
     if (M.legs?.[0]) { M.legs[0].rotation.x = sw; M.legs[1].rotation.x = -sw; }
     if (!M.scale?.scale) { this.root.rotation.y = this.yaw; return; }
-    M.scale.scale.setScalar(visualScale(M) * (1 + (this.state === 'windup' ? Math.sin(this.t * 12) * 0.03 : 0)));
+    M.scale.scale.setScalar(visualScale(M));
     this.root.rotation.y = this.yaw;
     lightRoot(this);
   }
 
-  dispose() { this.clearMarker(); this.game.scene.remove(this.root); }
+  dispose() { this.releasePig(); this.game.scene.remove(this.root); }
 }
 
 // ───────────────────────────────────────────────────────────────── Crop thief
@@ -539,6 +526,7 @@ export class CropThief {
     this.t = 0;
     this.dead = false;
     this.loot = 0;
+    this.planted = false;
     this.fleeTo = null;
     this.root.position.copy(this.body.pos);
   }
@@ -585,55 +573,20 @@ export class CropThief {
     const spd = this.state === 'flee' ? this.speed * 1.15 : this.speed;
 
     if (this.state === 'hunt') {
-      this.repathT -= dt;
-      if (this.repathT <= 0 && this.stun <= 0 && !(this.target?.pig && this.target.pigRef && !this.target.pigRef.dead)) {
-        this.repathT = 0.45;
-        const pig = !this.carriedPig && Math.random() < 0.65 ? g.nearestPennedPig(p) : null;
-        const crop = g.nearestCrop(p);
-        if (pig) {
-          this.target = { pig: true, pigRef: pig, pos: pig.body.pos.clone(), crop: false };
-          const goal = outdoorGoal(pig.body.pos.x, pig.body.pos.z);
-          const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: 1, maxNodes: 2800, blocked: houseCell });
-          this.path = r.path; this.pathI = 0;
-        } else if (crop) {
-          this.target = { x: crop[0], z: crop[1], pos: new THREE.Vector3(crop[0] + 0.5, GY + 1, crop[1] + 0.5), crop: true };
-          const goal = outdoorGoal(this.target.pos.x, this.target.pos.z);
-          const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: 0, maxNodes: 2800, blocked: houseCell });
-          this.path = r.path; this.pathI = 0;
-        } else {
-          // Empty field — still raid the plots so the thief is visible
-          const fx = LAYOUT.fieldA.water[0] + 2 + Math.floor(Math.random() * 4);
-          const fz = LAYOUT.fieldA.water[1] + 2 + Math.floor(Math.random() * 4);
-          this.target = { x: fx, z: fz, pos: new THREE.Vector3(fx + 0.5, GY + 1, fz + 0.5), crop: false };
-          this.path = null;
-        }
+      if (!this.target) {
+        const H = LAYOUT.house;
+        const door = new THREE.Vector3(H.door[0] + 0.5, GY + 1, H.door[1] + 1.15);
+        this.target = { pos: door };
+        const r = findPath(g.world, p.x, p.z, door.x, door.z, { near: 0.8, maxNodes: 2800, blocked: houseCell });
+        this.path = r.path; this.pathI = 0;
       }
       const t = this.target;
-      if (t?.pigRef && !t.pigRef.dead) t.pos.copy(t.pigRef.body.pos);
       if (t && this.stun <= 0) {
         const dist = Math.hypot(t.pos.x - p.x, t.pos.z - p.z);
-        if (t.pig && dist < 1.15 && t.pigRef && !t.pigRef.dead && !t.pigRef.carried) {
-          t.pigRef.carried = this;
-          t.pigRef.penned = false;
-          this.carriedPig = t.pigRef;
-          g.talk.sys('sys.thiefPig', null, 'warn');
-          g.audio.sfx('pig', { pos: p, pitch: 1.3 });
-          this.beginFlee();
-        } else if (!t.pig && dist < 0.85) {
-          const stole = t.crop ? g.stealCrop(t.x, t.z, this) : 0;
-          if (stole > 0) {
-            this.loot += stole;
-            if (this.model.sack) this.model.sack.visible = true;
-            g.talk.sys('sys.thiefSteal', { n: stole }, 'warn');
-            g.audio.sfx('harvest', { pos: p, pitch: 1.4 });
-          } else {
-            // Snatch a couple coins when plots are bare
-            this.loot += 1;
-            if (this.model.sack) this.model.sack.visible = true;
-            g.money = Math.max(0, (g.money | 0) - 3);
-            g.talk.sys('sys.thiefSteal', { n: 1 }, 'warn');
-            g.floats.add('-3¢', p.x, p.y + 1.2, p.z, '#ff8080');
-          }
+        if (!this.planted && dist < 1.35) {
+          this.planted = true;
+          const H = LAYOUT.house;
+          g.plantBomb(H.door[0] + 0.5, H.z1 - 0.35);
           this.beginFlee();
         } else {
           chaseAlong(this, dt, t.pos.x, t.pos.z, spd);

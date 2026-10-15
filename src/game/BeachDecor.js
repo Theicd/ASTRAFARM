@@ -4,7 +4,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { LAYOUT, GY, SEA, WX, WZ } from './world/World.js';
 
-import { B } from './world/blocks.js';
+import { B, isFarm } from './world/blocks.js';
+import { cropDefOf, isRipe } from './crops.js';
+import { findPath } from './nav.js';
 import { solidEntityMaterial, mapEntityMaterial, setEntityLight } from './world/materials.js';
 import { takeMobVisual, stepMobVisual } from './mobVisuals.js';
 import { syncDecorLabel } from './mobLabel.js';
@@ -811,13 +813,7 @@ export class BeachDecor {
     }
     for (const c of this._critters || []) {
       if (c.kind === 'bunny') {
-        const a = t * 0.45 + c.x;
-        c.v.root.position.x = c.x + Math.sin(a) * 1.6;
-        c.v.root.position.z = c.z + Math.cos(a * 0.7) * 1.1;
-        c.v.root.position.y = GY + 1;
-        c.v.root.rotation.y = a;
-        stepMobVisual(c.v, dt, true);
-        this._bunnyDig(c, dt);
+        this._bunnyWork(c, dt);
         syncDecorLabel(c, c.v.root, 'bunny', this.game.camera);
       } else {
         const a = t * 0.55 + c.z;
@@ -859,18 +855,107 @@ export class BeachDecor {
     this._shots = [];
   }
 
-  _bunnyDig(c, dt) {
+  _releaseBunny(c) {
+    if (!c.hold) return;
+    this.game.reserve?.(c.hold.x, c.hold.z, false);
+    c.hold = null;
+  }
+
+  _bunnyJob(c) {
     const g = this.game;
-    if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) return;
-    if (c.dig == null) c.dig = 8 + Math.random() * 14;
-    c.dig -= dt;
-    if (c.dig > 0) return;
+    const w = g.world;
     const pos = c.v.root.position;
-    const pp = g.player?.body?.pos;
-    if (!pp || Math.hypot(pp.x - pos.x, pp.z - pos.z) > 24) return;
-    c.dig = 48 + Math.random() * 36;
-    g.drops?.spawn('carrot', pos.x, pos.y + 0.35, pos.z, { vy: 2.2 });
-    g.particles?.burst(pos.x, pos.y + 0.1, pos.z, 0xdbd3a0, 8, 1, 0.55);
+    const zones = [LAYOUT.fieldA, LAYOUT.fieldB, LAYOUT.farmZone];
+    let best = null;
+    const consider = (type, x, z, score) => {
+      if (g.isReserved?.(x, z)) return;
+      if (!best || score < best.score) best = { type, x, z, score };
+    };
+    for (const F of zones) {
+      if (!F) continue;
+      for (let z = F.z0; z <= F.z1; z++) for (let x = F.x0; x <= F.x1; x++) {
+        const below = w.get(x, GY, z);
+        const at = w.get(x, GY + 1, z);
+        const d = Math.hypot(x + 0.5 - pos.x, z + 0.5 - pos.z);
+        const def = cropDefOf(at);
+        if (def?.id === 'carrot' && isRipe(at)) consider('harvest', x, z, d);
+        else if (isFarm(below) && at === B.AIR && g.seedCount?.('carrot') > 0) consider('plant', x, z, d + 1.5);
+        else if (def?.id === 'carrot') consider('tend', x, z, d + 4);
+      }
+    }
+    return best;
+  }
+
+  _bunnyWork(c, dt) {
+    const g = this.game;
+    const pos = c.v.root.position;
+    if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) {
+      pos.y = GY + 1;
+      stepMobVisual(c.v, dt, false);
+      return;
+    }
+    c.cool = (c.cool || 0) - dt;
+    if (c.act > 0) {
+      c.act -= dt;
+      pos.y = GY + 1;
+      stepMobVisual(c.v, dt, false);
+      if (c.act <= 0 && c.job) {
+        const run = (fn) => (g.syncFarm ? g.syncFarm(fn) : fn());
+        if (c.job.type === 'harvest') run(() => g.harvest(c.job.x, GY + 1, c.job.z, 'robot'));
+        else if (c.job.type === 'plant') run(() => g.plant(c.job.x, GY + 1, c.job.z, 'robot', 'carrot'));
+        else g.tendCarrot?.(c.job.x, c.job.z);
+        this._releaseBunny(c);
+        c.job = null;
+        c.cool = 0.4;
+      }
+      return;
+    }
+    if (!c.job && c.cool <= 0) {
+      const job = this._bunnyJob(c);
+      if (job) {
+        c.job = job;
+        c.hold = { x: job.x, z: job.z };
+        g.reserve?.(job.x, job.z, true);
+        const path = findPath(g.world, pos.x, pos.z, job.x + 0.5, job.z + 0.5, { near: 0.9, maxNodes: 2500 });
+        c.path = path.path;
+        c.pathI = 0;
+      } else {
+        const F = LAYOUT.fieldA;
+        const tx = (F.x0 + F.x1) * 0.5;
+        const tz = (F.z0 + F.z1) * 0.5;
+        if (Math.hypot(tx - pos.x, tz - pos.z) > 3) {
+          const path = findPath(g.world, pos.x, pos.z, tx, tz, { near: 1.2, maxNodes: 2500 });
+          c.path = path.path;
+          c.pathI = 0;
+          c.job = { type: 'wait', x: Math.floor(tx), z: Math.floor(tz) };
+        }
+        c.cool = 1.6;
+      }
+    }
+    let moving = false;
+    const jobDist = c.job ? Math.hypot(c.job.x + 0.5 - pos.x, c.job.z + 0.5 - pos.z) : 99;
+    if (c.job && c.job.type !== 'wait' && jobDist < 1.05) {
+      c.act = c.job.type === 'tend' ? 0.45 : 0.85;
+      c.path = null;
+    } else if (c.job?.type === 'wait' && jobDist < 2.2) {
+      this._releaseBunny(c);
+      c.job = null;
+      c.path = null;
+    } else if (c.job) {
+      const goal = c.path && c.pathI < c.path.length ? c.path[c.pathI] : null;
+      const tx = goal ? goal[0] + 0.5 : c.job.x + 0.5;
+      const tz = goal ? goal[1] + 0.5 : c.job.z + 0.5;
+      const dx = tx - pos.x, dz = tz - pos.z;
+      const dist = Math.hypot(dx, dz) || 1;
+      const step = Math.min(dist, 2.6 * dt);
+      pos.x += (dx / dist) * step;
+      pos.z += (dz / dist) * step;
+      c.v.root.rotation.y = Math.atan2(dx, dz);
+      moving = true;
+      if (goal && dist < 0.5) c.pathI++;
+    }
+    pos.y = GY + 1;
+    stepMobVisual(c.v, dt, moving);
   }
 
   _cannon(ship, tx, tz) {

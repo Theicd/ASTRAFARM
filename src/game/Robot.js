@@ -436,10 +436,10 @@ export class Robot {
             m.dist < 8 ||
             (m.mob.state === 'fuse' && m.dist < 12) ||
             (kind === 'dragon' && m.dist < 16) ||
-            (kind === 'thief' && m.dist < 10) ||
+            (kind === 'thief' && m.dist < 12) ||
             (kind === 'chomp' && m.dist < 10) ||
             (kind === 'hop' && m.dist < 9) ||
-            (kind === 'golem' && (m.mob.state === 'windup' || m.mob.state === 'smash') && m.dist < 14);
+            (kind === 'golem' && (m.mob.carriedPig || m.dist < 8));
           if (spook) this.panic(m.mob);
         }
       }
