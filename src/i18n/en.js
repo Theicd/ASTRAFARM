@@ -240,7 +240,7 @@ export const en = {
   'obj.grow': 'Harvest {n}/{m} — robots tend the fields',
   'obj.dawn': 'Morning: repair damage and harvest',
   'sys.turretLater': 'The guard tower opens on day 3. Until then, use the paint cannon.',
-  'sys.patrol': 'The shore patrol drives around the fields, not over them, and chases hostiles.',
+  'sys.patrol': 'The tank turns, then drives around the fields, and the turret shoots paint.',
   'sys.strategyGuard': 'In strategy view the farmer patrols the lodge and the pen and shoots paint, while the buggy stays around the fields.',
   'patrol.name': 'Shore patrol',
   'obj.boss': 'Defeat the Big Green Thing',

@@ -4,7 +4,7 @@ import { t } from '../core/i18n.js';
 import { LAYOUT, GY, WX, inRect } from './world/World.js';
 import { isFarm, isCrop } from './world/blocks.js';
 import { findPath } from './nav.js';
-import { dampAngle } from '../core/math.js';
+import { damp, dampAngle, wrapAngle } from '../core/math.js';
 
 /** Fields, lawn and beach belong to the buggy. The lodge, pen and outer grass belong to the farmer. */
 export function vehicleSector(x, z) {
@@ -36,6 +36,10 @@ export class Patrol {
     this.loop = ring;
     this.root.position.set(ring[0][0], GY + 1, ring[0][1]);
     this.yaw = 0;
+    this.speed = 0;
+    this.turretYaw = 0;
+    this.kick = 0;
+    this.flashT = 0;
     this.path = null;
     this.pathI = 0;
     this.repath = 0;
@@ -47,68 +51,98 @@ export class Patrol {
   }
 
   _build() {
-    const body = tex((g) => {
-      g.fillStyle = '#e7f4fb';
+    const sand = tex((g) => {
+      g.fillStyle = '#c4a36a';
       g.fillRect(0, 0, 128, 128);
-      g.fillStyle = '#2f7eb8';
-      g.fillRect(0, 0, 128, 28);
-      g.fillRect(0, 100, 128, 28);
-      g.fillStyle = '#f4b942';
-      g.fillRect(0, 58, 128, 14);
-      g.fillStyle = '#d7e6f2';
-      for (let x = 6; x < 128; x += 18) g.fillRect(x, 36, 8, 4);
+      g.fillStyle = '#a68448';
+      for (let y = 0; y < 128; y += 16) g.fillRect(0, y, 128, 2);
+      g.fillStyle = '#e6c98a';
+      g.fillRect(8, 8, 112, 8);
+      g.fillStyle = '#6e8f45';
+      g.fillRect(0, 56, 128, 14);
+      g.fillStyle = '#3e3428';
+      for (let x = 10; x < 120; x += 22) g.fillRect(x, 18, 3, 3);
+    });
+    const armor = tex((g) => {
+      g.fillStyle = '#6f8a48';
+      g.fillRect(0, 0, 128, 128);
+      g.fillStyle = '#8eae62';
+      g.fillRect(0, 0, 128, 22);
+      g.fillStyle = '#d2b15a';
+      g.fillRect(18, 40, 92, 10);
+      g.strokeStyle = '#2c3820';
+      g.lineWidth = 3;
+      g.strokeRect(8, 8, 112, 112);
+      g.fillStyle = '#243018';
+      for (let x = 16; x < 120; x += 28) for (let y = 28; y < 110; y += 28) g.fillRect(x, y, 4, 4);
     });
     const metal = tex((g) => {
-      g.fillStyle = '#c5d2de';
+      g.fillStyle = '#b7c0b0';
       g.fillRect(0, 0, 128, 128);
-      g.fillStyle = '#f7fbff';
-      g.fillRect(0, 16, 128, 20);
-      g.fillStyle = '#6d8296';
-      for (let i = 0; i < 10; i++) {
-        g.beginPath();
-        g.arc(12 + (i % 5) * 24, 70 + Math.floor(i / 5) * 34, 4, 0, Math.PI * 2);
-        g.fill();
-      }
+      g.fillStyle = '#eef2ea';
+      g.fillRect(0, 18, 128, 16);
+      g.fillStyle = '#5c6758';
+      for (let y = 0; y < 128; y += 9) g.fillRect(0, y, 128, 2);
     });
-    const glass = new THREE.MeshBasicMaterial({ color: 0x9fd8f2, transparent: true, opacity: 0.78 });
-    const rubber = new THREE.MeshBasicMaterial({ color: 0x1c2128 });
-    const hub = new THREE.MeshBasicMaterial({ color: 0xd8dee6 });
-    const lamp = new THREE.MeshBasicMaterial({ color: 0xfff1b0 });
-    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.36, 2.45), body);
-    hull.position.y = 0.46;
-    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.16, 0.85), metal);
-    hood.position.set(0, 0.68, -0.72);
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.42, 0.85), body);
-    cabin.position.set(0, 0.78, 0.05);
-    const win = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.28, 0.06), glass);
-    win.position.set(0, 0.84, -0.38);
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.08), lamp);
-    bar.position.set(0, 1.04, 0.05);
-    const bumper = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.1), metal);
-    bumper.position.set(0, 0.38, -1.22);
-    const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.05, 12), metal);
-    gun.rotation.x = Math.PI / 2;
-    gun.position.set(0, 0.95, -0.82);
-    for (const x of [-0.42, 0.42]) {
-      const light = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), lamp);
-      light.position.set(x, 0.52, -1.18);
-      this.root.add(light);
-    }
+    const tread = () => {
+      const c = document.createElement('canvas');
+      c.width = 64;
+      c.height = 128;
+      const g = c.getContext('2d');
+      g.fillStyle = '#241c14';
+      g.fillRect(0, 0, 64, 128);
+      g.fillStyle = '#4a3b2a';
+      for (let y = 0; y < 128; y += 12) g.fillRect(6, y, 52, 5);
+      g.fillStyle = '#120e0a';
+      g.fillRect(0, 0, 5, 128);
+      g.fillRect(59, 0, 5, 128);
+      const map = new THREE.CanvasTexture(c);
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.wrapS = map.wrapT = THREE.RepeatWrapping;
+      map.needsUpdate = true;
+      return new THREE.MeshBasicMaterial({ map });
+    };
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.42, 2.15), sand);
+    hull.position.y = 0.5;
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.08, 1.15), armor);
+    deck.position.set(0, 0.74, -0.15);
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.1, 0.34), armor);
+    nose.position.set(0, 0.62, 0.95);
+    const chevron = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.34, 3), new THREE.MeshBasicMaterial({ color: 0xf0c14a }));
+    chevron.rotation.x = Math.PI / 2;
+    chevron.position.set(0, 0.78, 0.95);
+    this.tracks = [];
     this.wheels = [];
-    const geo = new THREE.CylinderGeometry(0.32, 0.32, 0.18, 16);
-    const cap = new THREE.CylinderGeometry(0.14, 0.14, 0.2, 10);
-    for (const [x, z] of [[-0.78, -0.78], [0.78, -0.78], [-0.78, 0.72], [0.78, 0.72]]) {
-      const w = new THREE.Mesh(geo, rubber);
-      const h = new THREE.Mesh(cap, hub);
-      h.position.y = 0.01;
-      w.add(h);
-      w.position.set(x, 0.32, z);
-      this.wheels.push(w);
-      this.root.add(w);
+    const wheelGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.22, 10);
+    for (const side of [-1, 1]) {
+      const belt = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.36, 2.35), tread());
+      belt.position.set(side * 0.82, 0.32, 0);
+      this.tracks.push(belt.material.map);
+      this.root.add(belt);
+      for (const z of [-0.78, -0.26, 0.26, 0.78]) {
+        const w = new THREE.Mesh(wheelGeo, metal);
+        w.rotation.z = Math.PI / 2;
+        w.position.set(side * 0.82, 0.28, z);
+        this.wheels.push(w);
+        this.root.add(w);
+      }
     }
+    this.turret = new THREE.Group();
+    this.turret.position.set(0, 0.86, -0.12);
+    const dome = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.32, 12), armor);
+    dome.position.y = 0.16;
+    const hatch = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 8), metal);
+    hatch.position.y = 0.36;
+    this.barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.25, 10), metal);
+    this.barrel.rotation.x = Math.PI / 2;
+    this.barrel.position.set(0, 0.2, 0.72);
+    this.flash = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffe27a }));
+    this.flash.position.set(0, 0.2, 1.4);
+    this.flash.visible = false;
+    this.turret.add(dome, hatch, this.barrel, this.flash);
     const plate = this._plate();
-    plate.position.y = 1.55;
-    this.root.add(hull, hood, cabin, win, bar, bumper, gun, plate);
+    plate.position.y = 1.85;
+    this.root.add(hull, deck, nose, chevron, this.turret, plate);
   }
 
   _plate() {
@@ -207,29 +241,24 @@ export class Patrol {
     if (!g || g.titleMode || g.state !== 'play' || g.isNetClient?.()) return;
     this.cool = Math.max(0, this.cool - dt);
     this.repath -= dt;
+    this.flashT = Math.max(0, this.flashT - dt);
+    if (this.flash) this.flash.visible = this.flashT > 0;
+    this.kick = damp(this.kick, 0, 9, dt);
+    if (this.barrel) this.barrel.position.z = 0.72 - this.kick * 0.2;
     const p = this.root.position;
     const foe = this._foe();
-    let tx, tz, speed = 2.4;
+    let tx, tz;
     if (foe) {
       const edge = this._skirt(foe.pos.x, foe.pos.z);
       tx = edge[0]; tz = edge[1];
-      speed = 4.6;
-      const d = Math.hypot(tx - p.x, tz - p.z);
-      if (d < 10 && this.cool <= 0) {
-        const origin = new THREE.Vector3(p.x, p.y + 1.15, p.z);
-        const dir = new THREE.Vector3(tx - p.x, 0.2, tz - p.z);
-        g.launchPaint(origin, dir, 20);
-        this.cool = 0.42;
-      }
-      if (d < 4.5) speed = 1.4;
     } else {
       const spot = this.loop[this._i];
       tx = spot[0]; tz = spot[1];
-      if (Math.hypot(tx - p.x, tz - p.z) < 1.4) this._i = (this._i + 1) % this.loop.length;
+      if (Math.hypot(tx - p.x, tz - p.z) < 1.6) this._i = (this._i + 1) % this.loop.length;
     }
     if (this.repath <= 0) {
-      this.repath = foe ? 0.45 : 1.1;
-      const path = findPath(g.world, p.x, p.z, tx, tz, { near: 1.1, maxNodes: 1800, blocked: this._blocked });
+      this.repath = foe ? 0.55 : 1.2;
+      const path = findPath(g.world, p.x, p.z, tx, tz, { near: 1.2, maxNodes: 1800, blocked: this._blocked });
       this.path = path.path;
       this.pathI = 0;
     }
@@ -237,24 +266,63 @@ export class Patrol {
     if (this.path && this.pathI < this.path.length) {
       gx = this.path[this.pathI][0] + 0.5;
       gz = this.path[this.pathI][1] + 0.5;
-      if (Math.hypot(gx - p.x, gz - p.z) < 0.55) this.pathI++;
+      if (Math.hypot(gx - p.x, gz - p.z) < 0.7) this.pathI++;
     }
     const dx = gx - p.x, dz = gz - p.z;
     const dist = Math.hypot(dx, dz) || 1;
-    const step = Math.min(dist, speed * dt);
-    if (dist > 0.4) {
-      const nx = p.x + (dx / dist) * step;
-      const nz = p.z + (dz / dist) * step;
-      if (!this._onField(nx, nz)) {
-        p.x = nx;
-        p.z = nz;
-        this.wheelSpin += step * 3.2;
+    const desired = this._aim(gx, gz);
+    const err = wrapAngle(desired - this.yaw);
+    const turn = Math.max(-1.8 * dt, Math.min(1.8 * dt, err));
+    if (dist > 0.45) this.yaw += turn;
+    const aligned = Math.abs(err) < 0.4;
+    let want = 0;
+    if (dist > 0.55) {
+      const crawl = Math.max(0.08, 1 - Math.abs(err) / 1.15);
+      want = (foe ? 3.6 : 2.35) * (aligned ? 1 : crawl);
+      if (foe && Math.hypot(foe.pos.x - p.x, foe.pos.z - p.z) < 7) want = Math.min(want, 1.3);
+    }
+    this.speed = damp(this.speed, want, aligned ? 2.4 : 5, dt);
+    if (this.speed > 0.05 && dist > 0.4) {
+      const nx = p.x + Math.sin(this.yaw) * this.speed * dt;
+      const nz = p.z + Math.cos(this.yaw) * this.speed * dt;
+      if (this._onField(nx, nz)) this.speed = 0;
+      else { p.x = nx; p.z = nz; }
+    }
+    const aim = foe ? this._aim(foe.pos.x, foe.pos.z) : this.yaw;
+    this.turretYaw = dampAngle(this.turretYaw, aim, 6.5, dt);
+    if (this.turret) this.turret.rotation.y = this.turretYaw - this.yaw;
+    if (foe && this.cool <= 0) {
+      const range = Math.hypot(foe.pos.x - p.x, foe.pos.z - p.z);
+      const aimErr = Math.abs(wrapAngle(aim - this.turretYaw));
+      if (range < 12 && aimErr < 0.28) {
+        const origin = new THREE.Vector3();
+        this.flash.getWorldPosition(origin);
+        const dir = new THREE.Vector3(foe.pos.x - origin.x, 0.35, foe.pos.z - origin.z);
+        g.launchPaint(origin, dir, 24, 'cannon');
+        this.cool = 0.72;
+        this.kick = 1;
+        this.flashT = 0.08;
       }
     }
-    this.yaw = dampAngle(this.yaw, this._aim(tx, tz), 8, dt);
     p.y = GY + 1;
-    this.root.rotation.y = this.yaw + Math.PI;
-    for (const w of this.wheels) w.rotation.set(this.wheelSpin, 0, Math.PI / 2);
+    this.root.rotation.y = this.yaw;
+    const spin = this.wheelSpin + this.speed * dt * 7 + err * 2.2;
+    this.wheelSpin = spin;
+    for (const w of this.wheels) w.rotation.set(spin, 0, Math.PI / 2);
+    const scroll = this.speed * dt * 0.55;
+    for (const map of this.tracks) map.offset.y = (map.offset.y + scroll) % 1;
+    if (this.speed > 1.15) {
+      this._dust = (this._dust || 0) - dt;
+      if (this._dust <= 0) {
+        this._dust = 0.18;
+        g.particles?.burst(
+          p.x - Math.sin(this.yaw) * 1.15,
+          GY + 1.05,
+          p.z - Math.cos(this.yaw) * 1.15,
+          0xc6b48a, 3, 0.55, 0.22,
+        );
+      }
+    }
   }
 
   dispose() {

@@ -410,6 +410,39 @@ export const SFX = {
       perc(g.gain, t + dt, 0.1, 0.002, dt ? 0.26 : 0.08);
     }
   },
+  /** Patrol tank cannon — bass thump, crack, and a bright arcade zap. */
+  cannon(ctx, out, t, p = {}) {
+    const k = fin(p.pitch, 1);
+    const boom = osc(ctx, 'sine', 140 * k, t, t + 0.28);
+    boom.frequency.exponentialRampToValueAtTime(48 * k, t + 0.22);
+    const g = route(ctx, boom, out, { rev: 0.28, ...p });
+    perc(g.gain, t, 0.85, 0.004, 0.22);
+    const n = noise(ctx, t, t + 0.18);
+    const lp = filter(ctx, 'lowpass', 2200, 0.7);
+    lp.frequency.setValueAtTime(2400 * k, t);
+    lp.frequency.exponentialRampToValueAtTime(180, t + 0.16);
+    const g2 = route(ctx, n.connect(lp), out, { rev: 0.2, ...p });
+    perc(g2.gain, t, 0.55, 0.002, 0.12);
+    const zap = osc(ctx, 'square', 720 * k, t + 0.02, t + 0.16);
+    zap.frequency.exponentialRampToValueAtTime(220 * k, t + 0.14);
+    const g3 = route(ctx, zap.connect(filter(ctx, 'lowpass', 2800, 0.6)), out, p);
+    perc(g3.gain, t + 0.02, 0.16, 0.002, 0.1);
+  },
+  /** Paint round hitting a body — splat plus a bright arcade tick. */
+  paint_hit(ctx, out, t, p = {}) {
+    const k = fin(p.pitch, 1);
+    const n = noise(ctx, t, t + 0.16);
+    const bp = filter(ctx, 'bandpass', 1800 * k, 0.9);
+    bp.frequency.setValueAtTime(900 * k, t);
+    bp.frequency.exponentialRampToValueAtTime(3200 * k, t + 0.08);
+    const g = route(ctx, n.connect(bp), out, { rev: 0.18, ...p });
+    perc(g.gain, t, 0.62, 0.002, 0.1);
+    const tick = osc(ctx, 'square', 660 * k, t, t + 0.12);
+    tick.frequency.exponentialRampToValueAtTime(1480 * k, t + 0.07);
+    const g2 = route(ctx, tick.connect(filter(ctx, 'lowpass', 4200, 0.5)), out, p);
+    perc(g2.gain, t, 0.2, 0.002, 0.08);
+    INSTRUMENTS.pluck(ctx, out, t + 0.04, { f: 1568 * k, vel: 0.45, rev: 0.12 });
+  },
   /** Guard tower shot — cute balloon-pop arcade blip. */
   turret_pop(ctx, out, t, p = {}) {
     const k = fin(p.pitch, 1);

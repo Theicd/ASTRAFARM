@@ -1610,7 +1610,7 @@ export class Game {
     this.paints = [];
   }
 
-  launchPaint(origin, dir, speed = 28) {
+  launchPaint(origin, dir, speed = 28, sound = 'turret_pop') {
     const colors = [0xff3b5c, 0x3dff7a, 0x3aa0ff, 0xffd23a, 0xd15cff, 0xff8a2a];
     const color = colors[(this._paintI = ((this._paintI | 0) + 1) % colors.length)];
     const mesh = new THREE.Mesh(
@@ -1623,7 +1623,7 @@ export class Game {
     if (vel.lengthSq() < 1e-6) vel.set(0, 0, 1);
     vel.normalize().multiplyScalar(speed);
     this.paints.push({ mesh, vel, life: 0, color });
-    this.audio.sfx('turret_pop', { pitch: 1.45, dur: 0.12 });
+    this.audio.sfx(sound, { pos: origin, pitch: sound === 'cannon' ? 1 : 1.45, refDistance: 9 });
   }
 
   firePaint() {
@@ -1653,7 +1653,7 @@ export class Game {
       if (hit?.hit) {
         hit.hit(2, { x, y, z }, 0.45);
         if (hit.dead && !hit.sea) this.onMobKilled(hit, 'player');
-        this.audio.sfx('hit', { pos: { x, y, z }, pitch: 1.3 });
+        this.audio.sfx('paint_hit', { pos: { x, y, z }, pitch: 0.94 + Math.random() * 0.14 });
       }
       p.mesh.removeFromParent();
       this.paints.splice(i, 1);

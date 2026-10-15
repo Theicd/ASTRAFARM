@@ -27,26 +27,153 @@ function pickClip(clips, re) {
 
 const _paint = new Map();
 
-function paintOf(color) {
-  const key = color.getHexString();
+function skinKind(modelKey, name) {
+  const n = (name || '').toLowerCase();
+  const k = (modelKey || '').toLowerCase();
+  if (n.includes('eye') && n.includes('black')) return 'pupil';
+  if (n.includes('eye')) return 'eye';
+  if (n.includes('mouth') || n.includes('beak') || n.includes('tooth')) return 'horn';
+  if (n.includes('wood')) return 'wood';
+  if (n.includes('strap') || n.includes('metal') || n.includes('armor')) return 'metal';
+  if (k === 'fish' || k === 'dino' || n.includes('scale') || n.includes('flap')) return 'scale';
+  if (k === 'cactoro' || n.includes('leaf')) return 'plant';
+  if (k === 'ninja' || n.includes('cloth') || n.includes('cape')) return 'cloth';
+  if (k === 'yeti' || k === 'bunny') return 'fur';
+  if (k === 'alien') return 'metal';
+  return 'hide';
+}
+
+/** Baked light and material detail. These models have no albedo image, and MeshBasic has no lights. */
+function richPaint(color, kind) {
+  const key = 'rich|' + kind + '|' + color.getHexString();
   if (_paint.has(key)) return _paint.get(key);
   const c = document.createElement('canvas');
-  c.width = c.height = 64;
+  c.width = c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = '#' + key;
-  g.fillRect(0, 0, 64, 64);
-  for (let i = 0; i < 220; i++) {
-    const x = (i * 13) % 64;
-    const y = (i * 29) % 64;
-    g.fillStyle = i % 3 === 0 ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.2)';
-    g.fillRect(x, y, i % 5 === 0 ? 3 : 2, 2);
+  const mid = '#' + color.getHexString();
+  const light = '#' + color.clone().lerp(new THREE.Color(0xfff6e4), 0.42).getHexString();
+  const dark = '#' + color.clone().multiplyScalar(0.45).getHexString();
+  const accent = color.clone();
+  accent.offsetHSL(kind === 'plant' ? 0.12 : 0.06, 0.18, 0.06);
+  const accentHex = '#' + accent.getHexString();
+  if (kind === 'pupil') {
+    g.fillStyle = '#140e0c';
+    g.fillRect(0, 0, 128, 128);
+    g.fillStyle = '#f4f7ff';
+    g.beginPath();
+    g.arc(46, 42, 10, 0, Math.PI * 2);
+    g.fill();
+  } else if (kind === 'eye') {
+    g.fillStyle = light;
+    g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = dark;
+    g.lineWidth = 8;
+    g.strokeRect(6, 6, 116, 116);
+  } else {
+    const grd = g.createLinearGradient(0, 0, 0, 128);
+    grd.addColorStop(0, light);
+    grd.addColorStop(0.42, mid);
+    grd.addColorStop(1, dark);
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 128, 128);
+    if (kind === 'metal') {
+      g.strokeStyle = dark;
+      g.lineWidth = 3;
+      for (let y = 8; y < 128; y += 32) g.strokeRect(6, y, 116, 26);
+      g.fillStyle = light;
+      for (let x = 14; x < 120; x += 28) for (let y = 16; y < 120; y += 32) g.fillRect(x, y, 5, 5);
+      g.fillStyle = accentHex;
+      g.fillRect(0, 58, 128, 8);
+    } else if (kind === 'scale') {
+      g.fillStyle = dark;
+      for (let row = 0; row < 8; row++) {
+        const y = row * 16;
+        for (let x = (row % 2) * 12; x < 128; x += 24) {
+          g.beginPath();
+          g.ellipse(x + 12, y + 10, 11, 8, 0, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+      g.fillStyle = light;
+      g.globalAlpha = 0.55;
+      g.fillRect(0, 0, 128, 18);
+      g.globalAlpha = 1;
+    } else if (kind === 'plant') {
+      g.strokeStyle = dark;
+      g.lineWidth = 3;
+      for (let x = 8; x < 128; x += 18) {
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.lineTo(x + 6, 128);
+        g.stroke();
+      }
+      g.fillStyle = accentHex;
+      for (let i = 0; i < 9; i++) g.fillRect(8 + (i * 13) % 110, 10 + (i * 29) % 100, 4, 14);
+    } else if (kind === 'cloth') {
+      g.strokeStyle = 'rgba(20,16,28,0.35)';
+      g.lineWidth = 1;
+      for (let i = -128; i < 256; i += 8) {
+        g.beginPath();
+        g.moveTo(i, 0);
+        g.lineTo(i + 128, 128);
+        g.stroke();
+      }
+      g.fillStyle = accentHex;
+      g.fillRect(0, 24, 128, 10);
+      g.fillRect(0, 92, 128, 6);
+    } else if (kind === 'wood') {
+      g.fillStyle = dark;
+      for (let y = 0; y < 128; y += 14) g.fillRect(0, y, 128, 3);
+      g.fillStyle = 'rgba(255,220,160,0.25)';
+      g.fillRect(0, 4, 128, 4);
+    } else if (kind === 'fur') {
+      g.strokeStyle = dark;
+      g.lineWidth = 2;
+      for (let i = 0; i < 40; i++) {
+        const x = (i * 17) % 128;
+        const y = (i * 29) % 120;
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + 3, y + 10);
+        g.stroke();
+      }
+      g.fillStyle = light;
+      g.globalAlpha = 0.7;
+      g.fillRect(0, 86, 128, 28);
+      g.globalAlpha = 1;
+    } else if (kind === 'horn') {
+      g.fillStyle = light;
+      g.fillRect(0, 0, 128, 36);
+      g.fillStyle = accentHex;
+      g.fillRect(0, 70, 128, 16);
+    } else {
+      g.fillStyle = accentHex;
+      g.globalAlpha = 0.55;
+      for (let i = 0; i < 8; i++) {
+        g.beginPath();
+        g.ellipse(16 + (i * 31) % 100, 20 + (i * 23) % 70, 16, 11, i * 0.4, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+      g.fillStyle = light;
+      g.fillRect(0, 84, 128, 26);
+      g.strokeStyle = dark;
+      g.lineWidth = 2;
+      for (let y = 10; y < 128; y += 18) {
+        g.beginPath();
+        g.moveTo(0, y);
+        g.bezierCurveTo(40, y - 6, 90, y + 6, 128, y);
+        g.stroke();
+      }
+    }
+    g.strokeStyle = 'rgba(0,0,0,0.28)';
+    g.lineWidth = 4;
+    g.strokeRect(1, 1, 126, 126);
   }
-  g.fillStyle = 'rgba(0,0,0,0.1)';
-  for (let y = 4; y < 64; y += 9) g.fillRect(0, y, 64, 2);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 2);
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.anisotropy = 4;
   tex.needsUpdate = true;
   _paint.set(key, tex);
   return tex;
@@ -160,7 +287,7 @@ function basicMats(root, modelKey) {
       }
       return new THREE.MeshBasicMaterial({
         color: 0xffffff,
-        map: src?.map || paintOf(color),
+        map: src?.map || richPaint(color, skinKind(modelKey, name)),
         side: THREE.DoubleSide,
       });
     });
