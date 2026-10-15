@@ -76,9 +76,9 @@ export class Patrol {
     bar.position.set(0, 1.04, 0.05);
     const bumper = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.1), metal);
     bumper.position.set(0, 0.38, -1.22);
-    const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.62, 12), metal);
+    const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.05, 12), metal);
     gun.rotation.x = Math.PI / 2;
-    gun.position.set(0, 0.95, -0.55);
+    gun.position.set(0, 0.95, -0.82);
     for (const x of [-0.42, 0.42]) {
       const light = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), lamp);
       light.position.set(x, 0.52, -1.18);
@@ -241,7 +241,7 @@ export class Patrol {
     }
     this.yaw = dampAngle(this.yaw, this._aim(tx, tz), 8, dt);
     p.y = GY + 1;
-    this.root.rotation.y = this.yaw;
+    this.root.rotation.y = this.yaw + Math.PI;
     for (const w of this.wheels) w.rotation.set(this.wheelSpin, 0, Math.PI / 2);
   }
 
