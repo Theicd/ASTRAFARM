@@ -21,76 +21,86 @@ export class Patrol {
     this.root = new THREE.Group();
     this.root.name = 'patrol';
     this._build();
-    const x = LAYOUT.pathX + 3.2;
-    const z = LAYOUT.house.z1 + 3.4;
-    this.root.position.set(x, GY + 1, z);
-    this.yaw = 0;
+    const beach = LAYOUT.beach;
+    const shoreZ = (beach?.z1 ?? (LAYOUT.waterLineZ ?? 81) - 1) - 1.5;
+    const x0 = (beach?.x0 ?? LAYOUT.pathX - 24) + 4;
+    const x1 = (beach?.x1 ?? LAYOUT.pathX + 24) - 4;
+    this.loop = [[x0, shoreZ], [x1, shoreZ]];
+    this.root.position.set((x0 + x1) * 0.5, GY + 1, shoreZ);
+    this.yaw = Math.PI / 2;
     this.path = null;
     this.pathI = 0;
     this.repath = 0;
     this.cool = 0.4;
     this.wheelSpin = 0;
     this._i = 0;
-    const F = LAYOUT.farmZone;
-    this.loop = [
-      [F.x0 + 2, F.z0 + 2],
-      [F.x1 - 2, F.z0 + 2],
-      [F.x1 - 2, F.z1 - 2],
-      [F.x0 + 2, F.z1 - 2],
-    ];
     game.scene.add(this.root);
     game.talk?.sys('sys.patrol');
   }
 
   _build() {
     const body = tex((g) => {
-      g.fillStyle = '#2f6b3a';
+      g.fillStyle = '#e7f4fb';
       g.fillRect(0, 0, 128, 128);
-      g.fillStyle = '#f2f4f0';
-      g.fillRect(0, 54, 128, 16);
-      g.fillStyle = '#1d4a28';
-      for (let i = 0; i < 6; i++) g.fillRect(8 + i * 20, 18, 10, 6);
+      g.fillStyle = '#2f7eb8';
+      g.fillRect(0, 0, 128, 28);
+      g.fillRect(0, 100, 128, 28);
+      g.fillStyle = '#f4b942';
+      g.fillRect(0, 58, 128, 14);
+      g.fillStyle = '#d7e6f2';
+      for (let x = 6; x < 128; x += 18) g.fillRect(x, 36, 8, 4);
     });
     const metal = tex((g) => {
-      g.fillStyle = '#9eb0c0';
+      g.fillStyle = '#c5d2de';
       g.fillRect(0, 0, 128, 128);
-      g.fillStyle = '#e7eef4';
-      g.fillRect(0, 20, 128, 18);
-      g.fillStyle = '#5d7284';
-      for (let i = 0; i < 8; i++) {
+      g.fillStyle = '#f7fbff';
+      g.fillRect(0, 16, 128, 20);
+      g.fillStyle = '#6d8296';
+      for (let i = 0; i < 10; i++) {
         g.beginPath();
-        g.arc(16 + (i % 4) * 30, 78, 4, 0, Math.PI * 2);
+        g.arc(12 + (i % 5) * 24, 70 + Math.floor(i / 5) * 34, 4, 0, Math.PI * 2);
         g.fill();
       }
     });
-    const glass = new THREE.MeshBasicMaterial({ color: 0xb7e4ff, transparent: true, opacity: 0.72 });
-    const rubber = new THREE.MeshBasicMaterial({ color: 0x22262c });
-    const paint = tex((g) => {
-      const cols = ['#ff4d6a', '#3dff7a', '#3aa0ff', '#ffd23a'];
-      cols.forEach((c, i) => { g.fillStyle = c; g.fillRect(i * 32, 0, 32, 128); });
-    });
-    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.42, 2.15), body);
-    hull.position.y = 0.48;
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.48, 0.9), body);
-    cabin.position.set(0, 0.88, -0.15);
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.28, 0.08), glass);
-    win.position.set(0, 0.92, -0.58);
-    const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.7, 10), metal);
+    const glass = new THREE.MeshBasicMaterial({ color: 0x9fd8f2, transparent: true, opacity: 0.78 });
+    const rubber = new THREE.MeshBasicMaterial({ color: 0x1c2128 });
+    const hub = new THREE.MeshBasicMaterial({ color: 0xd8dee6 });
+    const lamp = new THREE.MeshBasicMaterial({ color: 0xfff1b0 });
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.36, 2.45), body);
+    hull.position.y = 0.46;
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.16, 0.85), metal);
+    hood.position.set(0, 0.68, -0.72);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.42, 0.85), body);
+    cabin.position.set(0, 0.78, 0.05);
+    const win = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.28, 0.06), glass);
+    win.position.set(0, 0.84, -0.38);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.08), lamp);
+    bar.position.set(0, 1.04, 0.05);
+    const bumper = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.1), metal);
+    bumper.position.set(0, 0.38, -1.22);
+    const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.62, 12), metal);
     gun.rotation.x = Math.PI / 2;
-    gun.position.set(0, 1.05, -0.55);
-    const tank = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.42), paint);
-    tank.position.set(0, 0.78, 0.55);
+    gun.position.set(0, 0.95, -0.55);
+    for (const x of [-0.42, 0.42]) {
+      const light = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), lamp);
+      light.position.set(x, 0.52, -1.18);
+      this.root.add(light);
+    }
     this.wheels = [];
-    const geo = new THREE.CylinderGeometry(0.28, 0.28, 0.16, 14);
-    for (const [x, z] of [[-0.62, -0.7], [0.62, -0.7], [-0.62, 0.7], [0.62, 0.7]]) {
+    const geo = new THREE.CylinderGeometry(0.32, 0.32, 0.18, 16);
+    const cap = new THREE.CylinderGeometry(0.14, 0.14, 0.2, 10);
+    for (const [x, z] of [[-0.78, -0.78], [0.78, -0.78], [-0.78, 0.72], [0.78, 0.72]]) {
       const w = new THREE.Mesh(geo, rubber);
-      w.position.set(x, 0.28, z);
+      const h = new THREE.Mesh(cap, hub);
+      h.position.y = 0.01;
+      w.add(h);
+      w.position.set(x, 0.32, z);
       this.wheels.push(w);
       this.root.add(w);
     }
     const plate = this._plate();
-    plate.position.y = 1.7;
-    this.root.add(hull, cabin, win, gun, tank, plate);
+    plate.position.y = 1.55;
+    this.root.add(hull, hood, cabin, win, bar, bumper, gun, plate);
   }
 
   _plate() {

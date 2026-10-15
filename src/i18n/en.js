@@ -240,8 +240,8 @@ export const en = {
   'obj.grow': 'Harvest {n}/{m} — robots tend the fields',
   'obj.dawn': 'Morning: repair damage and harvest',
   'sys.turretLater': 'The guard tower opens on day 3. Until then, use the paint cannon.',
-  'sys.patrol': 'The farm patrol is out — it chases hostiles.',
-  'patrol.name': 'Farm patrol',
+  'sys.patrol': 'The shore patrol drives the waterline and chases hostiles.',
+  'patrol.name': 'Shore patrol',
   'obj.boss': 'Defeat the Big Green Thing',
   'obj.done': 'Goal reached! Keep harvesting',
 
