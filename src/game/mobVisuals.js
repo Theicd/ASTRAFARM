@@ -167,6 +167,13 @@ export function takeMobVisual(key, height = 1.8, gameplayScale = null) {
       if (o.isBone && /upperleg/i.test(o.name)) legs.push(o);
     });
   }
+  const pins = [];
+  visual.traverse((o) => {
+    if (o === visual) return;
+    if (o.name === 'Root' || o.name === 'CharacterArmature' || o.parent === visual) {
+      pins.push({ o, x: o.position.x, y: o.position.y, z: o.position.z });
+    }
+  });
   return {
     root,
     scale: scaleG,
@@ -174,6 +181,7 @@ export function takeMobVisual(key, height = 1.8, gameplayScale = null) {
     idle,
     walk,
     legs,
+    pins,
     mat: { uniforms: {} },
     baseScale: gameplayScale ?? height * 0.82,
     fitScale: scale,
@@ -197,6 +205,9 @@ export function stepMobVisual(model, dt, moving) {
   if (model.walk) model.walk.setEffectiveWeight(w);
   if (model.idle) model.idle.setEffectiveWeight(model.walk ? 1 - w : 1);
   model.mixer.update(dt);
+  if (model.pins) {
+    for (const pin of model.pins) pin.o.position.set(pin.x, pin.y, pin.z);
+  }
   if (!model.walk && model.legs?.length) {
     model._step = (model._step || 0) + dt * (moving ? 9 : 2);
     const sw = Math.sin(model._step) * (moving ? 0.75 : 0.06);

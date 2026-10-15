@@ -695,9 +695,9 @@ export class BeachDecor {
     }
     this._placeHutch();
     const birbs = [
-      [xMid - 20, GY + 8, z0 + 6],
-      [xMid + 30, GY + 11, z0 + 10],
-      [xMid + 4, GY + 14, z0 + 2],
+      [xMid - 20, GY + 4.2, z0 + 6],
+      [xMid + 30, GY + 5.2, z0 + 10],
+      [xMid + 4, GY + 3.6, z0 + 2],
     ];
     for (const [x, y, z] of birbs) {
       const v = takeMobVisual('Birb', 0.7);
@@ -716,14 +716,14 @@ export class BeachDecor {
     const z1 = beach?.z1 ?? z0 + 12;
     // Spread along the shore and out over the water — not one tight circle.
     const flock = [
-      { x: xMid - 34, y: GY + 6.5, z: z0 + 2, speed: 0.32, phase: 0.3, rx: 16, rz: 2.5 },
-      { x: xMid + 28, y: GY + 8, z: z1 - 1, speed: 0.26, phase: 1.7, rx: 18, rz: 3 },
-      { x: xMid - 6, y: GY + 13, z: z0 + 4, speed: 0.18, phase: 2.4, rx: 12, rz: 6 },
-      { x: xMid - 52, y: GY + 5.5, z: z1 + 16, speed: 0.38, phase: 0.8, rx: 14, rz: 7 },
-      { x: xMid + 20, y: GY + 7, z: z1 + 28, speed: 0.3, phase: 3.2, rx: 20, rz: 9 },
-      { x: xMid + 58, y: GY + 10, z: z1 + 14, speed: 0.22, phase: 4.1, rx: 16, rz: 5 },
-      { x: xMid - 22, y: GY + 15, z: z1 + 42, speed: 0.16, phase: 2.0, rx: 24, rz: 11 },
-      { x: xMid + 8, y: GY + 9, z: z1 + 55, speed: 0.2, phase: 5.1, rx: 18, rz: 8 },
+      { x: xMid - 34, y: GY + 4.2, z: z0 + 2, speed: 0.32, phase: 0.3, rx: 16, rz: 2.5 },
+      { x: xMid + 28, y: GY + 5.0, z: z1 - 1, speed: 0.26, phase: 1.7, rx: 18, rz: 3 },
+      { x: xMid - 6, y: GY + 5.6, z: z0 + 4, speed: 0.18, phase: 2.4, rx: 12, rz: 6 },
+      { x: xMid - 52, y: GY + 4.4, z: z1 + 6, speed: 0.38, phase: 0.8, rx: 10, rz: 4 },
+      { x: xMid + 20, y: GY + 4.8, z: z1 + 4, speed: 0.3, phase: 3.2, rx: 12, rz: 4 },
+      { x: xMid + 58, y: GY + 5.2, z: z1 + 2, speed: 0.22, phase: 4.1, rx: 10, rz: 3 },
+      { x: xMid - 22, y: GY + 5.8, z: z0 + 8, speed: 0.16, phase: 2.0, rx: 8, rz: 3 },
+      { x: xMid + 8, y: GY + 4.6, z: z1 + 8, speed: 0.2, phase: 5.1, rx: 10, rz: 4 },
     ];
     for (const b of flock) {
       const bird = makeSeagull(mats);
@@ -780,7 +780,7 @@ export class BeachDecor {
         const a = t * 0.55 + c.z;
         c.v.root.position.x = c.x + Math.cos(a) * 6;
         c.v.root.position.z = c.z + Math.sin(a * 0.6) * 4;
-        c.v.root.position.y = c.y + Math.sin(a * 1.3) * 0.8;
+        c.v.root.position.y = Math.min(GY + 7, c.y + Math.sin(a * 1.3) * 0.35);
         c.v.root.rotation.y = -a;
         stepMobVisual(c.v, dt, true);
       }
@@ -791,7 +791,7 @@ export class BeachDecor {
       const a = t * b.speed + b.phase;
       b.mesh.position.x = b.x + Math.cos(a) * b.rx;
       b.mesh.position.z = b.z + Math.sin(a * 0.65) * b.rz;
-      b.mesh.position.y = b.y + Math.sin(a * 1.4) * 0.7;
+      b.mesh.position.y = Math.min(GY + 7, b.y + Math.sin(a * 1.4) * 0.45);
       b.mesh.rotation.y = -Math.sin(a) * 0.9;
       b.mesh.rotation.z = Math.sin(t * 7 + b.phase) * 0.28;
     }
