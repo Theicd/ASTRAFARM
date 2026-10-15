@@ -42,7 +42,7 @@ function skinKind(modelKey, name) {
   return 'hide';
 }
 
-/** Baked light and material detail. These models have no albedo image, and MeshBasic has no lights. */
+/** Sharp same-hue shading. Cream-mixing was turning green orcs and the rest into gray. */
 function richPaint(color, kind) {
   const key = 'rich|' + kind + '|' + color.getHexString();
   if (_paint.has(key)) return _paint.get(key);
@@ -50,10 +50,14 @@ function richPaint(color, kind) {
   c.width = c.height = 128;
   const g = c.getContext('2d');
   const mid = '#' + color.getHexString();
-  const light = '#' + color.clone().lerp(new THREE.Color(0xfff6e4), 0.42).getHexString();
-  const dark = '#' + color.clone().multiplyScalar(0.45).getHexString();
+  const lightC = color.clone();
+  lightC.offsetHSL(0, 0.04, 0.16);
+  const darkC = color.clone();
+  darkC.multiplyScalar(0.62);
   const accent = color.clone();
-  accent.offsetHSL(kind === 'plant' ? 0.12 : 0.06, 0.18, 0.06);
+  accent.offsetHSL(kind === 'plant' ? 0.08 : 0.04, 0.12, 0.04);
+  const light = '#' + lightC.getHexString();
+  const dark = '#' + darkC.getHexString();
   const accentHex = '#' + accent.getHexString();
   if (kind === 'pupil') {
     g.fillStyle = '#140e0c';
@@ -165,13 +169,10 @@ function richPaint(color, kind) {
         g.stroke();
       }
     }
-    g.strokeStyle = 'rgba(0,0,0,0.28)';
-    g.lineWidth = 4;
-    g.strokeRect(1, 1, 126, 126);
   }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.anisotropy = 4;
   tex.needsUpdate = true;
   _paint.set(key, tex);
@@ -246,6 +247,77 @@ function featherPaint(base, vane, shaft) {
   return tex;
 }
 
+const PALETTE = {
+  Orc: {
+    orc_main: ['#46c83a', 'hide'],
+    orc_secondary: ['#1e8a34', 'hide'],
+    belt: ['#a86a32', 'wood'],
+    orc_mouth: ['#f0989a', 'hide'],
+    tongue: ['#e23b48', 'hide'],
+    gold: ['#f2c14a', 'metal'],
+    orc_hair: ['#2a3f86', 'fur'],
+    wood: ['#c48a48', 'wood'],
+    metal: ['#d7e2ee', 'metal'],
+  },
+  Alien: {
+    alien_main: ['#7a32e0', 'metal'],
+    alien_secondary: ['#3dce4a', 'plant'],
+    tongue: ['#ff5a8a', 'hide'],
+  },
+  Cactoro: {
+    cactoro_main: ['#3ecf45', 'plant'],
+    'cactoro_main.001': ['#3ecf45', 'plant'],
+    cactoro_secondary: ['#e0a24a', 'wood'],
+    cactoro_red: ['#e23b3b', 'hide'],
+  },
+  Dino: {
+    dino_main: ['#e4456a', 'scale'],
+    dino_secondary: ['#f0a030', 'scale'],
+    dino_teeth: ['#f7f3ea', 'horn'],
+    dino_tongue: ['#e23b4a', 'hide'],
+  },
+  Fish: {
+    fish_main: ['#1a92e0', 'scale'],
+    fish_secondary: ['#22d4c8', 'scale'],
+    fish_flaps: ['#f0a030', 'scale'],
+    mouth: ['#f07888', 'hide'],
+  },
+  Frog: {
+    frog_main: ['#46d24a', 'hide'],
+    frog_secondary: ['#f0d24a', 'hide'],
+  },
+  MushroomKing: {
+    mushroomking_main: ['#e23b3b', 'hide'],
+    mushroomking_secondary: ['#f6efe2', 'hide'],
+    orc_main: ['#46c840', 'plant'],
+  },
+  Ninja: {
+    ninja_main: ['#242433', 'cloth'],
+    ninja_secondary: ['#c48a4a', 'cloth'],
+    belt: ['#2a241c', 'wood'],
+    gold: ['#f0c040', 'metal'],
+    birb_secondary: ['#d8d4cc', 'cloth'],
+  },
+  Yeti: {
+    yeti_main: ['#f7f4ee', 'fur'],
+    yeti_secondary: ['#3aa0e8', 'fur'],
+    yeti_teeth: ['#f4efe4', 'horn'],
+    tongue: ['#e07080', 'hide'],
+  },
+};
+
+function paletteOf(modelKey, name) {
+  return PALETTE[modelKey]?.[name] || null;
+}
+
+function punch(color) {
+  const hsl = { h: 0, s: 0, l: 0 };
+  color.getHSL(hsl);
+  const s = hsl.s < 0.08 ? hsl.s : Math.min(0.82, Math.max(0.48, hsl.s * 1.6));
+  const l = hsl.s < 0.08 ? Math.min(0.7, Math.max(0.28, hsl.l)) : Math.min(0.58, Math.max(0.4, hsl.l));
+  color.setHSL(hsl.h, s, l);
+}
+
 function namedPaint(modelKey, name) {
   if (modelKey === 'Bunny') {
     if (name === 'bunny_main') return hidePaint('#fff7f1', '#f6c9d4', '#ffe4c8');
@@ -278,19 +350,32 @@ function basicMats(root, modelKey) {
       if (painted) {
         return new THREE.MeshBasicMaterial({ color: 0xffffff, map: painted, side: THREE.DoubleSide });
       }
-      const sum = color.r + color.g + color.b;
-      if (name.includes('eye') && name.includes('black')) color.setRGB(0.015, 0.015, 0.02);
-      else if (sum < 0.04) color.setRGB(0.22, 0.2, 0.24);
-      else {
-        const k = Math.min(6, Math.max(1, 0.55 / Math.max(0.08, sum)));
-        color.multiplyScalar(k);
-        color.r = Math.min(1, Math.pow(color.r, 0.8));
-        color.g = Math.min(1, Math.pow(color.g, 0.8));
-        color.b = Math.min(1, Math.pow(color.b, 0.8));
+      const look = paletteOf(modelKey, name);
+      let kind = skinKind(modelKey, name);
+      if (look) {
+        color.set(look[0]);
+        kind = look[1];
+      } else if (name.includes('eye') && name.includes('black')) {
+        color.setRGB(0.04, 0.03, 0.03);
+        kind = 'pupil';
+      } else if (name.includes('eye')) {
+        color.setRGB(0.96, 0.97, 0.98);
+        kind = 'eye';
+      } else {
+        const sum = color.r + color.g + color.b;
+        if (sum < 0.04) color.setRGB(0.22, 0.2, 0.24);
+        else {
+          const k = Math.min(6, Math.max(1, 0.55 / Math.max(0.08, sum)));
+          color.multiplyScalar(k);
+          color.r = Math.min(1, color.r);
+          color.g = Math.min(1, color.g);
+          color.b = Math.min(1, color.b);
+        }
+        punch(color);
       }
       return new THREE.MeshBasicMaterial({
         color: 0xffffff,
-        map: src?.map || richPaint(color, skinKind(modelKey, name)),
+        map: src?.map || richPaint(color, kind),
         side: THREE.DoubleSide,
       });
     });
