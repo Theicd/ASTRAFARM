@@ -456,15 +456,32 @@ export class Game {
     return m;
   }
 
-  /** Swarm pool — boom-style pests that show up often (not rare events). */
+  /** Even rotation: cactus, mushroom, frog, dino, orc, ninja, then one sea beast. */
   pickSwarmKind(rng) {
-    const r = rng();
-    if (r < 0.22) return 'boom';
-    if (r < 0.4) return 'chomp';
-    if (r < 0.58) return 'hop';
-    if (r < 0.78) return 'dino';
-    if (r < 0.9) return 'sea';
-    return 'boom';
+    const roster = ['boom', 'chomp', 'hop', 'dino', 'golem', 'thief', 'sea'];
+    if (!this._roster || !this._roster.length) {
+      this._roster = roster.slice();
+      for (let i = this._roster.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        const swap = this._roster[i];
+        this._roster[i] = this._roster[j];
+        this._roster[j] = swap;
+      }
+      if (this._rosterLast && this._roster[0] === this._rosterLast) this._roster.push(this._roster.shift());
+    }
+    let guard = this._roster.length;
+    while (guard-- > 0) {
+      const kind = this._roster[0];
+      const alive = this.mobs.filter((m) => !m.dead && m.kind === kind && !(kind === 'boom' && m.big)).length;
+      if (alive >= 1) {
+        this._roster.push(this._roster.shift());
+        continue;
+      }
+      break;
+    }
+    const kind = this._roster.shift();
+    this._rosterLast = kind;
+    return kind;
   }
 
   /** Peer placed a guard tower — mirror without charging coins again. */
@@ -805,6 +822,8 @@ export class Game {
     this._lodgeWarn = false;
     this._buildLodgeBar();
     this.spawnPigs();
+    this._roster = null;
+    this._rosterLast = null;
     this.talk.reset();
     this.hud.clearChat();
     this.tut = null;
@@ -1088,22 +1107,11 @@ export class Game {
       daySlots.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / Math.max(1, cfg.mobsDay), kind });
     }
     if (i === 0) for (let k = 0; k < daySlots.length; k++) daySlots[k].t = 130 + k * 15; // day-1 tutorial boom
-    // Day raids (after tutorial day): mix special roles so robots still panic home
-    if (i >= 1 && daySlots.length >= 1) {
-      const roll = rng();
-      daySlots[0].kind = roll < 0.4 ? 'thief' : roll < 0.7 ? 'golem' : this.pickSwarmKind(rng);
-    }
-    if (i >= 1 && daySlots.length >= 2) {
-      daySlots[1].kind = rng() < 0.5 ? 'thief' : 'golem';
-    }
-    // Dragon only by day — robots sleep indoors at night, so night snatches are unfair
+    // Dragon only by day, and only once — robots sleep indoors at night
     if (i === 0) {
-      daySlots.push({ t: 150, kind: 'dragon' }); // after tutorial boom settles
+      daySlots.push({ t: 150, kind: 'dragon' });
     } else {
-      daySlots.push({ t: start + (end - start) * (0.4 + rng() * 0.35), kind: 'dragon' });
-      if (rng() < 0.35) {
-        daySlots.push({ t: start + (end - start) * (0.15 + rng() * 0.2), kind: 'dragon' });
-      }
+      daySlots.push({ t: start + (end - start) * (0.45 + rng() * 0.3), kind: 'dragon' });
     }
     for (const s of daySlots) list.push(s);
 
@@ -1116,11 +1124,6 @@ export class Game {
         kind: this.pickSwarmKind(rng),
       });
     }
-    // Guarantee special roles on top of the swarm mix (no dragon at night)
-    if (nightSlots.length >= 2) nightSlots[1].kind = 'thief';
-    if (nightSlots.length >= 3) nightSlots[2].kind = 'golem';
-    if (nightSlots.length >= 4) nightSlots[3].kind = 'dino';
-    if (nightSlots.length >= 5) nightSlots[4].kind = rng() < 0.5 ? 'sea' : 'dino';
     for (const s of nightSlots) list.push(s);
     if (cfg.boss) list.push({ t: ns + cfg.night * 0.35, big: true, kind: 'boom' });
     return list.sort((a, b) => a.t - b.t);
@@ -1158,8 +1161,7 @@ export class Game {
     for (let k = 0; k < extra; k++) {
       const u = (k + 0.15 + rng() * 0.7) / Math.max(1, extra);
       // Extra pressure: mix roles so towers attract variety, not just booms
-      const roll = rng();
-      const kind = roll < 0.25 ? 'thief' : roll < 0.4 ? 'golem' : this.pickSwarmKind(rng);
+      const kind = this.pickSwarmKind(rng);
       this.schedule.push({ t: ns + 5 + u * (nightLen - 18), surge: true, kind });
     }
     // Surprise mid-night cluster when the farm is well defended

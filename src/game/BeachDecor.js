@@ -770,7 +770,7 @@ export class BeachDecor {
       this._fish.push(this._armSea(v, {
         x, z: Math.min(WZ - 3, z), yaw,
         labelKey: 'fish', kind: 'fish',
-        cool: 10 + Math.random() * 16,
+        cool: 55 + Math.random() * 40,
         hp: 5,
       }));
     }
@@ -1101,7 +1101,7 @@ export class BeachDecor {
       f.cool = (f.cool || 0) - dt;
       if (f.cool > 0) return;
       const busy = (this._fish || []).some((o) => o !== f && o.kind === 'fish' && o.state !== 'under');
-      if (f.kind === 'fish' && busy) { f.cool = 4; return; }
+      if (f.kind === 'fish' && busy) { f.cool = 28; return; }
       const raid = this._pickSeaRaid();
       if (!raid) { f.cool = 8; return; }
       f.raid = raid;
@@ -1135,7 +1135,7 @@ export class BeachDecor {
       this._seaHide(f);
       f.state = 'under';
       f.raid = null;
-      f.cool = f.rare ? 0 : 34 + Math.random() * 18;
+      f.cool = f.rare ? 0 : 100 + Math.random() * 80;
       if (f.rare) f.gone = true;
       return;
     } else if (dist > 0.05) {
