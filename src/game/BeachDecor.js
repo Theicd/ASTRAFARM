@@ -59,13 +59,118 @@ function adaptGltf(root, mats) {
   });
 }
 
+function gullMaterials(mats) {
+  const body = new THREE.MeshBasicMaterial({
+    map: canvasTex('gull-body', (ctx, w, h) => {
+      ctx.fillStyle = '#f6f3ec';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(150,150,140,0.45)';
+      ctx.lineWidth = 1;
+      for (let row = 0; row < 9; row++) {
+        const y = 8 + row * 14;
+        for (let x = (row % 2) * 8; x < w; x += 18) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.quadraticCurveTo(x + 8, y - 7, x + 16, y);
+          ctx.stroke();
+        }
+      }
+    }, 1),
+  });
+  const mantle = new THREE.MeshBasicMaterial({
+    map: canvasTex('gull-mantle', (ctx, w, h) => {
+      const grd = ctx.createLinearGradient(0, 0, 0, h);
+      grd.addColorStop(0, '#d5dde4');
+      grd.addColorStop(1, '#9aa7b3');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(50,60,70,0.35)';
+      for (let y = 6; y < h; y += 11) ctx.strokeRect(0, y, w, 0);
+    }, 1),
+  });
+  const wing = new THREE.MeshBasicMaterial({
+    map: canvasTex('gull-wing', (ctx, w, h) => {
+      ctx.clearRect(0, 0, w, h);
+      ctx.beginPath();
+      ctx.moveTo(4, h * 0.58);
+      ctx.quadraticCurveTo(w * 0.28, h * 0.12, w * 0.7, h * 0.3);
+      ctx.quadraticCurveTo(w * 0.92, h * 0.34, w - 2, h * 0.46);
+      ctx.lineTo(w * 0.9, h * 0.58);
+      ctx.quadraticCurveTo(w * 0.5, h * 0.9, 6, h * 0.74);
+      ctx.closePath();
+      const grd = ctx.createLinearGradient(0, 0, w, 0);
+      grd.addColorStop(0, '#f3f1ea');
+      grd.addColorStop(0.28, '#d5dde3');
+      grd.addColorStop(0.62, '#8f9bab');
+      grd.addColorStop(0.84, '#2c3238');
+      grd.addColorStop(1, '#16181c');
+      ctx.fillStyle = grd;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(30,36,44,0.4)';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 8; i++) {
+        ctx.beginPath();
+        ctx.moveTo(18 + i * 13, h * 0.32);
+        ctx.lineTo(28 + i * 13, h * 0.78);
+        ctx.stroke();
+      }
+    }, 1),
+    transparent: true,
+    alphaTest: 0.35,
+    side: THREE.DoubleSide,
+  });
+  const beak = new THREE.MeshBasicMaterial({
+    map: canvasTex('gull-beak', (ctx, w, h) => {
+      ctx.fillStyle = '#f2b434';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#d23a32';
+      ctx.fillRect(w * 0.62, h * 0.35, w * 0.22, h * 0.3);
+      ctx.fillStyle = '#ffe08a';
+      ctx.fillRect(0, h * 0.15, w, 4);
+    }, 1),
+  });
+  const eye = new THREE.MeshBasicMaterial({ color: 0x1c140e });
+  const pupilRing = new THREE.MeshBasicMaterial({ color: 0xf4d24a });
+  mats.push(body, mantle, wing, beak, eye, pupilRing);
+  return { body, mantle, wing, beak, eye, pupilRing };
+}
+
 function makeSeagull(mats) {
+  const M = gullMaterials(mats);
   const g = new THREE.Group();
-  const body = mat(0xf5f5f5, 1.15);
-  const wing = mat(0xd0d4d8, 1.12);
-  box(g, mats, 0.55, 0.28, 0.28, 0, 0, 0, body);
-  box(g, mats, 1.4, 0.08, 0.35, 0, 0.05, 0, wing);
-  box(g, mats, 0.2, 0.12, 0.12, 0.35, 0.02, 0, mat(0xf0a020, 1.15));
+  const add = (geo, mat, x, y, z, parent = g) => {
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    parent.add(mesh);
+    return mesh;
+  };
+  const torso = add(new THREE.SphereGeometry(0.16, 12, 8), M.body, 0, 0, 0);
+  torso.scale.set(0.82, 0.7, 1.65);
+  const saddle = add(new THREE.SphereGeometry(0.13, 10, 8), M.mantle, 0, 0.07, -0.02);
+  saddle.scale.set(0.72, 0.32, 1.25);
+  add(new THREE.SphereGeometry(0.09, 10, 8), M.body, 0, 0.07, 0.26);
+  const bill = add(new THREE.ConeGeometry(0.035, 0.2, 7), M.beak, 0, 0.05, 0.42);
+  bill.rotation.x = Math.PI / 2;
+  add(new THREE.SphereGeometry(0.028, 8, 6), M.pupilRing, 0.055, 0.09, 0.31);
+  add(new THREE.SphereGeometry(0.028, 8, 6), M.pupilRing, -0.055, 0.09, 0.31);
+  add(new THREE.SphereGeometry(0.016, 6, 6), M.eye, 0.068, 0.09, 0.328);
+  add(new THREE.SphereGeometry(0.016, 6, 6), M.eye, -0.068, 0.09, 0.328);
+  const tail = add(new THREE.BoxGeometry(0.14, 0.02, 0.26), M.body, 0, 0.01, -0.3);
+  tail.rotation.x = 0.35;
+  const wingOf = (side) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.1, 0.05, 0);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.38), M.wing);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.set(side * 0.52, 0, 0);
+    if (side < 0) plane.scale.x = -1;
+    pivot.add(plane);
+    g.add(pivot);
+    return pivot;
+  };
+  g.userData.wingL = wingOf(1);
+  g.userData.wingR = wingOf(-1);
+  g.scale.setScalar(1.45);
   return g;
 }
 
@@ -702,6 +807,10 @@ export class BeachDecor {
     for (const [x, y, z] of birbs) {
       const v = takeMobVisual('Birb', 0.7);
       if (!v) continue;
+      v.wings = [];
+      v.root.traverse((o) => {
+        if (o.isBone && /upperarm/i.test(o.name)) v.wings.push(o);
+      });
       v.root.position.set(x, y, z);
       this.root.add(v.root);
       this._critters.push({ v, x, y, z, kind: 'birb' });
@@ -778,22 +887,37 @@ export class BeachDecor {
         syncDecorLabel(c, c.v.root, 'bunny', this.game.camera);
       } else {
         const a = t * 0.55 + c.z;
-        c.v.root.position.x = c.x + Math.cos(a) * 6;
-        c.v.root.position.z = c.z + Math.sin(a * 0.6) * 4;
-        c.v.root.position.y = Math.min(GY + 7, c.y + Math.sin(a * 1.3) * 0.35);
-        c.v.root.rotation.y = -a;
-        stepMobVisual(c.v, dt, true);
+        const nx = c.x + Math.cos(a) * 6;
+        const nz = c.z + Math.sin(a * 0.6) * 4;
+        const root = c.v.root;
+        const dx = nx - root.position.x;
+        const dz = nz - root.position.z;
+        root.position.set(nx, Math.min(GY + 7, c.y + Math.sin(a * 1.3) * 0.35), nz);
+        if (dx * dx + dz * dz > 1e-6) root.rotation.y = Math.atan2(dx, dz);
+        root.rotation.z = Math.sin(a) * 0.12;
+        stepMobVisual(c.v, dt, false);
+        const flap = Math.sin(t * 11 + c.z);
+        for (const bone of c.v.wings || []) {
+          const right = /\.r$/i.test(bone.name);
+          bone.rotation.x = -0.25;
+          bone.rotation.z = (right ? -1 : 1) * (0.85 + flap * 0.75);
+        }
       }
     }
     for (const b of this._birds) {
       b.mesh.visible = birdsOut;
       if (!birdsOut) continue;
       const a = t * b.speed + b.phase;
+      const dx = -Math.sin(a) * b.rx;
+      const dz = Math.cos(a * 0.65) * 0.65 * b.rz;
       b.mesh.position.x = b.x + Math.cos(a) * b.rx;
       b.mesh.position.z = b.z + Math.sin(a * 0.65) * b.rz;
-      b.mesh.position.y = Math.min(GY + 7, b.y + Math.sin(a * 1.4) * 0.45);
-      b.mesh.rotation.y = -Math.sin(a) * 0.9;
-      b.mesh.rotation.z = Math.sin(t * 7 + b.phase) * 0.28;
+      b.mesh.position.y = Math.min(GY + 7, b.y + Math.sin(a * 1.4) * 0.35);
+      b.mesh.rotation.y = Math.atan2(dx, dz);
+      b.mesh.rotation.z = Math.sin(a) * 0.14;
+      const flap = Math.sin(t * 8 + b.phase) * 0.7;
+      if (b.mesh.userData.wingL) b.mesh.userData.wingL.rotation.z = flap;
+      if (b.mesh.userData.wingR) b.mesh.userData.wingR.rotation.z = -flap;
     }
     for (const m of this._mats) {
       if (m.uniforms?.uLight) setEntityLight(m, 14, 0);

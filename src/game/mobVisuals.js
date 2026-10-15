@@ -84,7 +84,51 @@ function hidePaint(base, spots, stripe) {
   return tex;
 }
 
+function featherPaint(base, vane, shaft) {
+  const key = 'feather|' + base + vane + shaft;
+  if (_paint.has(key)) return _paint.get(key);
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = base;
+  g.fillRect(0, 0, 128, 128);
+  for (let row = 0; row < 8; row++) {
+    const y = row * 16;
+    g.fillStyle = row % 2 ? vane : shaft;
+    for (let x = (row % 2) * 12; x < 128; x += 24) {
+      g.beginPath();
+      g.moveTo(x, y + 15);
+      g.quadraticCurveTo(x + 12, y + 1, x + 24, y + 15);
+      g.lineTo(x + 12, y + 16);
+      g.closePath();
+      g.fill();
+    }
+  }
+  g.strokeStyle = 'rgba(40,28,16,0.35)';
+  g.lineWidth = 1;
+  for (let x = 12; x < 128; x += 24) {
+    g.beginPath();
+    g.moveTo(x, 0);
+    g.lineTo(x, 128);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  _paint.set(key, tex);
+  return tex;
+}
+
 function namedPaint(modelKey, name) {
+  if (modelKey === 'Birb') {
+    if (name === 'birb_main') return featherPaint('#f4efe4', '#d7b48a', '#8d6848');
+    if (name === 'birb_secondary') return featherPaint('#e7d7c2', '#7f93ad', '#3e5168');
+    if (name === 'birb_beak') return hidePaint('#f0a030', '#c86818', '#ffe0a0');
+    if (name === 'eye_white') return hidePaint('#f7f4ee', '#e4ddd0', null);
+    if (name === 'eye_black') return hidePaint('#1a140e', '#000000', null);
+    return null;
+  }
   if (modelKey !== 'BlueDemon') return null;
   if (name === 'bluedemon_main') return hidePaint('#2a6fd6', '#143e86', '#8fd0ff');
   if (name === 'bluedemon_secondary') return hidePaint('#f0b24a', '#c47a22', '#ffe08a');
