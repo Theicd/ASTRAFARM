@@ -660,15 +660,18 @@ export class BeachDecor {
       ['Fish', xMid + 40, z0 + 7, 2.7, -0.2],
       ['BlueDemon', xMid - 6, z0 + 10, 3.6, 0.6],
     ];
-    const stand = 8.05;
     for (const [key, x, z, sc, yaw] of spots) {
       const v = takeMobVisual(key, sc);
       if (!v) continue;
-      v.root.position.set(x, stand, Math.min(WZ - 3, z));
+      v.root.position.set(x, 6.2, Math.min(WZ - 3, z));
+      v.root.visible = false;
       this.root.add(v.root);
       this._fish.push({
-        v, x, z: Math.min(WZ - 3, z), yaw, bite: 0, fed: false,
+        v, x, z: Math.min(WZ - 3, z), yaw,
         labelKey: key === 'BlueDemon' ? 'demon' : 'fish',
+        state: 'under',
+        cool: 6 + Math.random() * 18,
+        raid: null,
       });
     }
   }
@@ -734,7 +737,6 @@ export class BeachDecor {
     const t = performance.now() * 0.001;
     const phase = this.game.phase;
     const birdsOut = phase === 'day' || phase === 'dawn';
-    const nightish = phase === 'night' || phase === 'dusk';
     for (const s of this._ships) {
       s.cool = Math.max(0, (s.cool || 0) - dt);
       if (s.order) {
@@ -767,50 +769,7 @@ export class BeachDecor {
       }
     }
     this._stepShots(dt);
-    const player = this.game.player;
-    const pp = player?.body?.pos;
-    const beachZ = LAYOUT.beach?.z0 ?? 70;
-    for (const f of this._fish || []) {
-      f.bite = Math.max(0, (f.bite || 0) - dt);
-      const pos = f.v.root.position;
-      let tx = f.x, tz = f.z, ty = 8.15, chasing = false;
-      if (nightish && !f.fed) {
-        const pig = this.game.nearestPig?.(pos);
-        if (pig) {
-          tx = pig.pos.x; tz = pig.pos.z; ty = pig.pos.y;
-          chasing = true;
-          if (Math.hypot(tx - pos.x, tz - pos.z) < 1.3) {
-            this.game.removePig(pig);
-            this.game.talk?.sys('sys.seaPig', null, 'warn');
-            f.fed = true;
-          }
-        }
-      } else if (pp && pp.z > beachZ - 1) {
-        const d = Math.hypot(pp.x - pos.x, pp.z - pos.z);
-        if (d < 10) {
-          tx = pp.x; tz = pp.z; ty = pp.y; chasing = true;
-          if (d < 1.45 && f.bite <= 0 && player.alive) {
-            player.damage(2, pos);
-            f.bite = 1.15;
-          }
-        }
-      }
-      if (!chasing) {
-        const a = t * 0.35 + f.yaw;
-        tx = f.x + Math.cos(a) * 4.5;
-        tz = f.z + Math.sin(a) * 3.2;
-        ty = 8.15 + Math.sin(a * 2) * 0.12;
-      }
-      const dx = tx - pos.x, dz = tz - pos.z;
-      const dist = Math.hypot(dx, dz) || 1;
-      const step = Math.min(dist, (chasing ? 3.4 : 1.6) * dt);
-      pos.x += (dx / dist) * step;
-      pos.z += (dz / dist) * step;
-      pos.y += (ty - pos.y) * Math.min(1, dt * 3);
-      f.v.root.rotation.y = Math.atan2(dx, dz);
-      stepMobVisual(f.v, dt, true);
-      syncDecorLabel(f, f.v.root, f.labelKey || 'fish', this.game.camera);
-    }
+    for (const f of this._fish || []) this._seaRaid(f, dt);
     for (const c of this._critters || []) {
       if (c.kind === 'bunny') {
         this._bunnyWork(c, dt);
@@ -886,9 +845,145 @@ export class BeachDecor {
     return best;
   }
 
+  _seaSplash(x, z) {
+    this.game.particles?.burst(x, 8.1, z, 0x4a90c8, 16, 1.3);
+    this.game.audio?.sfx('hit', { pos: { x, y: 8, z }, pitch: 0.7 });
+  }
+
+  _pickSeaRaid() {
+    const g = this.game;
+    const order = ['crop', 'pig', 'bunny', 'building'];
+    const start = Math.floor(Math.random() * order.length);
+    for (let i = 0; i < order.length; i++) {
+      const type = order[(start + i) % order.length];
+      if (type === 'crop') {
+        const spot = g.nearestCrop?.({ x: LAYOUT.pathX, z: LAYOUT.farmZone.z1 });
+        if (spot) return { type, x: spot[0] + 0.5, z: spot[1] + 0.5 };
+      } else if (type === 'pig') {
+        const pig = g.nearestPennedPig?.({ x: LAYOUT.pathX, z: 40 }) || g.nearestPig?.({ x: LAYOUT.pathX, z: 40 });
+        if (pig && !pig.dead && !pig.carried) return { type, x: pig.pos.x, z: pig.pos.z, ref: pig };
+      } else if (type === 'bunny') {
+        const b = (this._critters || []).find((c) => c.kind === 'bunny' && !c.stolen && c.v?.root?.visible !== false);
+        if (b) return { type, x: b.v.root.position.x, z: b.v.root.position.z, ref: b };
+      } else {
+        const roll = Math.random();
+        if (roll < 0.5) {
+          const H = LAYOUT.house;
+          return { type: 'lodge', x: H.door[0] + 0.5, z: H.z1 + 1.3 };
+        }
+        if (roll < 0.78 && LAYOUT.pigPen) {
+          const P = LAYOUT.pigPen;
+          return { type: 'pen', x: P.gateX + 0.5, z: (P.gateZ0 + P.gateZ1) * 0.5 };
+        }
+        const pond = LAYOUT.pond;
+        if (pond) return { type: 'pond', x: pond[0], z: pond[1] + 3 };
+      }
+    }
+    return null;
+  }
+
+  _finishSeaRaid(f) {
+    const g = this.game;
+    const raid = f.raid;
+    if (!raid) return;
+    if (raid.type === 'crop') {
+      const n = g.stealCrop?.(Math.floor(raid.x), Math.floor(raid.z), f) || 0;
+      if (n > 0) g.talk?.sys('sys.seaCrop', null, 'warn');
+    } else if (raid.type === 'pig' && raid.ref && !raid.ref.dead && !raid.ref.carried) {
+      g.removePig(raid.ref);
+      g.talk?.sys('sys.seaPig', null, 'warn');
+    } else if (raid.type === 'bunny' && raid.ref && !raid.ref.stolen) {
+      const b = raid.ref;
+      b.stolen = true;
+      b.backIn = 32 + Math.random() * 16;
+      b.v.root.visible = false;
+      if (b._label) b._label.visible = false;
+      this._releaseBunny(b);
+      b.job = null;
+      g.talk?.sys('sys.seaBunny', null, 'warn');
+    } else if (raid.type === 'lodge') {
+      g.damageLodge?.(18);
+      g.talk?.sys('sys.seaHit', null, 'warn');
+    } else if (raid.type === 'pen' && g.penHp) {
+      g.penHp.hp = Math.max(0, g.penHp.hp - 14);
+      g.particles?.burst(raid.x, GY + 1.4, raid.z, 0xc4a060, 10, 1);
+      g.talk?.sys('sys.seaHit', null, 'warn');
+    } else if (raid.type === 'pond' && g.pondHp) {
+      g.pondHp.hp = Math.max(0, g.pondHp.hp - 12);
+      g.particles?.burst(raid.x, GY + 1.2, raid.z, 0x7ec8e8, 10, 1);
+      g.talk?.sys('sys.seaHit', null, 'warn');
+    }
+    f.raid = null;
+  }
+
+  _seaRaid(f, dt) {
+    const g = this.game;
+    const pos = f.v.root.position;
+    const shore = (LAYOUT.beach?.z1 ?? (LAYOUT.waterLineZ ?? 82) - 1);
+    if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) {
+      f.v.root.visible = false;
+      if (f._label) f._label.visible = false;
+      return;
+    }
+    f.cool = (f.cool || 0) - dt;
+    if (f.state === 'under') {
+      f.v.root.visible = false;
+      if (f._label) f._label.visible = false;
+      pos.set(f.x, 6.2, f.z);
+      if (f.cool > 0) return;
+      const raid = this._pickSeaRaid();
+      if (!raid) { f.cool = 8; return; }
+      f.raid = raid;
+      const x = Math.max(6, Math.min(WX - 7, raid.x + (Math.random() - 0.5) * 4));
+      pos.set(x, GY + 1, shore);
+      f.v.root.visible = true;
+      f.state = 'out';
+      this._seaSplash(x, shore + 1.5);
+      g.talk?.sys('sys.seaRise', null, 'warn');
+      return;
+    }
+    const back = f.state === 'back';
+    const tx = back ? pos.x : f.raid.x;
+    const tz = back ? shore : f.raid.z;
+    const dx = tx - pos.x, dz = tz - pos.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    if (!back && (!f.raid || dist < 1.15)) {
+      this._finishSeaRaid(f);
+      f.state = 'back';
+    } else if (back && pos.z >= shore - 0.4) {
+      this._seaSplash(pos.x, shore + 1.2);
+      f.state = 'under';
+      f.cool = 26 + Math.random() * 22;
+      f.v.root.visible = false;
+      if (f._label) f._label.visible = false;
+      pos.set(f.x, 6.2, f.z);
+    } else {
+      const step = Math.min(dist, 4.4 * dt);
+      pos.x += (dx / dist) * step;
+      pos.z += (dz / dist) * step;
+      pos.y = GY + 1;
+      f.v.root.rotation.y = Math.atan2(dx, dz);
+      stepMobVisual(f.v, dt, true);
+      syncDecorLabel(f, f.v.root, f.labelKey || 'fish', g.camera);
+    }
+  }
+
   _bunnyWork(c, dt) {
     const g = this.game;
     const pos = c.v.root.position;
+    if (c.stolen) {
+      c.backIn = (c.backIn || 0) - dt;
+      c.v.root.visible = false;
+      if (c._label) c._label.visible = false;
+      if (c.backIn <= 0) {
+        c.stolen = false;
+        const F = LAYOUT.fieldA;
+        pos.set((F.x0 + F.x1) * 0.5 + (Math.random() - 0.5) * 4, GY + 1, (F.z0 + F.z1) * 0.5);
+        c.v.root.visible = true;
+        c.cool = 0.4;
+      }
+      return;
+    }
     if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) {
       pos.y = GY + 1;
       stepMobVisual(c.v, dt, false);
