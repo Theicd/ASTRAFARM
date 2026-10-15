@@ -42,27 +42,29 @@ class Buf {
 }
 
 export class Mesher {
-  constructor(world, atlas) {
+  constructor(world, atlas, cropAtlas) {
     this.world = world;
     this.atlas = atlas;
+    this.cropAtlas = cropAtlas;
     this.group = new THREE.Group();
     this.group.name = 'world';
     this.mats = {
       opaque: worldMaterial(atlas.texture, 'opaque'),
       cutout: worldMaterial(atlas.texture, 'cutout'),
+      crops: worldMaterial(cropAtlas.texture, 'cutout'),
       water: waterMaterial(atlas.water),
     };
     this.chunks = [];
     const per = WX / CHUNK;
     for (let cz = 0; cz < WZ / CHUNK; cz++) for (let cx = 0; cx < per; cx++) {
       const c = { cx, cz, meshes: {} };
-      for (const k of ['opaque', 'cutout', 'water']) {
+      for (const k of ['opaque', 'cutout', 'crops', 'water']) {
         const m = new THREE.Mesh(new THREE.BufferGeometry(), this.mats[k]);
         m.name = `chunk_${cx}_${cz}_${k}`;
         m.matrixAutoUpdate = false;
         m.frustumCulled = true;
         if (k === 'water') m.renderOrder = 2;
-        if (k === 'cutout') m.renderOrder = 1;
+        if (k === 'cutout' || k === 'crops') m.renderOrder = 1;
         this.group.add(m);
         c.meshes[k] = m;
       }
@@ -92,7 +94,7 @@ export class Mesher {
 
   build(c) {
     const w = this.world;
-    const bufs = { opaque: new Buf(), cutout: new Buf(), water: new Buf() };
+    const bufs = { opaque: new Buf(), cutout: new Buf(), crops: new Buf(), water: new Buf() };
     const x0 = c.cx * CHUNK, z0 = c.cz * CHUNK;
     const data = w.data;
     for (let y = 0; y < WY; y++) for (let z = z0; z < z0 + CHUNK; z++) for (let x = x0; x < x0 + CHUNK; x++) {
@@ -103,13 +105,13 @@ export class Mesher {
         case 'cube': case 'low': case 'half': this.cube(b.cutout ? bufs.cutout : bufs.opaque, x, y, z, id, b); break;
         case 'stairs': this.stairs(bufs.opaque, x, y, z, b); break;
         case 'cross': this.cross(bufs.cutout, x, y, z, b); break;
-        case 'crop': this.crop(bufs.cutout, x, y, z, b); break;
+        case 'crop': this.crop(bufs.crops, x, y, z, b); break;
         case 'lantern': this.lantern(bufs.cutout, x, y, z, b); break;
         case 'water': this.water(bufs.water, x, y, z); break;
         default: break;
       }
     }
-    for (const k of ['opaque', 'cutout', 'water']) {
+    for (const k of ['opaque', 'cutout', 'crops', 'water']) {
       const m = c.meshes[k];
       m.geometry.dispose();
       m.geometry = bufs[k].n ? bufs[k].geometry() : new THREE.BufferGeometry();
@@ -203,15 +205,31 @@ export class Mesher {
     q(0.5 - d, 0.5 + d, 0.5 + d, 0.5 - d);
   }
 
+  cropUV(name) {
+    let u = this.uvCache.get('crop:' + name);
+    if (!u) { u = this.cropAtlas.uv(name); this.uvCache.set('crop:' + name, u); }
+    return u;
+  }
+
   crop(buf, x, y, z, b) {
-    const [u0, v0, u1, v1] = this.tileUV(b.tex);
+    const [u0, v0, u1, v1] = this.cropUV(b.tex);
     const yo = y - 1 / 16;
+    const h = [0.4, 0.62, 0.86, 1.08][b.crop] ?? 1;
     const [s, k] = this.plantLight(x, y, z);
-    const L = [[0.92, s, k], [0.92, s, k], [0.92, s, k], [0.92, s, k]];
+    const L = [[1, s, k], [1, s, k], [1, s, k], [1, s, k]];
     const uv = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
-    for (const o of [4 / 16, 12 / 16]) {
-      buf.quad([[x + o, yo, z], [x + o, yo, z + 1], [x + o, yo + 1, z + 1], [x + o, yo + 1, z]], uv, L);
-      buf.quad([[x, yo, z + o], [x + 1, yo, z + o], [x + 1, yo + 1, z + o], [x, yo + 1, z + o]], uv, L);
+    const spin = ((x * 3 + z * 5) & 3) * 0.22;
+    const cs = Math.cos(spin), sn = Math.sin(spin);
+    const arms = [[-0.42, 0], [0, -0.42], [-0.3, -0.3]];
+    for (const [dx, dz] of arms) {
+      const ax = 0.5 + dx * cs - dz * sn;
+      const az = 0.5 + dx * sn + dz * cs;
+      const bx = 0.5 - dx * cs + dz * sn;
+      const bz = 0.5 - dx * sn - dz * cs;
+      buf.quad(
+        [[x + ax, yo, z + az], [x + bx, yo, z + bz], [x + bx, yo + h, z + bz], [x + ax, yo + h, z + az]],
+        uv, L,
+      );
     }
   }
 

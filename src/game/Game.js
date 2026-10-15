@@ -9,6 +9,7 @@ import { createStore } from '../core/save.js';
 import { clamp, damp, lerp } from '../core/math.js';
 import { mulberry32 } from '../core/rng.js';
 import { buildAtlas } from './world/atlas.js';
+import { buildCropAtlas } from './world/cropAtlas.js';
 import { World, LAYOUT, GY, WX, WZ, inRect } from './world/World.js';
 import { Mesher } from './world/Mesher.js';
 import { B, BLOCKS, isCrop, isFarm, needsSupport } from './world/blocks.js';
@@ -82,6 +83,7 @@ export class Game {
     this.time = 0;
     this.state = 'title';
     this.atlas = buildAtlas();
+    this.cropAtlas = buildCropAtlas();
 
     const scene = (this.scene = new THREE.Scene());
     scene.background = new THREE.Color(0x8ec3ff);
@@ -90,7 +92,7 @@ export class Game {
     scene.add(this.camera);
 
     this.world = new World();
-    this.mesher = new Mesher(this.world, this.atlas);
+    this.mesher = new Mesher(this.world, this.atlas, this.cropAtlas);
     scene.add(this.mesher.group);
     this.sky = new Sky(scene, this.atlas);
     this.particles = new Particles(scene);
