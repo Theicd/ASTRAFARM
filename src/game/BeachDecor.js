@@ -975,60 +975,79 @@ export class BeachDecor {
     f.raid = null;
   }
 
+  _seaHide(f) {
+    f.v.root.visible = false;
+    f.v.root.position.set(f.x, 6.2, f.z);
+    if (f._label) f._label.visible = false;
+    if (f._hpBar) for (const part of [f._hpBar.border, f._hpBar.bg, f._hpBar.fill]) if (part) part.visible = false;
+  }
+
+  _seaShow(f, dt) {
+    f._labelY = Math.max(f._labelY || 0, f.kind === 'demon' ? 3.5 : 2.75);
+    stepMobVisual(f.v, dt, true);
+    syncMobLabel(f, this.game.camera);
+  }
+
   _seaRaid(f, dt) {
     const g = this.game;
     const pos = f.v.root.position;
     const shore = (LAYOUT.beach?.z1 ?? (LAYOUT.waterLineZ ?? 82) - 1);
     if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) {
-      f.v.root.visible = false;
-      if (f._label) f._label.visible = false;
+      this._seaHide(f);
       return;
     }
-    f.cool = (f.cool || 0) - dt;
     if (f.state === 'under') {
-      f.v.root.visible = false;
-      if (f._label) f._label.visible = false;
-      pos.set(f.x, 6.2, f.z);
+      this._seaHide(f);
+      f.cool = (f.cool || 0) - dt;
       if (f.cool > 0) return;
       const busy = (this._fish || []).some((o) => o !== f && o.kind === 'fish' && o.state !== 'under');
       if (f.kind === 'fish' && busy) { f.cool = 4; return; }
       const raid = this._pickSeaRaid();
       if (!raid) { f.cool = 8; return; }
       f.raid = raid;
-      const x = Math.max(6, Math.min(WX - 7, raid.x + (Math.random() - 0.5) * 4));
-      pos.set(x, GY + 1, shore);
+      f.outT = 0;
+      f.stuck = 0;
+      const x = Math.max(8, Math.min(WX - 9, raid.x));
+      pos.set(x, GY + 1, shore - 0.3);
       f.v.root.visible = true;
       f.state = 'out';
-      this._seaSplash(x, shore + 1.5);
+      this._seaSplash(x, shore);
       g.talk?.sys('sys.seaRise', null, 'warn');
-      return;
     }
-    const back = f.state === 'back';
-    const tx = back ? pos.x : f.raid.x;
-    const tz = back ? shore : f.raid.z;
-    const dx = tx - pos.x, dz = tz - pos.z;
-    const dist = Math.hypot(dx, dz) || 1;
-    if (!back && (!f.raid || dist < 1.15)) {
+    f.outT = (f.outT || 0) + dt;
+    const giveUp = !f.raid || f.outT > 14 || (f.stuck || 0) > 2.2;
+    const back = f.state === 'back' || giveUp;
+    if (giveUp && f.state !== 'back') {
+      f.state = 'back';
+      f.raid = null;
+    }
+    const tx = back ? f.x : f.raid.x;
+    const tz = back ? Math.max(shore + 3, f.z) : f.raid.z;
+    const dx = tx - pos.x;
+    const dz = tz - pos.z;
+    const dist = Math.hypot(dx, dz);
+    const beforeX = pos.x, beforeZ = pos.z;
+    if (!back && dist < 1.2) {
       this._finishSeaRaid(f);
       f.state = 'back';
-    } else if (back && pos.z >= shore - 0.4) {
-      this._seaSplash(pos.x, shore + 1.2);
+    } else if (back && (dist < 1.4 || pos.z >= shore + 1.5)) {
+      this._seaSplash(pos.x, shore);
+      this._seaHide(f);
       f.state = 'under';
-      f.cool = f.rare ? 0 : 34 + Math.random() * 20;
-      f.v.root.visible = false;
-      if (f._label) f._label.visible = false;
-      if (f._hpBar) for (const part of [f._hpBar.border, f._hpBar.bg, f._hpBar.fill]) if (part) part.visible = false;
+      f.raid = null;
+      f.cool = f.rare ? 0 : 34 + Math.random() * 18;
       if (f.rare) f.gone = true;
-      pos.set(f.x, 6.2, f.z);
-    } else {
-      const step = Math.min(dist, 4.4 * dt);
+      return;
+    } else if (dist > 0.05) {
+      const step = Math.min(dist, 4.6 * dt);
       pos.x += (dx / dist) * step;
       pos.z += (dz / dist) * step;
       pos.y = GY + 1;
       f.v.root.rotation.y = Math.atan2(dx, dz);
-      stepMobVisual(f.v, dt, true);
-      syncMobLabel(f, g.camera);
     }
+    if (Math.hypot(pos.x - beforeX, pos.z - beforeZ) < 0.015) f.stuck = (f.stuck || 0) + dt;
+    else f.stuck = 0;
+    this._seaShow(f, dt);
   }
 
   _bunnyShouldHide(c) {
