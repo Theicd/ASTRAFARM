@@ -304,6 +304,8 @@ export const en = {
   'mob.job.fish': 'Swims and bites',
   'mob.name.demon': 'Blue Demon',
   'mob.job.demon': 'Swims and bites',
+  'mob.name.bunny': 'Beach Bunny',
+  'mob.job.bunny': 'Digs carrots out of the sand',
   'banner.golem': 'The Orc',
   'banner.golemSub': 'Protect the towers!',
   'banner.thief': 'The Ninja',

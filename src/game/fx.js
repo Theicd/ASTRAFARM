@@ -251,68 +251,6 @@ export class Emote {
   }
 }
 
-const THREAT_COLORS = {
-  boom: 0xff2d3a,
-  golem: 0xd7dde6,
-  thief: 0xffc83a,
-  dragon: 0xff6a1a,
-  chomp: 0x3dff7a,
-  hop: 0xc6ff4a,
-  sea: 0x3ec0ff,
-  leviathan: 0x8a6bff,
-  dino: 0xff5a32,
-};
-
-/** Ground ring + orbiting corner brackets so an incoming pest reads at a glance. */
-export function threatFrame(kind = 'boom', big = false) {
-  const color = THREAT_COLORS[kind] || 0xff2d3a;
-  const radius = big || kind === 'golem' || kind === 'dragon' || kind === 'leviathan' ? 1.2 : 0.74;
-  const g = new THREE.Group();
-  g.name = 'threatFrame';
-  const ringMat = new THREE.MeshBasicMaterial({
-    color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide,
-  });
-  const ring = new THREE.Mesh(new THREE.RingGeometry(radius * 0.78, radius, 4), ringMat);
-  ring.rotation.x = -Math.PI / 2;
-  ring.rotation.z = Math.PI / 4;
-  ring.position.y = 0.08;
-  g.add(ring);
-  const inner = new THREE.Mesh(new THREE.RingGeometry(radius * 0.4, radius * 0.48, 28), ringMat.clone());
-  inner.rotation.x = -Math.PI / 2;
-  inner.position.y = 0.09;
-  g.add(inner);
-  const corners = new THREE.Group();
-  const cMat = new THREE.MeshBasicMaterial({
-    color: 0xfff4d2, transparent: true, opacity: 0.95, depthWrite: false,
-  });
-  const y = kind === 'dragon' ? 1.7 : kind === 'golem' || kind === 'leviathan' ? 1.9 : 1.05;
-  for (let i = 0; i < 4; i++) {
-    const c = new THREE.Group();
-    const hBar = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.055, 0.055), cMat);
-    const vBar = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.055, 0.36), cMat);
-    hBar.position.x = 0.15;
-    vBar.position.z = 0.15;
-    c.add(hBar, vBar);
-    const ang = i * Math.PI / 2;
-    c.position.set(Math.cos(ang) * radius, y, Math.sin(ang) * radius);
-    c.rotation.y = -ang;
-    corners.add(c);
-  }
-  g.add(corners);
-  g.userData.ring = ring;
-  g.userData.inner = inner;
-  g.userData.corners = corners;
-  return g;
-}
-
-export function pulseThreatFrame(frame, t, hot = false) {
-  const pulse = hot ? 0.5 + Math.abs(Math.sin(t * 9)) * 0.5 : 0.6 + Math.sin(t * 3.4) * 0.3;
-  frame.userData.ring.material.opacity = pulse;
-  frame.userData.inner.material.opacity = pulse * 0.75;
-  frame.userData.corners.rotation.y = t * (hot ? 2.1 : 0.75);
-  frame.userData.ring.scale.setScalar(1 + Math.sin(t * 4.2) * 0.07);
-}
-
 // ------------------------------------------------------------------ 狙っているブロックの枠
 export function selectionBox() {
   const g = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));

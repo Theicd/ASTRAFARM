@@ -36,7 +36,7 @@ import { StrategyMode } from './Strategy.js';
 import { preloadMobVisuals } from './mobVisuals.js';
 import { syncMobLabel } from './mobLabel.js';
 import { Drops } from './items.js';
-import { Particles, FloatTexts, selectionBox, threatFrame, pulseThreatFrame } from './fx.js';
+import { Particles, FloatTexts, selectionBox } from './fx.js';
 import { Talk } from './talk.js';
 import { drawFace } from './models.js';
 import { GameHud } from '../ui/GameHud.js';
@@ -448,10 +448,6 @@ export class Game {
     else if (kind === 'sea' || kind === 'leviathan') m = new SeaBeast(this, x, z, { big: big || kind === 'leviathan' });
     else if (kind === 'dino') m = new Dino(this, x, z);
     else m = new Green(this, x, z, { big, night: this.phase === 'night' });
-    if (m?.root) {
-      m.frame = threatFrame(m.kind, m.big);
-      m.root.add(m.frame);
-    }
     return m;
   }
 
@@ -2479,11 +2475,6 @@ export class Game {
     this.chargeBay?.update(dt);
     this.beachDecor?.update(dt);
     for (const m of [...this.mobs]) {
-      if (m.frame) {
-        const hot = m.state === 'fuse' || m.state === 'windup' || m.state === 'smash';
-        m.frame.visible = !m.dead && m.state !== 'leave';
-        if (m.frame.visible) pulseThreatFrame(m.frame, this.time + (m.phase || 0), hot);
-      }
       m.update(dt);
       syncMobLabel(m, this.camera);
       if (m.dead && this.mobs.includes(m)) this.removeMob(m);

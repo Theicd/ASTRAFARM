@@ -16,6 +16,7 @@ const SPECS = {
   dragon: ['mob.name.dragon', 'mob.job.dragon', '#ff7a6a'],
   fish: ['mob.name.fish', 'mob.job.fish', '#9ad4ff'],
   demon: ['mob.name.demon', 'mob.job.demon', '#8aa6ff'],
+  bunny: ['mob.name.bunny', 'mob.job.bunny', '#ffd0ea'],
 };
 
 const cache = new Map();
@@ -82,6 +83,50 @@ function fit(sprite, camera) {
   sprite.scale.set(h * (sprite.userData.aspect || 4), h, 1);
 }
 
+function barSprite(color) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({
+    color, transparent: true, depthTest: false, depthWrite: false, toneMapped: false,
+  }));
+  s.center.set(0.5, 1);
+  s.renderOrder = 39;
+  return s;
+}
+
+function ensureHpBar(mob) {
+  if (mob._hpBar || !(mob.maxHp > 0)) return mob._hpBar;
+  const border = barSprite(0xf4f7f2);
+  const bg = barSprite(0x241814);
+  const fill = barSprite(0x3dff6a);
+  bg.renderOrder = 40;
+  fill.renderOrder = 41;
+  mob.root.add(border, bg, fill);
+  mob._hpBar = { border, bg, fill };
+  return mob._hpBar;
+}
+
+function syncHpBar(mob, label) {
+  const bar = ensureHpBar(mob);
+  if (!bar) return;
+  const show = label.visible && mob.hp > 0;
+  bar.border.visible = show;
+  bar.bg.visible = show;
+  bar.fill.visible = show;
+  if (!show) return;
+  const ratio = Math.max(0, Math.min(1, mob.hp / mob.maxHp));
+  const bw = Math.max(0.9, label.scale.x * 0.82);
+  const bh = Math.max(0.11, label.scale.y * 0.2);
+  const y = label.position.y;
+  const inset = bh * 0.22;
+  bar.border.position.set(0, y, 0);
+  bar.border.scale.set(bw, bh, 1);
+  bar.bg.position.set(0, y - inset * 0.5, 0);
+  bar.bg.scale.set(bw - inset, bh - inset, 1);
+  const fw = Math.max(0.04, (bw - inset * 2) * ratio);
+  bar.fill.position.set(-bw / 2 + inset + fw / 2, y - inset * 0.5, 0);
+  bar.fill.scale.set(fw, bh - inset * 1.15, 1);
+  bar.fill.material.color.setHex(ratio > 0.55 ? 0x3dff6a : ratio > 0.28 ? 0xffcc33 : 0xff3b3b);
+}
+
 function ensure(holder, root, key) {
   if (!holder._labelY) {
     const y = headHeight(root);
@@ -116,6 +161,7 @@ export function syncMobLabel(mob, camera) {
   const sprite = ensure(mob, mob.root, key);
   sprite.visible = !mob.dead && mob.state !== 'leave';
   if (sprite.visible) fit(sprite, camera);
+  syncHpBar(mob, sprite);
 }
 
 export function syncDecorLabel(holder, root, key, camera) {

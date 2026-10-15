@@ -372,13 +372,13 @@ export class World {
           }
         }
       }
-      // Shallow sea that belongs to the map: one-block steps down from the sand,
-      // then a wading floor at the waterline so you can walk out and back.
-      // No voxel water — that reads as a dark pool above the ocean sheet.
+      // One dry step off the sand, then a floor under the ocean sheet.
+      // The sheet sits at y ≈ 7.87, so a surface of 8 still hides it and
+      // leaves the pier and boats on dry sand.
       const seaZ0 = beachEnd + 1;
       for (let z = seaZ0; z < WZ; z++) {
-        const steps = Math.min(2, z - seaZ0);
-        const topY = GY - steps;
+        const dz = z - seaZ0;
+        const topY = dz === 0 ? GY - 1 : dz === 1 ? GY - 2 : 6;
         for (let x = 0; x < WX; x++) {
           if (!this.inside(x, GY, z)) continue;
           if (z <= lawnZ1 || inRect(x, z, LAYOUT.farmZone, 0) || inRect(x, z, LAYOUT.house, 1)) continue;
@@ -394,9 +394,7 @@ export class World {
         for (let dx = -1; dx <= 1; dx++) {
           const x = xMid + dx;
           if (!this.inside(x, GY, z)) continue;
-          if ((z - pierZ0) % 3 === 0) {
-            for (let y = 5; y < GY; y++) put(x, y, z, B.LOG);
-          }
+          for (let y = 5; y < GY; y++) if (at(x, y, z) === B.AIR) put(x, y, z, B.LOG);
           put(x, GY, z, B.PLANKS);
           for (let y = GY + 1; y < WY - 1; y++) if (at(x, y, z) !== B.AIR) put(x, y, z, B.AIR);
           top[x + z * WX] = GY;

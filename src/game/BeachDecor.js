@@ -604,12 +604,12 @@ export class BeachDecor {
     const pier = LAYOUT.pier;
     if (!pier) return;
     const slips = [
-      ['row', pier.x - 4.2, pier.z0 + 3, 0],
-      ['rowSmall', pier.x + 4.2, pier.z0 + 3, Math.PI],
-      ['fish', pier.x - 4.4, pier.z0 + 7, 0],
-      ['sail', pier.x + 4.4, pier.z0 + 7, Math.PI],
-      ['tug', pier.x - 5.1, pier.z1 - 2, 0.15],
-      ['speedA', pier.x + 5.1, pier.z1 - 2, Math.PI - 0.15],
+      ['row', pier.x - 4.2, pier.z0 + 6, 0],
+      ['rowSmall', pier.x + 4.2, pier.z0 + 6, Math.PI],
+      ['fish', pier.x - 4.4, pier.z0 + 10, 0],
+      ['sail', pier.x + 4.4, pier.z0 + 10, Math.PI],
+      ['tug', pier.x - 5.1, pier.z1 - 1, 0.15],
+      ['speedA', pier.x + 5.1, pier.z1 - 1, Math.PI - 0.15],
     ];
     for (const [key, x, z, yaw] of slips) {
       const mesh = this._clone(key, key === 'sail' ? 1.15 : 0.95);
@@ -817,6 +817,8 @@ export class BeachDecor {
         c.v.root.position.y = GY + 1;
         c.v.root.rotation.y = a;
         stepMobVisual(c.v, dt, true);
+        this._bunnyDig(c, dt);
+        syncDecorLabel(c, c.v.root, 'bunny', this.game.camera);
       } else {
         const a = t * 0.55 + c.z;
         c.v.root.position.x = c.x + Math.cos(a) * 6;
@@ -855,6 +857,20 @@ export class BeachDecor {
     this._critters = [];
     for (const shot of this._shots || []) shot.mesh.removeFromParent();
     this._shots = [];
+  }
+
+  _bunnyDig(c, dt) {
+    const g = this.game;
+    if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) return;
+    if (c.dig == null) c.dig = 8 + Math.random() * 14;
+    c.dig -= dt;
+    if (c.dig > 0) return;
+    const pos = c.v.root.position;
+    const pp = g.player?.body?.pos;
+    if (!pp || Math.hypot(pp.x - pos.x, pp.z - pos.z) > 24) return;
+    c.dig = 48 + Math.random() * 36;
+    g.drops?.spawn('carrot', pos.x, pos.y + 0.35, pos.z, { vy: 2.2 });
+    g.particles?.burst(pos.x, pos.y + 0.1, pos.z, 0xdbd3a0, 8, 1, 0.55);
   }
 
   _cannon(ship, tx, tz) {

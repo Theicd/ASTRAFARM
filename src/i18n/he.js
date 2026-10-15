@@ -240,6 +240,8 @@ export const he = {
   'mob.job.fish': 'שוחה ונושך',
   'mob.name.demon': 'השד הכחול',
   'mob.job.demon': 'שוחה ונושך',
+  'mob.name.bunny': 'ארנב החוף',
+  'mob.job.bunny': 'מוצא גזר בחול',
   'banner.golem': 'האורק',
   'banner.golemSub': 'הגנו על המגדלים!',
   'banner.thief': 'הנינג׳ה',
