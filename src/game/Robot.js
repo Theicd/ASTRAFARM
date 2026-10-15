@@ -263,6 +263,18 @@ export class Robot {
       const hole = this.holeAt(x, z);
       if (hole >= 0) consider('repair', x, hole, z, Math.hypot(x + 0.5 - p.x, z + 0.5 - p.z) - 2 + stripBias(x));
     }
+    const mendAt = (what, x, z, stat) => {
+      if (!stat || stat.hp >= stat.max) return;
+      const mx = Math.floor(x), mz = Math.floor(z);
+      const score = Math.hypot(mx + 0.5 - p.x, mz + 0.5 - p.z) - 2.2;
+      if (!best || score < best.score) best = { type: 'mend', x: mx, y: GY + 1, z: mz, score, what };
+    };
+    const house = LAYOUT.house;
+    mendAt('lodge', house.door[0], house.z1 + 1, g.lodge);
+    const pen = LAYOUT.pigPen;
+    if (pen) mendAt('pen', pen.gateX - 1, (pen.gateZ0 + pen.gateZ1) * 0.5, g.penHp);
+    const pond = LAYOUT.pond;
+    if (pond) mendAt('pond', pond[0], pond[1] + 3, g.pondHp);
     return best;
   }
 
@@ -275,7 +287,7 @@ export class Robot {
   startTask(task) {
     this.task = { ...task, phase: 'go', actT: 0 };
     this.game.reserve(task.x, task.z, true);
-    const near = task.type === 'repair' ? 1.6 : 1.25;
+    const near = task.type === 'repair' || task.type === 'mend' ? 1.7 : 1.25;
     if (!this.goTo(task.x + 0.5, task.z + 0.5, near)) { this.endTask(); this.thinkT = 1.5; }
   }
   /** Strategy view: walk here, or work the clicked field / building. */
@@ -516,7 +528,6 @@ export class Robot {
     if (!this.helper && this.talkT <= 0) { this.talkT = 26 + Math.random() * 22; g.say('astra.idle', { random: true }); }
     if (!t) {
       this.wantVel(0, 0, dt);
-      if (g.strategy?.on) return 0;
       this.thinkT -= dt;
       if (this.thinkT <= 0) {
         const nt = this.restNext ? null : this.findTask();

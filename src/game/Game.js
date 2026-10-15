@@ -34,6 +34,7 @@ import { ArcadeEvents } from './ArcadeEvents.js';
 import { BeachDecor } from './BeachDecor.js';
 import { StrategyMode } from './Strategy.js';
 import { preloadMobVisuals } from './mobVisuals.js';
+import { syncMobLabel } from './mobLabel.js';
 import { Drops } from './items.js';
 import { Particles, FloatTexts, selectionBox, threatFrame, pulseThreatFrame } from './fx.js';
 import { Talk } from './talk.js';
@@ -2484,6 +2485,7 @@ export class Game {
         if (m.frame.visible) pulseThreatFrame(m.frame, this.time + (m.phase || 0), hot);
       }
       m.update(dt);
+      syncMobLabel(m, this.camera);
       if (m.dead && this.mobs.includes(m)) this.removeMob(m);
     }
     for (const p of this.pigs) p.update(dt);

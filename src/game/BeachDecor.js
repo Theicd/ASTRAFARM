@@ -7,6 +7,7 @@ import { LAYOUT, GY, SEA, WX, WZ } from './world/World.js';
 import { B } from './world/blocks.js';
 import { solidEntityMaterial, mapEntityMaterial, setEntityLight } from './world/materials.js';
 import { takeMobVisual, stepMobVisual } from './mobVisuals.js';
+import { syncDecorLabel } from './mobLabel.js';
 
 const ASSET = (name) => `./assets/beach/${name}`;
 
@@ -663,7 +664,10 @@ export class BeachDecor {
       if (!v) continue;
       v.root.position.set(x, stand, Math.min(WZ - 3, z));
       this.root.add(v.root);
-      this._fish.push({ v, x, z: Math.min(WZ - 3, z), yaw, bite: 0, fed: false });
+      this._fish.push({
+        v, x, z: Math.min(WZ - 3, z), yaw, bite: 0, fed: false,
+        labelKey: key === 'BlueDemon' ? 'demon' : 'fish',
+      });
     }
   }
 
@@ -803,6 +807,7 @@ export class BeachDecor {
       pos.y += (ty - pos.y) * Math.min(1, dt * 3);
       f.v.root.rotation.y = Math.atan2(dx, dz);
       stepMobVisual(f.v, dt, true);
+      syncDecorLabel(f, f.v.root, f.labelKey || 'fish', this.game.camera);
     }
     for (const c of this._critters || []) {
       if (c.kind === 'bunny') {
