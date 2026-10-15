@@ -686,6 +686,10 @@ export class BeachDecor {
       const v = takeMobVisual('Bunny', 0.85);
       if (!v) continue;
       v.root.position.set(x, GY + 1, z);
+      v.arms = [];
+      v.root.traverse((o) => {
+        if (o.isBone && /upperarm/i.test(o.name)) v.arms.push(o);
+      });
       this.root.add(v.root);
       this._critters.push({ v, x, z, kind: 'bunny' });
     }
@@ -1026,6 +1030,80 @@ export class BeachDecor {
     }
   }
 
+  _bunnyShouldHide(c) {
+    const g = this.game;
+    if (g.isNightish) return true;
+    const crew = [g.robot, ...(g.helpers || [])];
+    if (crew.some((r) => r && ['panic', 'hide', 'toBed', 'sleep'].includes(r.state))) return true;
+    const pos = c.v.root.position;
+    for (const m of g.mobs || []) {
+      if (!m || m.dead || m.state === 'leave' || m.state === 'emerge') continue;
+      if (Math.hypot(m.pos.x - pos.x, m.pos.z - pos.z) < 12) return true;
+    }
+    return false;
+  }
+
+  _bunnyPose(c, mode) {
+    const arms = c.v?.arms;
+    if (!arms?.length) return;
+    const t = performance.now() * 0.001;
+    for (const bone of arms) {
+      if (bone.userData.restX == null) bone.userData.restX = bone.rotation.x;
+      if (bone.userData.restZ == null) bone.userData.restZ = bone.rotation.z;
+      const right = /\.r$/i.test(bone.name);
+      if (mode === 'work') {
+        const k = Math.sin(t * 11);
+        bone.rotation.x = bone.userData.restX + (right ? -1.2 + k * 0.7 : -0.35);
+        bone.rotation.z = bone.userData.restZ;
+      } else if (mode === 'scare') {
+        const side = right ? 1 : -1;
+        bone.rotation.x = bone.userData.restX - 0.4;
+        bone.rotation.z = bone.userData.restZ + side * (1.15 + Math.sin(t * 22) * 0.18);
+      } else {
+        bone.rotation.x = bone.userData.restX;
+        bone.rotation.z = bone.userData.restZ;
+      }
+    }
+  }
+
+  _bunnyFlee(c, dt) {
+    const g = this.game;
+    const pos = c.v.root.position;
+    if (c.flee !== 'home') {
+      this._releaseBunny(c);
+      c.job = null;
+      c.act = 0;
+      c.flee = 'home';
+      const H = LAYOUT.house;
+      const i = Math.max(0, (this._critters || []).filter((x) => x.kind === 'bunny').indexOf(c));
+      const tx = H.x0 + 2.4 + (i % 2) * 1.5;
+      const tz = H.z0 + 2.2 + Math.floor(i / 2) * 1.15;
+      c.home = { x: tx, z: tz };
+      const path = findPath(g.world, pos.x, pos.z, tx, tz, { near: 0.7, maxNodes: 2500 });
+      c.path = path.path;
+      c.pathI = 0;
+    }
+    const home = c.home;
+    const distHome = Math.hypot(home.x - pos.x, home.z - pos.z);
+    let moving = false;
+    if (distHome > 0.7) {
+      const goal = c.path && c.pathI < c.path.length ? c.path[c.pathI] : null;
+      const tx = goal ? goal[0] + 0.5 : home.x;
+      const tz = goal ? goal[1] + 0.5 : home.z;
+      const dx = tx - pos.x, dz = tz - pos.z;
+      const dist = Math.hypot(dx, dz) || 1;
+      const step = Math.min(dist, 4.4 * dt);
+      pos.x += (dx / dist) * step;
+      pos.z += (dz / dist) * step;
+      c.v.root.rotation.y = Math.atan2(dx, dz);
+      moving = true;
+      if (goal && dist < 0.45) c.pathI++;
+    }
+    pos.y = GY + 1;
+    stepMobVisual(c.v, dt, moving);
+    this._bunnyPose(c, 'scare');
+  }
+
   _bunnyWork(c, dt) {
     const g = this.game;
     const pos = c.v.root.position;
@@ -1042,6 +1120,15 @@ export class BeachDecor {
       }
       return;
     }
+    if (this._bunnyShouldHide(c)) {
+      this._bunnyFlee(c, dt);
+      return;
+    }
+    if (c.flee === 'home') {
+      c.flee = null;
+      c.path = null;
+      c.cool = 0.2;
+    }
     if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) {
       pos.y = GY + 1;
       stepMobVisual(c.v, dt, false);
@@ -1051,7 +1138,9 @@ export class BeachDecor {
     if (c.act > 0) {
       c.act -= dt;
       pos.y = GY + 1;
+      if (c.job) c.v.root.rotation.y = Math.atan2(c.job.x + 0.5 - pos.x, c.job.z + 0.5 - pos.z);
       stepMobVisual(c.v, dt, false);
+      this._bunnyPose(c, 'work');
       if (c.act <= 0 && c.job) {
         const run = (fn) => (g.syncFarm ? g.syncFarm(fn) : fn());
         if (c.job.type === 'harvest') run(() => g.harvest(c.job.x, GY + 1, c.job.z, 'robot'));
