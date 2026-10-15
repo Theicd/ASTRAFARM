@@ -19,6 +19,25 @@ const houseCell = houseFootprintBlocked;
 /** Shared ground-path chase helpers. */
 function chaseAlong(self, dt, tx, tz, speed) {
   const p = self.body.pos;
+  const tank = self.game?.patrol;
+  if (self.aggro > 0 && tank && !tank.dead) {
+    tx = tank.root.position.x;
+    tz = tank.root.position.z;
+    const dist = Math.hypot(tx - p.x, tz - p.z);
+    self.yaw = dampAngle(self.yaw, Math.atan2(tx - p.x, tz - p.z), 10, dt);
+    if (dist < 1.75) {
+      self.body.vel.x = damp(self.body.vel.x, 0, 10, dt);
+      self.body.vel.z = damp(self.body.vel.z, 0, 10, dt);
+      self._bite = (self._bite || 0) - dt;
+      if (self._bite <= 0) {
+        self._bite = 0.62;
+        tank.hit(self.big ? 8 : 4);
+      }
+      return true;
+    }
+    self.path = null;
+    speed = Math.max(speed, (self.speed || speed) * 1.08);
+  }
   let gx = tx, gz = tz;
   if (self.path && self.pathI < self.path.length) {
     const [cx, cz] = self.path[self.pathI];
@@ -583,7 +602,7 @@ export class CropThief {
       const t = this.target;
       if (t && this.stun <= 0) {
         const dist = Math.hypot(t.pos.x - p.x, t.pos.z - p.z);
-        if (!this.planted && dist < 1.35) {
+        if (!this.aggro && !this.planted && dist < 1.35) {
           this.planted = true;
           const H = LAYOUT.house;
           g.plantBomb(H.door[0] + 0.5, H.z1 - 0.35);

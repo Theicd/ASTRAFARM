@@ -117,21 +117,40 @@ export class Green {
       return;
     }
 
+    const tankUnit = this.aggro > 0 && g.patrol && !g.patrol.dead ? g.patrol : null;
     this.repathT -= dt;
     if (this.repathT <= 0 && this.stun <= 0) {
       this.repathT = 0.7 + Math.random() * 0.3;
-      this.target = this.pickTarget();
-      const t = this.target;
-      const goal = outdoorGoal(t.pos.x, t.pos.z);
-      const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: t.kind === 'crop' ? 0 : 1, maxNodes: 2800, blocked: houseFootprintBlocked });
-      this.path = r.path;
-      this.pathI = 0;
+      if (tankUnit) {
+        const tp = tankUnit.root.position;
+        this.target = { kind: 'tank', pos: tp };
+        const r = findPath(g.world, p.x, p.z, tp.x, tp.z, { near: 1.2, maxNodes: 2800, blocked: houseFootprintBlocked });
+        this.path = r.path;
+        this.pathI = 0;
+      } else {
+        this.target = this.pickTarget();
+        const t = this.target;
+        const goal = outdoorGoal(t.pos.x, t.pos.z);
+        const r = findPath(g.world, p.x, p.z, goal.x, goal.z, { near: t.kind === 'crop' ? 0 : 1, maxNodes: 2800, blocked: houseFootprintBlocked });
+        this.path = r.path;
+        this.pathI = 0;
+      }
     }
     const t = this.target;
-    const spot = this.houseSpot();
+    const spot = tankUnit ? tankUnit.root.position : this.houseSpot();
+    if (tankUnit && this.state === 'bash') this.state = 'chase';
     if (this.state === 'chase' && this.stun <= 0) {
       const dist = Math.hypot(spot.x - p.x, spot.z - p.z);
-      if (dist < (this.big ? 2.5 : 2.05)) {
+      if (tankUnit && dist < 1.75) {
+        this.body.vel.x = damp(this.body.vel.x, 0, 10, dt);
+        this.body.vel.z = damp(this.body.vel.z, 0, 10, dt);
+        this.yaw = dampAngle(this.yaw, Math.atan2(spot.x - p.x, spot.z - p.z), 10, dt);
+        this._bite = (this._bite || 0) - dt;
+        if (this._bite <= 0) {
+          this._bite = 0.62;
+          tankUnit.hit(this.big ? 8 : 4);
+        }
+      } else if (!tankUnit && dist < (this.big ? 2.5 : 2.05)) {
         this.state = 'bash';
         this.stateT = 0;
         this.bashT = 0.15;

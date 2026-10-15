@@ -243,6 +243,8 @@ export const en = {
   'sys.patrol': 'The tank turns, then drives around the fields, and the turret shoots paint.',
   'sys.strategyGuard': 'In strategy view the farmer patrols the lodge and the pen and shoots paint, while the buggy stays around the fields.',
   'patrol.name': 'Shore patrol',
+  'patrol.job': 'Guards the fields',
+  'sys.tankDown': 'The tank was destroyed!',
   'obj.boss': 'Defeat the Big Green Thing',
   'obj.done': 'Goal reached! Keep harvesting',
 

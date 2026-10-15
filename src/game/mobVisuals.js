@@ -37,7 +37,7 @@ function skinKind(modelKey, name) {
   if (k === 'fish' || k === 'dino' || n.includes('scale') || n.includes('flap')) return 'scale';
   if (k === 'cactoro' || n.includes('leaf')) return 'plant';
   if (k === 'ninja' || n.includes('cloth') || n.includes('cape')) return 'cloth';
-  if (k === 'yeti' || k === 'bunny') return 'fur';
+  if (k === 'yeti') return 'fur';
   if (k === 'alien') return 'metal';
   return 'hide';
 }
@@ -247,6 +247,15 @@ function featherPaint(base, vane, shaft) {
 }
 
 function namedPaint(modelKey, name) {
+  if (modelKey === 'Bunny') {
+    if (name === 'bunny_main') return hidePaint('#fff7f1', '#f6c9d4', '#ffe4c8');
+    if (name === 'bunny_secondary') return hidePaint('#ff7eae', '#e4548c', '#ffd0e4');
+    if (name === 'eye_white') return hidePaint('#fffdf8', '#ffe0ea', null);
+    if (name === 'eye_black') return hidePaint('#1a120e', '#000000', null);
+    if (name === 'material.024') return hidePaint('#ff8c1a', '#e25c08', '#ffe08a');
+    if (name === 'material.011') return hidePaint('#3dce45', '#178a28', '#d6ff8a');
+    return hidePaint('#fff4ea', '#f3c4b0', '#ffe8d4');
+  }
   if (modelKey === 'Birb') {
     if (name === 'birb_main') return featherPaint('#f4efe4', '#d7b48a', '#8d6848');
     if (name === 'birb_secondary') return featherPaint('#e7d7c2', '#7f93ad', '#3e5168');

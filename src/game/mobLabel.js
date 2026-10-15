@@ -16,6 +16,7 @@ const SPECS = {
   dragon: ['mob.name.dragon', 'mob.job.dragon', '#ff7a6a'],
   fish: ['mob.name.fish', 'mob.job.fish', '#9ad4ff'],
   bunny: ['mob.name.bunny', 'mob.job.bunny', '#ffd0ea'],
+  patrol: ['patrol.name', 'patrol.job', '#d6f09a'],
 };
 
 const cache = new Map();
@@ -78,7 +79,7 @@ function headHeight(root) {
 function fit(sprite, camera) {
   sprite.getWorldPosition(_wp);
   const dist = Math.max(4, camera.position.distanceTo(_wp));
-  const h = Math.min(6.4, Math.max(0.9, dist * 0.042));
+  const h = Math.min(1.7, Math.max(0.32, dist * 0.016));
   sprite.scale.set(h * (sprite.userData.aspect || 4), h, 1);
 }
 
@@ -112,8 +113,8 @@ function syncHpBar(mob, label) {
   bar.fill.visible = show;
   if (!show) return;
   const ratio = Math.max(0, Math.min(1, mob.hp / mob.maxHp));
-  const bw = Math.max(0.9, label.scale.x * 0.82);
-  const bh = Math.max(0.11, label.scale.y * 0.2);
+  const bw = Math.max(0.34, label.scale.x * 0.7);
+  const bh = Math.max(0.042, label.scale.y * 0.14);
   const y = label.position.y;
   const inset = bh * 0.22;
   bar.border.position.set(0, y, 0);

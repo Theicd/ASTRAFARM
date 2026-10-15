@@ -1612,7 +1612,7 @@ export class Game {
     this.paints = [];
   }
 
-  launchPaint(origin, dir, speed = 28, sound = 'turret_pop') {
+  launchPaint(origin, dir, speed = 28, sound = 'turret_pop', from = null) {
     const colors = [0xff3b5c, 0x3dff7a, 0x3aa0ff, 0xffd23a, 0xd15cff, 0xff8a2a];
     const color = colors[(this._paintI = ((this._paintI | 0) + 1) % colors.length)];
     const mesh = new THREE.Mesh(
@@ -1624,7 +1624,7 @@ export class Game {
     const vel = dir.clone();
     if (vel.lengthSq() < 1e-6) vel.set(0, 0, 1);
     vel.normalize().multiplyScalar(speed);
-    this.paints.push({ mesh, vel, life: 0, color });
+    this.paints.push({ mesh, vel, life: 0, color, from });
     this.audio.sfx(sound, { pos: origin, pitch: sound === 'cannon' ? 1 : 1.45, refDistance: 9 });
   }
 
@@ -1654,6 +1654,12 @@ export class Game {
       this.particles.burst(x, y, z, p.color, 10, 1.1);
       if (hit?.hit) {
         hit.hit(2, { x, y, z }, 0.45);
+        if (p.from === 'tank' && !hit.sea) {
+          hit.aggro = 8;
+          if (hit.state === 'eat' || hit.state === 'bash' || hit.state === 'fuse') {
+            hit.state = hit.kind === 'chomp' || hit.kind === 'hop' ? 'hunt' : 'chase';
+          }
+        }
         if (hit.dead && !hit.sea) this.onMobKilled(hit, 'player');
         this.audio.sfx('paint_hit', { pos: { x, y, z }, pitch: 0.94 + Math.random() * 0.14 });
       }

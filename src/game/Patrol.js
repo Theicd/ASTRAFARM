@@ -1,10 +1,10 @@
 // Farm patrol buggy. Present from the first morning. Chases hostiles and shoots paint.
 import * as THREE from 'three';
-import { t } from '../core/i18n.js';
 import { LAYOUT, GY, WX, inRect } from './world/World.js';
 import { isFarm, isCrop } from './world/blocks.js';
 import { findPath } from './nav.js';
 import { damp, dampAngle, wrapAngle } from '../core/math.js';
+import { syncMobLabel } from './mobLabel.js';
 
 /** Fields, lawn and beach belong to the buggy. The lodge, pen and outer grass belong to the farmer. */
 export function vehicleSector(x, z) {
@@ -46,6 +46,11 @@ export class Patrol {
     this.cool = 0.4;
     this.wheelSpin = 0;
     this._i = 0;
+    this.kind = 'patrol';
+    this.hp = 90;
+    this.maxHp = 90;
+    this.dead = false;
+    this._labelY = 1.7;
     game.scene.add(this.root);
     game.talk?.sys('sys.patrol');
   }
@@ -140,29 +145,23 @@ export class Patrol {
     this.flash.position.set(0, 0.2, 1.4);
     this.flash.visible = false;
     this.turret.add(dome, hatch, this.barrel, this.flash);
-    const plate = this._plate();
-    plate.position.y = 1.85;
-    this.root.add(hull, deck, nose, chevron, this.turret, plate);
+    this.root.add(hull, deck, nose, chevron, this.turret);
   }
 
-  _plate() {
-    const c = document.createElement('canvas');
-    c.width = 256; c.height = 64;
-    const g = c.getContext('2d');
-    g.fillStyle = 'rgba(8,14,12,0.88)';
-    g.fillRect(0, 0, 256, 64);
-    g.fillStyle = '#b6f27a';
-    g.fillRect(0, 0, 256, 4);
-    g.font = 'bold 28px "Segoe UI", Arial, sans-serif';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillStyle = '#e9fff0';
-    g.fillText(t('patrol.name'), 128, 34);
-    const map = new THREE.CanvasTexture(c);
-    map.colorSpace = THREE.SRGBColorSpace;
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthTest: false }));
-    s.scale.set(2.4, 0.6, 1);
-    return s;
+  hit(dmg) {
+    if (this.dead || dmg <= 0) return false;
+    this.hp = Math.max(0, this.hp - dmg);
+    this.hurt = 0.35;
+    const p = this.root.position;
+    this.game.particles?.burst(p.x, p.y + 0.7, p.z, 0xf0c14a, 6, 0.8);
+    if (this.hp <= 0) {
+      this.dead = true;
+      this.speed = 0;
+      this.game.particles?.burst(p.x, p.y + 0.6, p.z, 0xff8844, 16, 1.2);
+      this.game.audio?.sfx('explode', { pos: p, pitch: 1.05, dur: 0.45 });
+      this.game.talk?.sys('sys.tankDown', null, 'warn');
+    }
+    return true;
   }
 
   _fieldRing() {
@@ -239,6 +238,10 @@ export class Patrol {
   update(dt) {
     const g = this.game;
     if (!g || g.titleMode || g.state !== 'play' || g.isNetClient?.()) return;
+    if (this.dead) {
+      syncMobLabel(this, g.camera);
+      return;
+    }
     this.cool = Math.max(0, this.cool - dt);
     this.repath -= dt;
     this.flashT = Math.max(0, this.flashT - dt);
@@ -298,7 +301,7 @@ export class Patrol {
         const origin = new THREE.Vector3();
         this.flash.getWorldPosition(origin);
         const dir = new THREE.Vector3(foe.pos.x - origin.x, 0.35, foe.pos.z - origin.z);
-        g.launchPaint(origin, dir, 24, 'cannon');
+        g.launchPaint(origin, dir, 24, 'cannon', 'tank');
         this.cool = 0.72;
         this.kick = 1;
         this.flashT = 0.08;
@@ -323,6 +326,7 @@ export class Patrol {
         );
       }
     }
+    syncMobLabel(this, g.camera);
   }
 
   dispose() {
