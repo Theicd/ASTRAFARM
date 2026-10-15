@@ -1091,8 +1091,9 @@ export class BeachDecor {
 
   _hutchSpot(i) {
     const H = LAYOUT.house;
-    const x = H.x1 - 1.48;
-    const z = H.z0 + 3.55 + i * 0.48;
+    // Under the stair run, against the east (right) wall. Opening faces the room.
+    const x = H.x1 - 1.22;
+    const z = (H.z1 - 5) + 1.15 + i * 0.38;
     return { x, z, yaw: -Math.PI / 2 };
   }
 
@@ -1100,30 +1101,71 @@ export class BeachDecor {
     const H = LAYOUT.house;
     const g = new THREE.Group();
     g.name = 'hutch';
-    const wood = new THREE.MeshBasicMaterial({ color: 0xc4925a });
-    const woodDark = new THREE.MeshBasicMaterial({ color: 0x8a5a32 });
-    const roof = new THREE.MeshBasicMaterial({ color: 0x6b3a28 });
-    const straw = new THREE.MeshBasicMaterial({ color: 0xd8c06a });
+    const plank = new THREE.MeshBasicMaterial({ map: canvasTex('hutch-plank', (ctx, w, h) => {
+      ctx.fillStyle = '#c9844a';
+      ctx.fillRect(0, 0, w, h);
+      for (let y = 0; y < h; y += 16) {
+        ctx.fillStyle = y % 32 === 0 ? '#8a4e24' : '#e2a86a';
+        ctx.fillRect(0, y, w, y % 32 === 0 ? 3 : 2);
+        ctx.fillStyle = 'rgba(90,40,12,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(18 + (y % 40), y + 8, 5, 3, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#5c3318';
+      for (let x = 8; x < w; x += 36) for (let y = 6; y < h; y += 16) ctx.fillRect(x, y, 2, 2);
+    }, 1) });
+    const trim = new THREE.MeshBasicMaterial({ map: canvasTex('hutch-trim', (ctx, w, h) => {
+      ctx.fillStyle = '#6e3e22';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = '#3d2414';
+      ctx.lineWidth = 4;
+      for (let y = 4; y < h; y += 10) ctx.strokeRect(1, y, w - 2, 1);
+    }, 1) });
+    const shingle = new THREE.MeshBasicMaterial({ map: canvasTex('hutch-roof', (ctx, w, h) => {
+      ctx.fillStyle = '#7a3428';
+      ctx.fillRect(0, 0, w, h);
+      for (let row = 0; row < 8; row++) {
+        const y = row * 16;
+        ctx.fillStyle = row % 2 ? '#9a4634' : '#5c241c';
+        ctx.fillRect(0, y, w, 14);
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        for (let x = (row % 2) * 10; x < w; x += 20) ctx.fillRect(x, y, 2, 14);
+      }
+    }, 1) });
+    const straw = new THREE.MeshBasicMaterial({ map: canvasTex('hutch-straw', (ctx, w, h) => {
+      ctx.fillStyle = '#e2c56a';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = '#8a6a28';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 40; i++) {
+        ctx.beginPath();
+        ctx.moveTo((i * 17) % w, 0);
+        ctx.lineTo((i * 29) % w, h);
+        ctx.stroke();
+      }
+    }, 1) });
     const add = (mat, geo, x, y, z) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y, z);
       g.add(m);
       return m;
     };
-    const cx = H.x1 - 1.35;
-    const cz = H.z0 + 4.25;
+    // Tuck under the SE stair, opening toward the room (-X).
+    const cx = H.x1 - 1.05;
+    const cz = (H.z1 - 5) + 1.7;
     g.position.set(cx, GY + 1, cz);
-    add(woodDark, new THREE.BoxGeometry(0.12, 1.05, 2.2), 0.48, 0.55, 0);
-    add(wood, new THREE.BoxGeometry(0.9, 1.05, 0.1), 0.05, 0.55, 1.05);
-    add(wood, new THREE.BoxGeometry(0.9, 1.05, 0.1), 0.05, 0.55, -1.05);
-    add(wood, new THREE.BoxGeometry(1.05, 0.1, 2.2), 0.08, 1.08, 0);
-    add(straw, new THREE.BoxGeometry(0.85, 0.06, 2.0), 0.02, 0.06, 0);
-    const slope = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 2.45), roof);
-    slope.position.set(0.02, 1.22, 0);
-    slope.rotation.z = -0.22;
+    add(trim, new THREE.BoxGeometry(0.1, 0.92, 1.7), 0.42, 0.46, 0);
+    add(plank, new THREE.BoxGeometry(0.85, 0.92, 0.08), 0.02, 0.46, 0.8);
+    add(plank, new THREE.BoxGeometry(0.85, 0.92, 0.08), 0.02, 0.46, -0.8);
+    add(plank, new THREE.BoxGeometry(0.95, 0.08, 1.7), 0.05, 0.92, 0);
+    add(straw, new THREE.BoxGeometry(0.8, 0.05, 1.5), 0, 0.05, 0);
+    const slope = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.07, 1.85), shingle);
+    slope.position.set(0.02, 1.02, 0);
+    slope.rotation.z = 0.28;
     g.add(slope);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.38, 0.52, 28), wood);
-    ring.position.set(-0.38, 0.5, 0);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.44, 28), plank);
+    ring.position.set(-0.4, 0.42, 0);
     ring.rotation.y = Math.PI / 2;
     g.add(ring);
     this.root.add(g);
