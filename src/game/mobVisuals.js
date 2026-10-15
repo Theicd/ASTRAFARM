@@ -11,7 +11,6 @@ const FILES = {
   Yeti: './assets/mobs/Yeti.gltf',
   Bunny: './assets/mobs/Bunny.gltf',
   Birb: './assets/mobs/Birb.gltf',
-  BlueDemon: './assets/mobs/BlueDemon.gltf',
   Cactoro: './assets/mobs/Cactoro.gltf',
   Frog: './assets/mobs/Frog.gltf',
   Alien: './assets/mobs/Alien.gltf',
@@ -256,11 +255,6 @@ function namedPaint(modelKey, name) {
     if (name === 'eye_black') return hidePaint('#1a140e', '#000000', null);
     return null;
   }
-  if (modelKey !== 'BlueDemon') return null;
-  if (name === 'bluedemon_main') return hidePaint('#2a6fd6', '#143e86', '#8fd0ff');
-  if (name === 'bluedemon_secondary') return hidePaint('#f0b24a', '#c47a22', '#ffe08a');
-  if (name === 'wood') return hidePaint('#8a5a32', '#5c3a1e', '#c49262');
-  if (name === 'straps') return hidePaint('#3a342c', '#1c1814', '#6a604e');
   return null;
 }
 

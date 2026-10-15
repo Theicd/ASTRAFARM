@@ -878,7 +878,6 @@ export class BeachDecor {
       }
     }
     this._stepShots(dt);
-    this._maybeDemon(dt);
     for (const f of this._fish || []) this._seaRaid(f, dt);
     this._fish = (this._fish || []).filter((f) => !f.gone);
     for (const c of this._critters || []) {
@@ -996,36 +995,13 @@ export class BeachDecor {
       if (f._hpBar) for (const part of [f._hpBar.border, f._hpBar.bg, f._hpBar.fill]) if (part) part.visible = false;
       this._seaSplash(v.root.position.x, v.root.position.z);
       this.game.drops?.spawn('powder', v.root.position.x, GY + 1, v.root.position.z);
-      this.game.talk?.sys(f.kind === 'demon' ? 'sys.seaDemonDown' : 'sys.seaFishDown');
-      if (f.rare) f.gone = true;
-      else {
-        f.hp = f.maxHp;
-        f.dead = false;
-        f.cool = 42 + Math.random() * 18;
-      }
-      this._demonCool = Math.max(this._demonCool || 0, f.rare ? 50 : 0);
+      this.game.talk?.sys('sys.seaFishDown');
+      f.hp = f.maxHp;
+      f.dead = false;
+      f.cool = 42 + Math.random() * 18;
       return true;
     };
     return f;
-  }
-
-  _maybeDemon(dt) {
-    const g = this.game;
-    if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) return;
-    if ((this._fish || []).some((f) => f.kind === 'demon' && !f.gone)) return;
-    this._demonCool = (this._demonCool ?? 22) - dt;
-    if (this._demonCool > 0) return;
-    const v = takeMobVisual('BlueDemon', 3.1);
-    if (!v) { this._demonCool = 20; return; }
-    v.root.visible = false;
-    const x = LAYOUT.pathX + (Math.random() < 0.5 ? -20 : 18);
-    const z = (LAYOUT.waterLineZ ?? 82) + 7;
-    v.root.position.set(x, 6.2, z);
-    this.root.add(v.root);
-    this._fish.push(this._armSea(v, {
-      x, z, yaw: 0, labelKey: 'demon', kind: 'demon', rare: true, cool: 0.4, hp: 8,
-    }));
-    this._demonCool = 48 + Math.random() * 28;
   }
 
   _seaSplash(x, z) {
@@ -1107,7 +1083,7 @@ export class BeachDecor {
   }
 
   _seaShow(f, dt) {
-    f._labelY = Math.max(f._labelY || 0, f.kind === 'demon' ? 3.5 : 2.75);
+    f._labelY = Math.max(f._labelY || 0, 2.75);
     stepMobVisual(f.v, dt, true);
     syncMobLabel(f, this.game.camera);
   }

@@ -15,7 +15,6 @@ const SPECS = {
   dino: ['mob.name.dino', 'mob.job.dino', '#e2d27a'],
   dragon: ['mob.name.dragon', 'mob.job.dragon', '#ff7a6a'],
   fish: ['mob.name.fish', 'mob.job.fish', '#9ad4ff'],
-  demon: ['mob.name.demon', 'mob.job.demon', '#8aa6ff'],
   bunny: ['mob.name.bunny', 'mob.job.bunny', '#ffd0ea'],
 };
 

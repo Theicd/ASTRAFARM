@@ -2218,7 +2218,7 @@ export class Game {
     for (const f of this.beachDecor?._fish || []) {
       if (!f.v?.root?.visible || f.state === 'under' || f.dead) continue;
       const p = f.pos;
-      test(f, p.x, p.y, p.z, f.kind === 'demon' ? 0.95 : 0.75, f.kind === 'demon' ? 2.5 : 2.1);
+      test(f, p.x, p.y, p.z, 0.75, 2.1);
     }
     for (const p of this.pigs) test(p, p.pos.x, p.pos.y, p.pos.z, 0.5, 0.95);
     const rb = this.robot.body.pos;
