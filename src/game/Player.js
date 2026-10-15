@@ -24,7 +24,9 @@ export class Player {
     this.hand = new THREE.Group();
     this.hand.name = 'viewHand';
     camera.add(this.hand);
-    this.bodyRoot = createAstraModel({ tint: 0x3d8dff, seed: 77 }).root;
+    const farmer = createAstraModel({ tint: 0x3d8dff, seed: 77 });
+    this.bodyRoot = farmer.root;
+    this.bodyParts = farmer.parts;
     this.bodyRoot.name = 'farmer';
     this.bodyRoot.visible = false;
     game.scene.add(this.bodyRoot);
@@ -184,6 +186,16 @@ export class Player {
     if (showBody) {
       this.bodyRoot.position.copy(b.pos);
       this.bodyRoot.rotation.y = this.yaw;
+      const moving = Math.hypot(b.vel.x, b.vel.z) > 0.35;
+      const step = Math.sin(this.bob * 1.4);
+      const P = this.bodyParts;
+      if (P) {
+        this.guardAim = Math.max(0, (this.guardAim || 0) - dt);
+        P.legL.rotation.x = moving ? step * 0.8 : 0;
+        P.legR.rotation.x = moving ? -step * 0.8 : 0;
+        P.armL.rotation.x = moving ? -step * 0.45 : 0;
+        P.armR.rotation.x = this.guardAim > 0 ? -1.2 : (moving ? step * 0.45 : 0);
+      }
     }
   }
 

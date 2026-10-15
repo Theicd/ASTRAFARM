@@ -2,7 +2,8 @@
 // select the farmer or robots, right-click to send them.
 import * as THREE from 'three';
 import { t } from '../core/i18n.js';
-import { LAYOUT, GY, inRect } from './world/World.js';
+import { LAYOUT, GY, WX, inRect } from './world/World.js';
+import { vehicleSector } from './Patrol.js';
 import { findPath } from './nav.js';
 import { B, isCrop, isFarm } from './world/blocks.js';
 import { isRipe } from './crops.js';
@@ -50,6 +51,9 @@ export class StrategyMode {
       this.cx = g.player.pos.x;
       this.cz = g.player.pos.z;
       g.hud.el.classList.add('strategy');
+      g.talk?.sys('sys.strategyGuard');
+      this._guardI = 0;
+      this._guardRepath = 0;
     } else {
       g.hud.el.classList.remove('strategy');
       this.marquee.classList.add('hidden');
@@ -57,6 +61,7 @@ export class StrategyMode {
       this.selected = [];
       this.focus = null;
       g.player.order = null;
+      g.player.guardAim = 0;
       g.camera.fov = 72;
       g.camera.far = 420;
       g.camera.updateProjectionMatrix();
@@ -94,9 +99,130 @@ export class StrategyMode {
     // Wheel back (positive delta) moves the camera farther away.
     if (g.input.wheel) this.height = Math.max(14, Math.min(150, this.height + Math.sign(g.input.wheel) * 7));
     this._placeRings();
+    this._guardPlayer(dt);
     this._updateOverlays();
     if (this.focus) g.hud.setRtsCard?.(this._card(this.focus));
     if (g._lodgeBar) g._lodgeBar.visible = false;
+  }
+
+  /** Lodge, west grass and the pen — the buggy keeps the fields and the beach. */
+  _guardLoop() {
+    const H = LAYOUT.house;
+    const P = LAYOUT.pigPen;
+    const F = LAYOUT.farmZone;
+    return [
+      [H.door[0], H.z0 - 5],
+      [H.x0 - 8, H.z0 - 2],
+      [F.x0 - 11, H.z1 - 2],
+      [F.x0 - 11, F.z0 + 4],
+      [H.x0 - 8, H.z0],
+      [H.door[0], H.z0 - 5],
+      [H.x1 + 4, H.z0 - 4],
+      [P.x1 + 4, P.z0 - 3],
+      [P.x1 + 4, (P.z0 + P.z1) * 0.5],
+      [P.x1 + 4, P.z0 - 3],
+      [H.x1 + 4, H.z0 - 4],
+    ];
+  }
+
+  _guardBlocked(i) {
+    const x = i % WX;
+    const z = (i / WX) | 0;
+    const w = this.game.world;
+    if (!w.inside(x, GY, z)) return true;
+    if (isFarm(w.get(x, GY, z)) || isCrop(w.get(x, GY + 1, z))) return true;
+    const H = LAYOUT.house;
+    const onHouse = x >= H.x0 && x <= H.x1 && z >= H.z0 && z <= H.z1;
+    if (!onHouse) return false;
+    const wall = x === H.x0 || x === H.x1 || z === H.z0 || z === H.z1;
+    const door = x === H.door[0] && z === H.z1;
+    return wall && !door;
+  }
+
+  _guardFoe(player) {
+    let best = null;
+    let bd = 18;
+    const p = player.pos;
+    const consider = (ent, x, z) => {
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (vehicleSector(x, z) && d > 8) return;
+      if (d < bd) { bd = d; best = ent; }
+    };
+    for (const m of this.game.mobs || []) {
+      if (!m || m.dead || m.state === 'leave' || m.state === 'emerge') continue;
+      consider(m, m.pos.x, m.pos.z);
+    }
+    for (const f of this.game.beachDecor?._fish || []) {
+      if (!f.v?.root?.visible || f.state === 'under' || f.dead) continue;
+      consider(f, f.pos.x, f.pos.z);
+    }
+    return best;
+  }
+
+  _guardPlayer(dt) {
+    const p = this.game.player;
+    if (!p?.alive) return;
+    this._guardRepath = Math.max(0, (this._guardRepath || 0) - dt);
+    if (p.order?.manual) return;
+    const H = LAYOUT.house;
+    const ix = Math.floor(p.pos.x);
+    const iz = Math.floor(p.pos.z);
+    let tx;
+    let tz;
+    let near = 1.15;
+    const indoors = ix >= H.x0 && ix <= H.x1 && iz >= H.z0 && iz <= H.z1;
+    const foe = indoors ? null : this._guardFoe(p);
+    if (indoors) {
+      tx = H.door[0] + 0.5;
+      tz = H.z1 + 1.7;
+    } else if (foe) {
+      tx = foe.pos.x;
+      tz = foe.pos.z;
+      near = 6.4;
+      const d = Math.hypot(tx - p.pos.x, tz - p.pos.z);
+      if (d < 11 && (this._guardCool || 0) <= 0) {
+        const origin = new THREE.Vector3(p.pos.x, p.pos.y + 1.25, p.pos.z);
+        const dir = new THREE.Vector3(tx - p.pos.x, 0.15, tz - p.pos.z);
+        this.game.launchPaint(origin, dir, 22);
+        this._guardCool = 0.46;
+        p.guardAim = 0.35;
+      }
+      this._guardCool = Math.max(0, (this._guardCool || 0) - dt);
+      if (d < 6.6) {
+        p.order = null;
+        p.yaw = Math.atan2(tx - p.pos.x, tz - p.pos.z);
+        return;
+      }
+    } else {
+      this._guardCool = Math.max(0, (this._guardCool || 0) - dt);
+      const loop = this._guardLoop();
+      let spot = loop[this._guardI % loop.length];
+      if (Math.hypot(spot[0] - p.pos.x, spot[1] - p.pos.z) < 1.7) {
+        this._guardI = (this._guardI + 1) % loop.length;
+        spot = loop[this._guardI];
+      }
+      tx = spot[0];
+      tz = spot[1];
+    }
+    const cur = p.order;
+    const same = cur?.guard && Math.hypot(cur.x - tx, cur.z - tz) < 1.4;
+    if (same) {
+      cur.near = near;
+      return;
+    }
+    if (this._guardRepath > 0 && cur?.guard) {
+      cur.x = tx;
+      cur.z = tz;
+      cur.near = near;
+      return;
+    }
+    this._guardRepath = foe ? 0.4 : 0.7;
+    const path = findPath(this.game.world, p.pos.x, p.pos.z, tx, tz, {
+      near: 1.1,
+      maxNodes: 2200,
+      blocked: (i) => this._guardBlocked(i),
+    });
+    p.order = { x: tx, z: tz, path: path.path, pathI: 0, near, job: null, guard: true };
   }
 
   _pointerDown(e) {
@@ -361,6 +487,7 @@ export class StrategyMode {
         x: gx, z: gz, path: path.path, pathI: 0,
         near: order.type === 'move' ? 0.75 : 1.35,
         job: order.type === 'move' ? null : order,
+        manual: true,
       };
     });
   }

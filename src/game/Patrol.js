@@ -6,6 +6,16 @@ import { isFarm, isCrop } from './world/blocks.js';
 import { findPath } from './nav.js';
 import { dampAngle } from '../core/math.js';
 
+/** Fields, lawn and beach belong to the buggy. The lodge, pen and outer grass belong to the farmer. */
+export function vehicleSector(x, z) {
+  const F = LAYOUT.farmZone;
+  const pen = LAYOUT.pigPen;
+  if (!F) return false;
+  if (z > F.z1 + 1) return true;
+  if (pen && x >= pen.x0) return false;
+  return x >= F.x0 - 2 && x <= F.x1 + 2 && z >= F.z0 - 1;
+}
+
 function tex(draw) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
@@ -173,6 +183,8 @@ export class Patrol {
     const p = this.root.position;
     const consider = (ent, x, z) => {
       const d = Math.hypot(x - p.x, z - p.z);
+      // The farmer covers the lodge, the pen and the outer grass. Stay with the fields unless a foe is on top of the buggy.
+      if (!vehicleSector(x, z) && d > 9) return;
       if (d < bd) { bd = d; best = ent; }
     };
     for (const m of this.game.mobs || []) {
