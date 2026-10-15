@@ -147,7 +147,7 @@ export class World {
       else {
         const hill = fbm(x * 0.09, z * 0.09, S + 1, 3);
         const shore = smoothstep(1.0, 0.86, t);
-        let ring = smoothstep(0.5, 0.7, t) * (1 - smoothstep(0.84, 0.97, t));
+        let ring = smoothstep(0.68, 0.84, t) * (1 - smoothstep(0.9, 0.98, t));
         // Never lower the grass / crop plateau — only open water far past the lawn
         if (beachGate) ring *= 0.04;
         const deepSea = z > LAYOUT.farmZone.z1 + 16;
@@ -157,16 +157,18 @@ export class World {
           const beachH = SEA + 0.15 + shore * 1.2 + (1 - t) * 1.5;
           h = lerp(h, beachH, smoothstep(0.6, 0.88, t));
         }
-        const flat = 1 - smoothstep(15.5, 19.5, r);
+        // Wide grass plateau: the lodge, fields, pen and pond stay put,
+        // and the ground between them and the hill rim is room for more buildings.
+        const flat = 1 - smoothstep(28, 33, r);
         // Keep GY plateau further toward the sea before any drop
-        const lawnFlat = beachGate ? (1 - smoothstep(20, 30, r)) : 0;
+        const lawnFlat = beachGate ? (1 - smoothstep(28, 36, r)) : 0;
         h = lerp(h, GY, Math.max(flat, lawnFlat));
         // Cap height only deep past the lawn — never next to the fields
         if (deepSea && t > 0.78) h = Math.min(h, SEA + 1.0);
       }
       const gy = Math.max(2, Math.min(WY - 8, Math.round(h)));
       top[x + z * WX] = gy;
-      const beach = (gy <= SEA + 1 && t > 0.72) || (beachGate && t > 0.58 && gy <= GY - 1);
+      const beach = (gy < GY && t > 0.72) || (beachGate && t > 0.58 && gy <= GY - 1);
       for (let y = 0; y <= gy; y++) {
         let id;
         if (y === 0) id = B.BEDROCK;
@@ -504,7 +506,7 @@ export class World {
       const x = 3 + Math.floor(rng() * (WX - 6)), z = 3 + Math.floor(rng() * (WZ - 6));
       const gy = top[x + z * WX];
       const r = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
-      if (r < 14 || gy < SEA || at(x, gy, z) !== B.GRASS || keepOut(x, z)) continue;
+      if (r < 27 || gy < SEA || at(x, gy, z) !== B.GRASS || keepOut(x, z)) continue;
       // Keep the farm-facing beach opening clear of trees
       if (angDist(Math.atan2(z + 0.5 - cz, x + 0.5 - cx), LAYOUT.beachDir) < LAYOUT.beachHalfWidth * 0.9 && r > 16) continue;
       if (z > LAYOUT.farmZone.z1 + 2) continue;
