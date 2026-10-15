@@ -346,6 +346,8 @@ export const en = {
   'sys.seaCrop': 'A sea creature stole a crop!',
   'sys.seaBunny': 'A sea creature snatched a rabbit!',
   'sys.seaHit': 'A sea creature struck a building!',
+  'sys.seaFishDown': 'Sea fish defeated!',
+  'sys.seaDemonDown': 'Blue demon defeated!',
   'sys.tideClear': 'The sea settles.',
   'sys.stampedeWarn': 'A dinosaur is coming from the beach!',
   'sys.stampede': 'The dinosaur is trampling the fields!',

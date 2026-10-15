@@ -9,7 +9,7 @@ import { cropDefOf, isRipe } from './crops.js';
 import { findPath } from './nav.js';
 import { solidEntityMaterial, mapEntityMaterial, setEntityLight } from './world/materials.js';
 import { takeMobVisual, stepMobVisual } from './mobVisuals.js';
-import { syncDecorLabel } from './mobLabel.js';
+import { syncDecorLabel, syncMobLabel } from './mobLabel.js';
 
 const ASSET = (name) => `./assets/beach/${name}`;
 
@@ -653,12 +653,8 @@ export class BeachDecor {
     const xMid = LAYOUT.pathX;
     const z0 = (LAYOUT.waterLineZ ?? 82) + 4;
     const spots = [
-      ['Fish', xMid - 16, z0, 2.8, 0.4],
-      ['Fish', xMid + 22, z0 + 6, 3.1, -0.5],
-      ['BlueDemon', xMid - 36, z0 + 8, 3.4, 0.2],
-      ['Fish', xMid + 8, z0 + 3, 3.3, 1.0],
-      ['Fish', xMid + 40, z0 + 7, 2.7, -0.2],
-      ['BlueDemon', xMid - 6, z0 + 10, 3.6, 0.6],
+      ['Fish', xMid - 14, z0 + 2, 2.6, 0.4],
+      ['Fish', xMid + 16, z0 + 6, 2.6, -0.4],
     ];
     for (const [key, x, z, sc, yaw] of spots) {
       const v = takeMobVisual(key, sc);
@@ -666,13 +662,12 @@ export class BeachDecor {
       v.root.position.set(x, 6.2, Math.min(WZ - 3, z));
       v.root.visible = false;
       this.root.add(v.root);
-      this._fish.push({
-        v, x, z: Math.min(WZ - 3, z), yaw,
-        labelKey: key === 'BlueDemon' ? 'demon' : 'fish',
-        state: 'under',
-        cool: 6 + Math.random() * 18,
-        raid: null,
-      });
+      this._fish.push(this._armSea(v, {
+        x, z: Math.min(WZ - 3, z), yaw,
+        labelKey: 'fish', kind: 'fish',
+        cool: 10 + Math.random() * 16,
+        hp: 5,
+      }));
     }
   }
 
@@ -769,7 +764,9 @@ export class BeachDecor {
       }
     }
     this._stepShots(dt);
+    this._maybeDemon(dt);
     for (const f of this._fish || []) this._seaRaid(f, dt);
+    this._fish = (this._fish || []).filter((f) => !f.gone);
     for (const c of this._critters || []) {
       if (c.kind === 'bunny') {
         this._bunnyWork(c, dt);
@@ -843,6 +840,63 @@ export class BeachDecor {
       }
     }
     return best;
+  }
+
+  _armSea(v, extra) {
+    const f = {
+      v, root: v.root, pos: v.root.position,
+      state: 'under', raid: null, dead: false, sea: true,
+      maxHp: extra.hp, ...extra,
+    };
+    Object.defineProperty(f, 'center', {
+      get() {
+        const p = v.root.position;
+        return new THREE.Vector3(p.x, p.y + 1.15, p.z);
+      },
+    });
+    f.hit = (dmg) => {
+      if (!v.root.visible || f.state === 'under' || f.dead) return false;
+      f.hp -= dmg;
+      f.hurt = 0.3;
+      if (f.hp > 0) return true;
+      f.dead = true;
+      f.raid = null;
+      f.state = 'under';
+      v.root.visible = false;
+      if (f._label) f._label.visible = false;
+      if (f._hpBar) for (const part of [f._hpBar.border, f._hpBar.bg, f._hpBar.fill]) if (part) part.visible = false;
+      this._seaSplash(v.root.position.x, v.root.position.z);
+      this.game.drops?.spawn('powder', v.root.position.x, GY + 1, v.root.position.z);
+      this.game.talk?.sys(f.kind === 'demon' ? 'sys.seaDemonDown' : 'sys.seaFishDown');
+      if (f.rare) f.gone = true;
+      else {
+        f.hp = f.maxHp;
+        f.dead = false;
+        f.cool = 42 + Math.random() * 18;
+      }
+      this._demonCool = Math.max(this._demonCool || 0, f.rare ? 50 : 0);
+      return true;
+    };
+    return f;
+  }
+
+  _maybeDemon(dt) {
+    const g = this.game;
+    if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) return;
+    if ((this._fish || []).some((f) => f.kind === 'demon' && !f.gone)) return;
+    this._demonCool = (this._demonCool ?? 22) - dt;
+    if (this._demonCool > 0) return;
+    const v = takeMobVisual('BlueDemon', 3.1);
+    if (!v) { this._demonCool = 20; return; }
+    v.root.visible = false;
+    const x = LAYOUT.pathX + (Math.random() < 0.5 ? -20 : 18);
+    const z = (LAYOUT.waterLineZ ?? 82) + 7;
+    v.root.position.set(x, 6.2, z);
+    this.root.add(v.root);
+    this._fish.push(this._armSea(v, {
+      x, z, yaw: 0, labelKey: 'demon', kind: 'demon', rare: true, cool: 0.4, hp: 8,
+    }));
+    this._demonCool = 48 + Math.random() * 28;
   }
 
   _seaSplash(x, z) {
@@ -931,6 +985,8 @@ export class BeachDecor {
       if (f._label) f._label.visible = false;
       pos.set(f.x, 6.2, f.z);
       if (f.cool > 0) return;
+      const busy = (this._fish || []).some((o) => o !== f && o.kind === 'fish' && o.state !== 'under');
+      if (f.kind === 'fish' && busy) { f.cool = 4; return; }
       const raid = this._pickSeaRaid();
       if (!raid) { f.cool = 8; return; }
       f.raid = raid;
@@ -953,9 +1009,11 @@ export class BeachDecor {
     } else if (back && pos.z >= shore - 0.4) {
       this._seaSplash(pos.x, shore + 1.2);
       f.state = 'under';
-      f.cool = 26 + Math.random() * 22;
+      f.cool = f.rare ? 0 : 34 + Math.random() * 20;
       f.v.root.visible = false;
       if (f._label) f._label.visible = false;
+      if (f._hpBar) for (const part of [f._hpBar.border, f._hpBar.bg, f._hpBar.fill]) if (part) part.visible = false;
+      if (f.rare) f.gone = true;
       pos.set(f.x, 6.2, f.z);
     } else {
       const step = Math.min(dist, 4.4 * dt);
@@ -964,7 +1022,7 @@ export class BeachDecor {
       pos.y = GY + 1;
       f.v.root.rotation.y = Math.atan2(dx, dz);
       stepMobVisual(f.v, dt, true);
-      syncDecorLabel(f, f.v.root, f.labelKey || 'fish', g.camera);
+      syncMobLabel(f, g.camera);
     }
   }
 

@@ -2140,14 +2140,20 @@ export class Game {
       if (tt !== null && tt < bt) { bt = tt; best = ent; }
     };
     for (const m of this.mobs) if (!m.dead && m.state !== 'emerge') test(m, m.pos.x, m.pos.y, m.pos.z, m.body.hw + 0.12, m.body.h + 0.1);
+    for (const f of this.beachDecor?._fish || []) {
+      if (!f.v?.root?.visible || f.state === 'under' || f.dead) continue;
+      const p = f.pos;
+      test(f, p.x, p.y, p.z, f.kind === 'demon' ? 0.95 : 0.75, f.kind === 'demon' ? 2.5 : 2.1);
+    }
     for (const p of this.pigs) test(p, p.pos.x, p.pos.y, p.pos.z, 0.5, 0.95);
     const rb = this.robot.body.pos;
     test(this.robot, rb.x, rb.y, rb.z, 0.4, 1.35);
     // ねらいを少し助ける（近くの緑のアレが、照準のそばにいれば当てる）
     if (!best) {
       let ba = 0.32;
-      for (const m of this.mobs) {
-        if (m.dead || m.state === 'emerge') continue;
+      const aim = [...this.mobs, ...(this.beachDecor?._fish || []).filter((f) => f.v?.root?.visible && f.state !== 'under' && !f.dead)];
+      for (const m of aim) {
+        if (m.dead || m.state === 'emerge' || m.state === 'under') continue;
         const v = m.center.sub(o);
         const dist = v.length();
         if (dist > 3.6 || dist > bd + 0.5) continue;
@@ -2459,7 +2465,7 @@ export class Game {
         return;
       }
       m.hit(dmg, pl.pos, knock);
-      if (m.dead) this.onMobKilled(m, 'player');
+      if (m.dead && !m.sea) this.onMobKilled(m, 'player');
       return;
     }
     if (atk.act === 'attack' && this.targetPig) {

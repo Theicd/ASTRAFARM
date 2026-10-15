@@ -53,13 +53,57 @@ function paintOf(color) {
 }
 
 /** Quaternius stores lit PBR albedos with no image. Lift them and paint grain so they read. */
-function basicMats(root) {
+function hidePaint(base, spots, stripe) {
+  const key = base + '|' + spots;
+  if (_paint.has(key)) return _paint.get(key);
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = base;
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = spots;
+  for (let i = 0; i < 18; i++) {
+    const x = (i * 17) % 58;
+    const y = (i * 23) % 56;
+    g.beginPath();
+    g.ellipse(x + 4, y + 4, 4 + (i % 3), 3, 0.4, 0, Math.PI * 2);
+    g.fill();
+  }
+  if (stripe) {
+    g.fillStyle = stripe;
+    g.fillRect(0, 26, 64, 8);
+    g.fillRect(0, 46, 64, 4);
+  }
+  g.strokeStyle = 'rgba(0,0,0,0.25)';
+  for (let y = 6; y < 64; y += 8) g.strokeRect(0.5, y, 63, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  _paint.set(key, tex);
+  return tex;
+}
+
+function namedPaint(modelKey, name) {
+  if (modelKey !== 'BlueDemon') return null;
+  if (name === 'bluedemon_main') return hidePaint('#2a6fd6', '#143e86', '#8fd0ff');
+  if (name === 'bluedemon_secondary') return hidePaint('#f0b24a', '#c47a22', '#ffe08a');
+  if (name === 'wood') return hidePaint('#8a5a32', '#5c3a1e', '#c49262');
+  if (name === 'straps') return hidePaint('#3a342c', '#1c1814', '#6a604e');
+  return null;
+}
+
+function basicMats(root, modelKey) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     const srcs = Array.isArray(o.material) ? o.material : [o.material];
     const next = srcs.map((src) => {
       const color = src?.color ? src.color.clone() : new THREE.Color(0xffffff);
       const name = (src?.name || '').toLowerCase();
+      const painted = namedPaint(modelKey, name);
+      if (painted) {
+        return new THREE.MeshBasicMaterial({ color: 0xffffff, map: painted, side: THREE.DoubleSide });
+      }
       const sum = color.r + color.g + color.b;
       if (name.includes('eye') && name.includes('black')) color.setRGB(0.015, 0.015, 0.02);
       else if (sum < 0.04) color.setRGB(0.22, 0.2, 0.24);
@@ -98,7 +142,7 @@ export function takeMobVisual(key, height = 1.8, gameplayScale = null) {
   const gltf = cache[key];
   if (!gltf) return null;
   const visual = SkeletonUtils.clone(gltf.scene);
-  basicMats(visual);
+  basicMats(visual, key);
   visual.position.y = 0;
   const bounds = new THREE.Box3().setFromObject(visual);
   const rawH = Math.max(0.25, bounds.max.y - bounds.min.y);
@@ -114,16 +158,22 @@ export function takeMobVisual(key, height = 1.8, gameplayScale = null) {
   const mixer = new THREE.AnimationMixer(visual);
   const clips = gltf.animations || [];
   const idleClip = pickClip(clips, /idle/i) || clips[0];
-  const walkClip = pickClip(clips, /^walk$/i) || pickClip(clips, /walk/i) || pickClip(clips, /run/i) || idleClip;
+  const walkClip = pickClip(clips, /^walk$/i) || pickClip(clips, /walk/i) || pickClip(clips, /run/i);
   const idle = idleClip ? mixer.clipAction(idleClip) : null;
-  const walk = walkClip ? mixer.clipAction(walkClip) : null;
+  const walk = walkClip && walkClip !== idleClip ? mixer.clipAction(walkClip) : null;
+  const legs = [];
+  if (!walk) {
+    visual.traverse((o) => {
+      if (o.isBone && /upperleg/i.test(o.name)) legs.push(o);
+    });
+  }
   return {
     root,
     scale: scaleG,
     mixer,
     idle,
     walk,
-    legs: [],
+    legs,
     mat: { uniforms: {} },
     baseScale: gameplayScale ?? height * 0.82,
     fitScale: scale,
@@ -145,8 +195,16 @@ export function stepMobVisual(model, dt, moving) {
   }
   const w = moving ? 1 : 0;
   if (model.walk) model.walk.setEffectiveWeight(w);
-  if (model.idle) model.idle.setEffectiveWeight(1 - w);
+  if (model.idle) model.idle.setEffectiveWeight(model.walk ? 1 - w : 1);
   model.mixer.update(dt);
+  if (!model.walk && model.legs?.length) {
+    model._step = (model._step || 0) + dt * (moving ? 9 : 2);
+    const sw = Math.sin(model._step) * (moving ? 0.75 : 0.06);
+    model.legs.forEach((bone, i) => {
+      if (bone.userData.restX == null) bone.userData.restX = bone.rotation.x;
+      bone.rotation.x = bone.userData.restX + (i % 2 === 0 ? sw : -sw);
+    });
+  }
   return true;
 }
 

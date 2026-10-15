@@ -282,6 +282,8 @@ export const he = {
   'sys.seaCrop': 'חיה מהים גנבה יבול!',
   'sys.seaBunny': 'חיה מהים חטפה ארנב!',
   'sys.seaHit': 'חיה מהים הכתה במבנה!',
+  'sys.seaFishDown': 'דג הים הובס!',
+  'sys.seaDemonDown': 'השד הכחול הובס!',
   'sys.tideClear': 'הים נרגע.',
   'sys.stampedeWarn': 'דינוזאור מתקרב מהחוף!',
   'sys.stampede': 'הדינוזאור רומס את השדות!',
