@@ -1,7 +1,8 @@
 // Farm patrol buggy. Present from the first morning. Chases hostiles and shoots paint.
 import * as THREE from 'three';
 import { t } from '../core/i18n.js';
-import { LAYOUT, GY } from './world/World.js';
+import { LAYOUT, GY, WX, inRect } from './world/World.js';
+import { isFarm, isCrop } from './world/blocks.js';
 import { findPath } from './nav.js';
 import { dampAngle } from '../core/math.js';
 
@@ -21,13 +22,10 @@ export class Patrol {
     this.root = new THREE.Group();
     this.root.name = 'patrol';
     this._build();
-    const beach = LAYOUT.beach;
-    const shoreZ = (beach?.z1 ?? (LAYOUT.waterLineZ ?? 81) - 1) - 1.5;
-    const x0 = (beach?.x0 ?? LAYOUT.pathX - 24) + 4;
-    const x1 = (beach?.x1 ?? LAYOUT.pathX + 24) - 4;
-    this.loop = [[x0, shoreZ], [x1, shoreZ]];
-    this.root.position.set((x0 + x1) * 0.5, GY + 1, shoreZ);
-    this.yaw = Math.PI / 2;
+    const ring = this._fieldRing();
+    this.loop = ring;
+    this.root.position.set(ring[0][0], GY + 1, ring[0][1]);
+    this.yaw = 0;
     this.path = null;
     this.pathI = 0;
     this.repath = 0;
@@ -123,6 +121,53 @@ export class Patrol {
     return s;
   }
 
+  _fieldRing() {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const F of [LAYOUT.fieldA, LAYOUT.fieldB, LAYOUT.farmZone]) {
+      if (!F) continue;
+      x0 = Math.min(x0, F.x0);
+      x1 = Math.max(x1, F.x1);
+      z0 = Math.min(z0, F.z0);
+      z1 = Math.max(z1, F.z1);
+    }
+    const m = 2;
+    return [
+      [x0 - m, z1 + m],
+      [x1 + m, z1 + m],
+      [x1 + m, z0 - m],
+      [x0 - m, z0 - m],
+    ];
+  }
+
+  _onField(x, z) {
+    const w = this.game.world;
+    const ix = Math.floor(x), iz = Math.floor(z);
+    if (!w?.inside(ix, GY, iz)) return false;
+    if (isFarm(w.get(ix, GY, iz)) || isCrop(w.get(ix, GY + 1, iz))) return true;
+    for (const F of [LAYOUT.fieldA, LAYOUT.fieldB]) {
+      if (F && inRect(ix, iz, F, 0)) return true;
+    }
+    return false;
+  }
+
+  _skirt(x, z) {
+    if (!this._onField(x, z)) return [x, z];
+    let best = null, bd = 1e9;
+    const ix = Math.floor(x), iz = Math.floor(z);
+    for (let dz = -10; dz <= 10; dz++) for (let dx = -10; dx <= 10; dx++) {
+      const nx = ix + dx, nz = iz + dz;
+      if (this._onField(nx, nz)) continue;
+      const d = dx * dx + dz * dz;
+      if (d < bd) { bd = d; best = [nx + 0.5, nz + 0.5]; }
+    }
+    return best || [x, z];
+  }
+
+  _blocked = (i) => {
+    const x = i % WX, z = (i / WX) | 0;
+    return this._onField(x, z);
+  };
+
   _foe() {
     let best = null, bd = 48;
     const p = this.root.position;
@@ -154,7 +199,8 @@ export class Patrol {
     const foe = this._foe();
     let tx, tz, speed = 2.4;
     if (foe) {
-      tx = foe.pos.x; tz = foe.pos.z;
+      const edge = this._skirt(foe.pos.x, foe.pos.z);
+      tx = edge[0]; tz = edge[1];
       speed = 4.6;
       const d = Math.hypot(tx - p.x, tz - p.z);
       if (d < 10 && this.cool <= 0) {
@@ -171,7 +217,7 @@ export class Patrol {
     }
     if (this.repath <= 0) {
       this.repath = foe ? 0.45 : 1.1;
-      const path = findPath(g.world, p.x, p.z, tx, tz, { near: 1.1, maxNodes: 1800 });
+      const path = findPath(g.world, p.x, p.z, tx, tz, { near: 1.1, maxNodes: 1800, blocked: this._blocked });
       this.path = path.path;
       this.pathI = 0;
     }
@@ -185,9 +231,13 @@ export class Patrol {
     const dist = Math.hypot(dx, dz) || 1;
     const step = Math.min(dist, speed * dt);
     if (dist > 0.4) {
-      p.x += (dx / dist) * step;
-      p.z += (dz / dist) * step;
-      this.wheelSpin += step * 3.2;
+      const nx = p.x + (dx / dist) * step;
+      const nz = p.z + (dz / dist) * step;
+      if (!this._onField(nx, nz)) {
+        p.x = nx;
+        p.z = nz;
+        this.wheelSpin += step * 3.2;
+      }
     }
     this.yaw = dampAngle(this.yaw, this._aim(tx, tz), 8, dt);
     p.y = GY + 1;
