@@ -15,7 +15,8 @@
 
 /* 左上：日付・時計・目標・やること */
 #hud .tl { position: absolute; top: calc(10px + var(--safe-t)); inset-inline-start: calc(12px + var(--safe-l)); display: grid; gap: 4px; max-width: min(46vw, 22em); }
-#hud .rts-btn { justify-self: start; font: inherit; cursor: pointer; color: #f3e2b0; background: rgba(18, 28, 22, 0.82); border: 2px solid rgba(140, 210, 120, 0.55); padding: 0.28em 0.7em; }
+#hud { z-index: 6; }
+#hud .rts-btn { justify-self: start; position: relative; z-index: 8; pointer-events: auto; font: inherit; cursor: pointer; color: #f3e2b0; background: rgba(10, 18, 14, 0.94); border: 2px solid rgba(140, 210, 120, 0.85); padding: 0.28em 0.7em; }
 #hud .rts-btn.on { background: rgba(40, 90, 48, 0.92); color: #fff; }
 #hud .rts-card { background: rgba(8, 14, 12, 0.88); border: 2px solid rgba(180, 220, 140, 0.7); padding: 0.4em 0.55em; display: grid; gap: 0.25em; min-width: 11em; }
 #hud .rts-card.hidden { display: none; }

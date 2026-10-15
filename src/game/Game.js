@@ -32,6 +32,7 @@ import { Green, Pig } from './Mobs.js';
 import { Golem, CropThief, Dragon, Chomper, Hopper, SeaBeast, Dino } from './Enemies.js';
 import { ArcadeEvents } from './ArcadeEvents.js';
 import { BeachDecor } from './BeachDecor.js';
+import { Patrol } from './Patrol.js';
 import { StrategyMode } from './Strategy.js';
 import { preloadMobVisuals } from './mobVisuals.js';
 import { syncMobLabel } from './mobLabel.js';
@@ -770,6 +771,7 @@ export class Game {
     this.helpers = [];
     for (const t of this.turrets) t.dispose();
     this.turrets = [];
+    if (this.patrol) { this.patrol.dispose(); this.patrol = null; }
   }
 
   newWorld() {
@@ -794,6 +796,7 @@ export class Game {
     this.pigGates = new PigGates(this);
     this.chargeBay = new ChargeBay(this);
     this.beachDecor = new BeachDecor(this);
+    this.patrol = new Patrol(this);
     this.lodge = { hp: 140, max: 140 };
     this.penHp = { hp: 90, max: 90 };
     this.pondHp = { hp: 70, max: 70 };
@@ -1607,18 +1610,25 @@ export class Game {
     this.paints = [];
   }
 
-  firePaint() {
-    const { o, d } = this.player.ray();
+  launchPaint(origin, dir, speed = 28) {
     const colors = [0xff3b5c, 0x3dff7a, 0x3aa0ff, 0xffd23a, 0xd15cff, 0xff8a2a];
     const color = colors[(this._paintI = ((this._paintI | 0) + 1) % colors.length)];
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(0.16, 8, 6),
       new THREE.MeshBasicMaterial({ color }),
     );
-    mesh.position.copy(o).addScaledVector(d, 0.85);
+    mesh.position.copy(origin);
     this.scene.add(mesh);
-    this.paints.push({ mesh, vel: d.clone().multiplyScalar(28), life: 0, color });
+    const vel = dir.clone();
+    if (vel.lengthSq() < 1e-6) vel.set(0, 0, 1);
+    vel.normalize().multiplyScalar(speed);
+    this.paints.push({ mesh, vel, life: 0, color });
     this.audio.sfx('turret_pop', { pitch: 1.45, dur: 0.12 });
+  }
+
+  firePaint() {
+    const { o, d } = this.player.ray();
+    this.launchPaint(o.clone().addScaledVector(d, 0.85), d, 28);
   }
 
   stepPaints(dt) {
@@ -2623,6 +2633,7 @@ export class Game {
     this.pigGates?.update(dt);
     this.chargeBay?.update(dt);
     this.beachDecor?.update(dt);
+    this.patrol?.update(dt);
     this.stepBombs(dt);
     this.stepPaints(dt);
     for (const m of [...this.mobs]) {
@@ -2659,7 +2670,7 @@ export class Game {
     this.camera.updateMatrixWorld(true);
     shared.uTime.value = this.time;
     const storm = this.arcade?.storm || 0;
-    this.sky.update(this.skyTime, this.camera, dt, this.time, { storm });
+    this.sky.update(this.skyTime, this.camera, dt, this.time, { storm, strategy: !!this.strategy?.on });
     // Fog closer on low/mobile presets (fewer far chunks shaded); tighter in arcade storms
     const night = 1 - shared.uSky.value;
     const far = (this.fogFar || 105) * (1 - storm * 0.42);

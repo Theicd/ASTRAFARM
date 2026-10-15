@@ -124,17 +124,18 @@ export class Sky {
       }
     }, 64);
     cloudTex.wrapS = cloudTex.wrapT = THREE.RepeatWrapping;
-    this.cloudU = { map: { value: cloudTex }, uOff: { value: new THREE.Vector2() }, uTint: { value: new THREE.Color(1, 1, 1) }, uCam: { value: new THREE.Vector3() } };
+    this.cloudU = { map: { value: cloudTex }, uOff: { value: new THREE.Vector2() }, uTint: { value: new THREE.Color(1, 1, 1) }, uCam: { value: new THREE.Vector3() }, uAlpha: { value: 0.92 } };
     const clouds = new THREE.Mesh(new THREE.PlaneGeometry(640, 640), new THREE.ShaderMaterial({
       uniforms: this.cloudU,
       vertexShader: /* glsl */ `varying vec2 vUv; varying vec3 vW; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vUv = w.xz / 768.0; gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */ `
-        uniform sampler2D map; uniform vec2 uOff; uniform vec3 uTint, uCam; varying vec2 vUv; varying vec3 vW;
+        uniform sampler2D map; uniform vec2 uOff; uniform vec3 uTint, uCam; uniform float uAlpha; varying vec2 vUv; varying vec3 vW;
         void main() {
           vec4 t = texture2D(map, vUv + uOff);
           if (t.a < 0.5) discard;
           float d = length(vW.xz - uCam.xz);
-          float a = 0.92 * (1.0 - smoothstep(140.0, 340.0, d));
+          float a = uAlpha * (1.0 - smoothstep(140.0, 340.0, d));
+          if (a < 0.02) discard;
           gl_FragColor = vec4(uTint * t.rgb, a);
         }`,
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
@@ -228,8 +229,10 @@ export class Sky {
     this.cloudU.uOff.value.x = time * (0.0025 + storm * 0.012);
     this.cloudU.uCam.value.copy(camera.position);
     this.cloudU.uTint.value.setRGB(1, 1, 1).multiplyScalar(lerp(0.25, 1, skyLit)).lerp(hor, 0.15 + storm * 0.4);
+    const strategy = !!weather.strategy;
+    this.cloudU.uAlpha.value = strategy ? 0.06 : 0.92;
     this.clouds.position.x = camera.position.x;
     this.clouds.position.z = camera.position.z;
-    this.clouds.position.y = lerp(52, 38, storm);
+    this.clouds.position.y = strategy ? camera.position.y + 80 : lerp(52, 38, storm);
   }
 }
