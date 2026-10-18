@@ -30,7 +30,10 @@ export class GameHud {
       <img class="arc-coin arc-3d" alt="" src="${icon3('coin')}">
       <b class="arc-money">0</b>
     </div>
-    <div class="arc-seeds"></div>
+    <div class="arc-seeds">
+      <img class="arc-3d" alt="" src="${icon3('seeds')}">
+      <b class="arc-seed-n">0</b>
+    </div>
     <div class="arc-day">
       <span class="sunmoon"></span>
       <b class="dayname"></b>
@@ -99,7 +102,7 @@ export class GameHud {
       hearts: [...el.querySelectorAll('.hearts img')], slots: Object.fromEntries([...el.querySelectorAll('.slot')].map((s) => [s.dataset.k, s])),
       banner: q('.banner'), bh: q('.banner h2'), bp: q('.banner p'), dead: q('.deadmsg'), slotname: q('.slotname'),
       jackpot: q('.jackpot'), jpTitle: q('.jackpot h2'), jpSub: q('.jackpot p'),
-      wh: q('.warehouse'), whMoney: q('.arc-money'), whStock: q('.arc-seeds'),
+      wh: q('.warehouse'), whMoney: q('.arc-money'), arcSeedN: q('.arc-seed-n'),
       whHelpers: q('.wh-helpers'), whHoe: q('.wh-hoe'),
       rtsBtn: q('#rts-toggle'), rtsCard: q('.rts-card'), rtsName: q('.rts-name'), rtsFill: q('.rts-bar i'), rtsHp: q('.rts-hp'),
     };
@@ -175,16 +178,11 @@ export class GameHud {
     const key = `${money}|${bags.potato}|${bags.wheat}|${bags.carrot}|${bags.corn}|${helpers}|${helperCap}|${hoeLevel}`;
     this._set('wh', key, () => {
       this.$.whMoney.textContent = String(money | 0);
+      const seedTotal = (bags.potato | 0) + (bags.wheat | 0) + (bags.carrot | 0) + (bags.corn | 0);
+      if (this.$.arcSeedN) this.$.arcSeedN.textContent = String(seedTotal);
       // Show total grower robots on the farm (main Astra + helpers), cap 3
       this.$.whHelpers.textContent = t('panel.helpers', { n: 1 + (helpers | 0), m: 1 + (helperCap | 0) });
       this.$.whHoe.textContent = t('panel.hoeLevel', { n: (hoeLevel | 0) + 1 });
-      const rows = ['potato', 'wheat', 'carrot', 'corn'].map((k) => {
-        const n = bags[k] | 0;
-        return `<span class="arc-seed${n > 0 ? '' : ' empty'}" data-crop="${k}" title="${esc(t('item.' + k))}">
-          <img class="arc-3d" alt="" src="${this._icon3(k)}"><b>${n}</b>
-        </span>`;
-      }).join('');
-      this.$.whStock.innerHTML = rows;
     });
   }
 
