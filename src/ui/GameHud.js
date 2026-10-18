@@ -60,6 +60,13 @@ export class GameHud {
     <span><i data-glyph="pause"></i><b data-i18n="howto.pause">${t('howto.pause')}</b></span>
   </div>
   <div class="banner"><h2></h2><p></p></div>
+  <div class="jackpot" aria-hidden="true">
+    <div class="jp-lights"></div>
+    <b class="jp-tag">BONUS</b>
+    <div class="jp-tank" aria-hidden="true"><i class="tr"></i><i class="hull"></i><i class="gun"></i></div>
+    <h2></h2>
+    <p></p>
+  </div>
   <div class="deadmsg hidden"><h2 data-i18n="banner.dead">${t('banner.dead')}</h2><p data-i18n="banner.deadSub">${t('banner.deadSub')}</p></div>
 </div>`);
     const el = (this.el = root.querySelector('#hud'));
@@ -70,6 +77,7 @@ export class GameHud {
       obj: q('.obj'), face: q('.robot canvas'), rstate: q('.rstate'), robot: q('.robot'), chat: q('.chat'),
       hearts: [...el.querySelectorAll('.hearts img')], slots: Object.fromEntries([...el.querySelectorAll('.slot')].map((s) => [s.dataset.k, s])),
       banner: q('.banner'), bh: q('.banner h2'), bp: q('.banner p'), dead: q('.deadmsg'), slotname: q('.slotname'),
+      jackpot: q('.jackpot'), jpTitle: q('.jackpot h2'), jpSub: q('.jackpot p'),
       wh: q('.warehouse'), whMoney: q('.wh-money'), whStock: q('.wh-stock'),
       whHelpers: q('.wh-helpers'), whHoe: q('.wh-hoe'),
       rtsBtn: q('#rts-toggle'), rtsCard: q('.rts-card'), rtsName: q('.rts-name'), rtsFill: q('.rts-bar i'), rtsHp: q('.rts-hp'),
@@ -241,6 +249,14 @@ export class GameHud {
     this.bannerDur = dur;
   }
 
+  /** Arcade bonus card — big, bright, and gone after a few seconds. */
+  jackpot(title, sub = '', dur = 4.4) {
+    this.$.jpTitle.textContent = title;
+    this.$.jpSub.textContent = sub;
+    this.$.jackpot.classList.add('on');
+    this.jackpotT = dur;
+  }
+
   setDead(on) { this.$.dead.classList.toggle('hidden', !on); }
 
   hurt(k) { this.hurtK = Math.max(this.hurtK, k); }
@@ -300,6 +316,10 @@ export class GameHud {
       const o = Math.min(1, k / 0.35, Math.max(0, this.bannerT) / 0.6);
       this.$.banner.style.opacity = o.toFixed(2);
     } else this.$.banner.style.opacity = '0';
+    if (this.jackpotT > 0) {
+      this.jackpotT -= dt;
+      if (this.jackpotT <= 0) this.$.jackpot.classList.remove('on');
+    }
     this.nameT = Math.max(0, this.nameT - dt);
     this.$.slotname.style.opacity = Math.min(1, this.nameT / 0.4).toFixed(2);
     this.hurtK = Math.max(0, this.hurtK - dt * 1.6);

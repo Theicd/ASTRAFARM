@@ -924,7 +924,12 @@ export class Game {
       if (!this.patrol || this.patrol.dead) {
         this.patrol?.dispose();
         this.patrol = new Patrol(this);
-        if (i === 1) this.talk.sys('sys.unlockTank');
+        if (i === 1) {
+          this.talk.sys('sys.unlockTank');
+          this.hud.jackpot(t('bonus.tank'), t('bonus.tankSub'));
+          this.audio.sfx('jackpot');
+          this.flash = Math.max(this.flash, 0.85);
+        }
       }
     } else if (this.patrol) {
       this.patrol.dispose();

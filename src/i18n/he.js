@@ -315,6 +315,8 @@ export const he = {
   'obj.fight': 'ירו על {name} ({n} בחוץ)',
   'obj.grow': 'עברו על יבול בשל כדי לקצור ({n}/{m})',
   'sys.unlockTank': 'יום 2: הטנק הגיע ושומר מסביב לשדה.',
+  'bonus.tank': 'הטנק הגיע!',
+  'bonus.tankSub': 'בונוס: הוא שומר על השדה ויורה צבע',
   'sys.unlockField': 'נפתחה ערוגה שנייה. אפשר לשתול גם שם.',
   'sys.unlockTower': 'יום 3: מגדל השמירה נפתח.',
   'sys.unlockPen': 'יום 4: דיר החזירים מוכן.',

@@ -239,6 +239,8 @@ export const en = {
   'obj.fight': 'Shoot {name} ({n} out)',
   'obj.grow': 'Walk over ripe crops to harvest ({n}/{m})',
   'sys.unlockTank': 'Day 2: the tank has arrived to guard the field.',
+  'bonus.tank': 'Tank unlocked!',
+  'bonus.tankSub': 'Bonus: it guards the field and shoots paint',
   'sys.unlockField': 'A second bed is open. You can plant there too.',
   'sys.unlockTower': 'Day 3: the guard tower is open.',
   'sys.unlockPen': 'Day 4: the pig pen is ready.',

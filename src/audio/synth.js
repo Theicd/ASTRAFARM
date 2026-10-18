@@ -369,6 +369,11 @@ export const SFX = {
     INSTRUMENTS.bell(ctx, out, t + 0.32, { f: 1568, vel: 0.35, dur: 1.4 });
   },
   ding(ctx, out, t) { INSTRUMENTS.bell(ctx, out, t, { f: 1319, vel: 0.5, dur: 0.9 }); INSTRUMENTS.bell(ctx, out, t + 0.1, { f: 1760, vel: 0.4, dur: 0.9 }); },
+  /** Slot-machine bonus: rising bells and a coin shower. */
+  jackpot(ctx, out, t, p = {}) {
+    [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => INSTRUMENTS.bell(ctx, out, t + i * 0.07, { f, vel: 0.42, dur: 0.7, rev: 0.2 }));
+    [0.45, 0.55, 0.66, 0.78].forEach((dt, i) => INSTRUMENTS.pluck(ctx, out, t + dt, { f: 1319 + i * 180, vel: 0.35, rev: 0.1 }));
+  },
   /** Soft arcade alarm: three quiet bells, not a siren. */
   alarm(ctx, out, t, p = {}) {
     const k = fin(p.pitch, 1);
