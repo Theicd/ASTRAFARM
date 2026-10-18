@@ -111,10 +111,24 @@ export class Turret {
     const standY = game.world.floorAt?.(x, z);
     const y = standY >= 1 ? standY : GY + 1;
     this.root.position.set(x + 0.5, y, z + 0.5);
+    this.root.traverse((o) => { o.frustumCulled = false; });
     game.scene.add(this.root);
     this.x = x;
     this.z = z;
     this.y = y;
+  }
+
+  /** Stay on the same plot, visible, after a night or a new morning. */
+  replant() {
+    const g = this.game;
+    const standY = g.world?.floorAt?.(this.x, this.z);
+    const y = standY >= 1 ? standY : this.y;
+    this.y = y;
+    this.dead = false;
+    this.root.visible = true;
+    this.root.rotation.z = 0;
+    this.root.position.set(this.x + 0.5, y, this.z + 0.5);
+    if (this.root.parent !== g.scene) g.scene.add(this.root);
   }
 
   hit(dmg = 1) {
@@ -202,7 +216,14 @@ export class Turret {
     this.lamp.distance = night ? 14 : 6;
     this.lamp.color.setHex(flash > 0.2 ? 0xfff0c0 : 0xffb060);
 
-    const [sk, bl] = g.world.lightAt?.(this.x, (this.y | 0) + 2, this.z) || [15, 8];
+    if (!this.root.parent) g.scene.add(this.root);
+    let sk = 0, bl = 0;
+    for (const dy of [1, 3, 5]) {
+      const [s, b] = g.world.lightAt?.(this.x, (this.y | 0) + dy, this.z) || [15, 0];
+      if (s > sk) sk = s;
+      if (b > bl) bl = b;
+    }
+    if (!night) sk = Math.max(sk, 13);
     // Keep the lens a little brighter than the wood at night so it reads as lit
     for (const m of this._mats) {
       if (m === this.matLens) setEntityLight(m, Math.max(sk, night ? 10 : sk), Math.max(bl, night ? 8 : bl));

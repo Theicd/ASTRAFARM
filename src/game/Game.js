@@ -107,6 +107,7 @@ export class Game {
     this.robot = new Robot(this);
     this.helpers = [];
     this.turrets = [];
+    this.turretSpots = [];
     this.pigGates = null;
     this.chargeBay = null;
     this.beachDecor = null;
@@ -793,6 +794,7 @@ export class Game {
     this.helpers = [];
     for (const t of this.turrets) t.dispose();
     this.turrets = [];
+    this.turretSpots = [];
     if (this.patrol) { this.patrol.dispose(); this.patrol = null; }
   }
 
@@ -855,8 +857,7 @@ export class Game {
     this.totals = { harvest: 0, kills: 0, booms: 0, stars: 0, green: 0, wheat: 0, carrot: 0, corn: 0, ...(r.totals || {}) };
     const helpers = Math.min(MAX_HELPERS, r.helpers | 0);
     for (let i = 0; i < helpers; i++) this.spawnHelper(true);
-    const turrets = Math.min(MAX_TURRETS, r.turrets | 0);
-    for (let i = 0; i < turrets; i++) this.placeTurret(true);
+    this.restoreSavedTurrets(r.turrets);
     this.tut = null;
     if (r.lodgeHp != null && this.lodge) {
       this.lodge.hp = Math.max(0, Math.min(this.lodge.max, r.lodgeHp | 0));
@@ -869,7 +870,8 @@ export class Game {
     this.save.data[this.mode === 'endless' ? 'endless' : 'run'] = {
       day: this.dayIndex, stock: this.stock, bags: { ...this.bags },
       money: this.money, lifetimeCoins: this.lifetimeCoins,
-      helpers: this.helpers.length, turrets: this.turrets.length,
+      helpers: this.helpers.length,
+      turrets: (this.turretSpots || []).map((s) => ({ x: s.x | 0, z: s.z | 0, hp: s.hp | 0 })),
       powder: this.powder, green: this.green,
       totals: { ...this.totals }, diff: this.world.diff(),
       lodgeHp: this.lodge?.hp ?? 140,
@@ -1016,10 +1018,56 @@ export class Game {
       }
       r.wake();
     }
-    // Mend cracked towers overnight
-    for (const tr of this.turrets) {
-      if (!tr.dead && tr.hp < tr.maxHp) tr.mend(4);
+    // Placed guard towers stay through the night and into the next morning.
+    this.keepTurrets();
+  }
+
+  noteTurret(t) {
+    if (!t) return;
+    if (!this.turretSpots) this.turretSpots = [];
+    const x = t.x | 0, z = t.z | 0;
+    let s = this.turretSpots.find((p) => p.x === x && p.z === z);
+    if (!s) {
+      s = { x, z, hp: t.maxHp };
+      this.turretSpots.push(s);
     }
+    s.hp = t.hp;
+  }
+
+  /** Put every placed tower back on its spot. Day changes never drop them. */
+  keepTurrets() {
+    const spots = this.turretSpots || [];
+    for (const s of spots) {
+      let tr = this.turrets.find((t) => (t.x | 0) === s.x && (t.z | 0) === s.z);
+      if (!tr || tr.dead) {
+        if (tr) {
+          tr.dispose();
+          this.turrets = this.turrets.filter((x) => x !== tr);
+        }
+        tr = this.spawnTurretAt(s.x, s.z, true);
+      }
+      if (!tr) continue;
+      tr.dead = false;
+      tr.hp = tr.maxHp;
+      tr.replant?.();
+      s.hp = tr.hp;
+    }
+  }
+
+  restoreSavedTurrets(saved) {
+    this.turretSpots = [];
+    if (Array.isArray(saved)) {
+      for (const s of saved) {
+        if (!s || s.x == null || s.z == null) continue;
+        const t = this.spawnTurretAt(s.x | 0, s.z | 0, true);
+        if (!t) continue;
+        if (s.hp != null) t.hp = Math.max(1, Math.min(t.maxHp, s.hp | 0));
+        this.noteTurret(t);
+      }
+      return;
+    }
+    const n = Math.min(MAX_TURRETS, saved | 0);
+    for (let i = 0; i < n; i++) this.placeTurret(true);
   }
 
   hoeLevel() { return hoeLevelFromStars(this.totals.stars | 0); }
@@ -1115,6 +1163,7 @@ export class Game {
     if (this.turrets.length >= MAX_TURRETS) return null;
     const t = new Turret(this, x, z);
     this.turrets.push(t);
+    this.noteTurret(t);
     if (!silent) {
       this.particles.sparkle(x + 0.5, GY + 1.2, z + 0.5, 10, 0xffd27a);
       this.audio.sfx('ding');
