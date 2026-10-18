@@ -167,6 +167,6 @@ export function syncMobLabel(mob, camera) {
 export function syncDecorLabel(holder, root, key, camera) {
   if (!root || !camera) return;
   const sprite = ensure(holder, root, key);
-  sprite.visible = true;
-  fit(sprite, camera);
+  sprite.visible = holder._labelOn !== false;
+  if (sprite.visible) fit(sprite, camera);
 }

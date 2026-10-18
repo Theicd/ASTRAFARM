@@ -1199,10 +1199,11 @@ export class BeachDecor {
 
   _hutchSpot(i) {
     const H = LAYOUT.house;
-    // On the floor against the east wall, south of the stair flight. Opening faces the room.
-    const x = H.x1 - 0.72;
-    const z = (H.z1 - 1.35) - 0.55 + i * 0.36;
-    return { x, z, yaw: -Math.PI / 2 };
+    // In the mouth of the hutch, on the straw, facing the room so a sleeping bunny stays visible.
+    const cz = H.z1 - 1.35;
+    const x = H.x1 - 0.88;
+    const z = cz - 0.45 + i * 0.3;
+    return { x, z, yaw: -Math.PI / 2, roll: i % 2 ? 0.18 : -0.18 };
   }
 
   _placeHutch() {
@@ -1314,11 +1315,13 @@ export class BeachDecor {
       if (goal && dist < 0.45) c.pathI++;
       return;
     }
-    pos.set(home.x, GY + 0.58, home.z);
-    c.v.root.rotation.set(1.05, home.yaw, 0);
+    // Feet on the straw, body curled in the opening — not under the floorboards.
+    pos.set(home.x, GY + 1.12, home.z);
+    c.v.root.visible = true;
+    c.v.root.rotation.set(1.05, home.yaw, home.roll || 0);
     stepMobVisual(c.v, dt, false);
     this._bunnyPose(c, 'sleep');
-    if (c._label) c._label.visible = false;
+    c._labelOn = false;
   }
 
   _bunnyWork(c, dt) {
@@ -1327,12 +1330,13 @@ export class BeachDecor {
     if (c.stolen) {
       c.backIn = (c.backIn || 0) - dt;
       c.v.root.visible = false;
-      if (c._label) c._label.visible = false;
+      c._labelOn = false;
       if (c.backIn <= 0) {
         c.stolen = false;
         const F = LAYOUT.fieldA;
         pos.set((F.x0 + F.x1) * 0.5 + (Math.random() - 0.5) * 4, GY + 1, (F.z0 + F.z1) * 0.5);
         c.v.root.visible = true;
+        c._labelOn = true;
         c.cool = 0.4;
       }
       return;
@@ -1347,7 +1351,7 @@ export class BeachDecor {
       c.cool = 0.2;
       c.v.root.rotation.x = 0;
       c.v.root.rotation.z = 0;
-      if (c._label) c._label.visible = true;
+      c._labelOn = true;
     }
     if (g.titleMode || g.state !== 'play' || g.isNetClient?.()) {
       pos.y = GY + 1;
