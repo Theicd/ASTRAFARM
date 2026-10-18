@@ -63,7 +63,7 @@ const DUSK = 12, DAWN = 7;
 const REACH = 4.8;
 const RANKS = [0, 300, 600, 900];   // 合計収穫数の称号のしきい（じゃがいも）
 // Hotbar: one Seed tool cycles wheat→corn→potato→carrot from bags.
-export const TOOLS = ['sword', 'hoe', 'seed', 'dirt', 'powder', 'turret'];
+export const TOOLS = ['sword', 'hoe', 'dirt', 'turret'];
 export { SEED_TOOLS, CROPS, PLANT_ORDER };
 
 // title：タイトルを出す ／ hud：ゲーム中の表示 ／ touch：タッチの操作 ／ input：play・actions・menu ／ music：曲 ／ modal：開く画面 ／ duck：曲を下げる

@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { createAstraModel, itemMesh } from './models.js';
 import { Emote } from './fx.js';
 import { B, BLOCKS, isFarm } from './world/blocks.js';
-import { CROPS, isRipe } from './crops.js';
+import { CROPS, isCrop, isRipe } from './crops.js';
 import { LAYOUT, GY, inRect } from './world/World.js';
 import { findPath } from './nav.js';
 import { moveBody, applyGravity } from './physics.js';
@@ -52,7 +52,7 @@ export class Robot {
     this.hand.position.set(0, -5.5 * PX, 0.5 * PX);
     this.model.parts.armR.add(this.hand);
     this.handItems = {};
-    for (const n of ['item_hoe', 'item_potato', 'item_wheat', 'item_carrot', 'item_corn']) {
+    for (const n of ['item_hoe', 'item_potato', 'item_wheat', 'item_carrot', 'item_corn', 'item_powder']) {
       const m = itemMesh(game.atlas, n, this.handMat);
       m.scale.setScalar(0.42);
       m.rotation.set(0, Math.PI / 2, n === 'item_hoe' ? Math.PI * 0.75 : 0);
@@ -237,6 +237,7 @@ export class Robot {
       const d = Math.hypot(x + 0.5 - p.x, z + 0.5 - p.z) + stripBias(x);
       if (g.isReserved(x, z)) continue;
       if (isRipe(at)) consider('harvest', x, GY + 1, z, d);
+      else if (isCrop(at) && g.powder > 0) consider('fertilize', x, GY + 1, z, d + 0.35);
       else if (isFarm(below) && at === B.AIR) {
         emptyFarm++;
         const seed = g.pickPlantSeed?.(reserve);
@@ -324,6 +325,9 @@ export class Robot {
       if (kind && isFarm(w.get(t.x, t.y - 1, t.z)) && w.get(t.x, t.y, t.z) === B.AIR) {
         run(() => g.plant(t.x, t.y, t.z, 'robot', kind));
       }
+    } else if (t.type === 'fertilize') {
+      const id = w.get(t.x, t.y, t.z);
+      if (isCrop(id) && !isRipe(id)) run(() => g.fertilize(t.x, t.y, t.z));
     } else if (t.type === 'till') run(() => g.till(t.x, t.y, t.z, 'robot'));
     else if (t.type === 'repair') run(() => g.repair(t.x, t.y, t.z, 'robot'));
     else if (t.type === 'mend') {
@@ -549,10 +553,15 @@ export class Robot {
       }
       if (r === 'arrived') {
         t.phase = 'act';
-        const act = { harvest: 1.35, plant: 0.85, till: 1.35, repair: 1.0, wander: 2.2 + Math.random() * 2 };
+        const act = { harvest: 1.35, plant: 0.85, fertilize: 0.8, till: 1.35, repair: 1.0, wander: 2.2 + Math.random() * 2 };
         t.actT = (act[t.type] || 1.2) * (this.helper ? 0.9 : 1);
         const seedHand = t.crop ? `item_${t.crop}` : 'item_potato';
-        this.setHand(t.type === 'till' || t.type === 'repair' ? 'item_hoe' : t.type === 'plant' ? seedHand : null);
+        this.setHand(
+          t.type === 'till' || t.type === 'repair' ? 'item_hoe'
+            : t.type === 'plant' ? seedHand
+            : t.type === 'fertilize' ? 'item_powder'
+            : null,
+        );
         if (t.type === 'wander' && Math.random() < 0.35) this.emote.show('note', 1.6);
       } else if (r === 'stuck') { this.endTask(); this.thinkT = 0.8; }
       return t.type === 'wander' ? workSpeed * 0.75 : workSpeed;

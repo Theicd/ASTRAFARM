@@ -53,8 +53,8 @@ export class GameHud {
     <div class="slotname"></div>
     <div class="hotbar">
       <i class="hb-side" data-glyph="slotPrev"></i>
-      ${['sword', 'hoe', 'seed', 'dirt', 'powder', 'turret'].map((k, i) => {
-        const counted = k === 'seed' || k === 'powder' || k === 'turret';
+      ${['sword', 'hoe', 'dirt', 'turret'].map((k, i) => {
+        const counted = k === 'turret';
         return `<div class="slot" data-k="${k}" data-n="${i + 1}"><img alt="" src="${icon('item_' + k)}"><em>${i + 1}</em>${counted ? '<span></span>' : ''}</div>`;
       }).join('')}
       <div class="slot extra" data-k="green"><img alt="" src="${icon('item_green')}"><span></span></div>
@@ -145,10 +145,14 @@ export class GameHud {
         const img = S.seed.querySelector('img');
         if (img) img.src = this.atlas.iconURL(nextSeed ? 'item_' + nextSeed : 'item_seed');
       }
-      S.powder.querySelector('span').textContent = powder;
-      S.green.querySelector('span').textContent = green;
-      S.powder.classList.toggle('empty', powder <= 0);
-      S.green.classList.toggle('empty', green <= 0);
+      if (S.powder) {
+        S.powder.querySelector('span').textContent = powder;
+        S.powder.classList.toggle('empty', powder <= 0);
+      }
+      if (S.green) {
+        S.green.querySelector('span').textContent = green;
+        S.green.classList.toggle('empty', green <= 0);
+      }
       if (S.turret) {
         S.turret.querySelector('span').textContent = turretsAfford;
         S.turret.classList.toggle('empty', !turretOpen || turretsAfford <= 0);
