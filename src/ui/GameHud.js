@@ -61,9 +61,15 @@ export class GameHud {
   </div>
   <div class="banner"><h2></h2><p></p></div>
   <div class="jackpot" aria-hidden="true">
-    <div class="jp-lights"></div>
+    <i class="jp-lights"></i>
     <b class="jp-tag">BONUS</b>
-    <div class="jp-tank" aria-hidden="true"><i class="tr"></i><i class="hull"></i><i class="gun"></i></div>
+    <div class="jp-tank" aria-hidden="true">
+      <i class="track"></i>
+      <i class="wheel a"></i><i class="wheel b"></i><i class="wheel c"></i>
+      <i class="hull"></i>
+      <i class="turret"></i>
+      <i class="gun"></i>
+    </div>
     <h2></h2>
     <p></p>
   </div>
@@ -250,7 +256,7 @@ export class GameHud {
   }
 
   /** Arcade bonus card — big, bright, and gone after a few seconds. */
-  jackpot(title, sub = '', dur = 4.4) {
+  jackpot(title, sub = '', dur = 5.4) {
     this.$.jpTitle.textContent = title;
     this.$.jpSub.textContent = sub;
     this.$.jackpot.classList.add('on');

@@ -128,30 +128,60 @@
 
 /* 真ん中上の見出し */
 #hud .jackpot {
-  position: absolute; left: 50%; top: 42%; z-index: 8; width: min(440px, 88vw);
+  position: absolute; left: 50%; top: 40%; z-index: 8; width: min(520px, 92vw);
   transform: translate(-50%, -46%) scale(0.72); opacity: 0; pointer-events: none;
-  text-align: center; padding: 22px 18px 18px; border-radius: 18px;
-  background: linear-gradient(180deg, #2a2110 0%, #14110c 100%);
+  text-align: center; padding: 28px 22px 20px; border-radius: 18px;
+  background: linear-gradient(180deg, #3a2c12 0%, #16130e 70%);
   border: 4px solid #f2c14a; box-shadow: 0 0 0 4px #6a4a12, 0 18px 40px rgba(0,0,0,0.45);
 }
 #hud .jackpot.on { animation: jackpotPop 0.55s cubic-bezier(.15, 1.35, .4, 1) forwards; }
 #hud .jackpot .jp-tag {
-  display: inline-block; margin: 0 0 8px; padding: 2px 14px; border-radius: 999px;
+  position: relative; z-index: 1;
+  display: inline-block; margin: 0 0 6px; padding: 2px 16px; border-radius: 999px;
   background: #f2c14a; color: #3a2508; font-size: 22px; letter-spacing: 0.18em;
-  text-shadow: none;
 }
-#hud .jackpot h2 { margin: 8px 0 0; font-size: clamp(28px, 6vw, 48px); color: #fff8dc; text-shadow: 0 3px 0 #6a3a08; }
-#hud .jackpot p { margin: 6px 0 0; color: #ffe08a; font-size: clamp(15px, 2.4vw, 20px); }
-#hud .jp-tank { position: relative; height: 74px; margin: 8px auto 0; width: 168px; }
-#hud .jp-tank .hull { position: absolute; left: 28px; top: 28px; width: 112px; height: 28px; background: #6f8a48; border: 3px solid #243018; border-radius: 4px; }
-#hud .jp-tank .tr { position: absolute; left: 18px; top: 24px; width: 132px; height: 40px; background: repeating-linear-gradient(90deg, #2a2118 0 8px, #4a3b2a 8px 14px); border-radius: 8px; }
-#hud .jp-tank .gun { position: absolute; left: 96px; top: 18px; width: 58px; height: 10px; background: #d5dee6; border: 2px solid #3a4450; border-radius: 2px; }
-#hud .jp-lights { position: absolute; inset: 6px; border-radius: 14px; pointer-events: none;
-  background: repeating-linear-gradient(90deg, transparent 0 16px, rgba(242,193,74,0.55) 16px 22px);
-  animation: jpMarquee 0.45s linear infinite; opacity: 0.55;
+#hud .jackpot h2, #hud .jackpot p, #hud .jp-tank { position: relative; z-index: 1; }
+#hud .jackpot h2 { margin: 10px 0 0; font-size: clamp(32px, 6.4vw, 52px); color: #fff8dc; text-shadow: 0 3px 0 #6a3a08; }
+#hud .jackpot p { margin: 8px 12px 0; color: #fff; font-size: clamp(16px, 2.6vw, 22px); line-height: 1.35; }
+#hud .jp-tank { height: 108px; margin: 4px auto 0; width: 250px; }
+#hud .jp-tank .track {
+  position: absolute; left: 18px; top: 58px; width: 168px; height: 36px; border-radius: 18px;
+  background: #1c1814; border: 3px solid #3a3228;
+  box-shadow: inset 0 -8px 0 #4a3c2c;
 }
+#hud .jp-tank .wheel {
+  position: absolute; top: 62px; width: 28px; height: 28px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #d8dee6 0 5px, #2a241c 6px, #5c4e3c 100%);
+  border: 3px solid #111;
+}
+#hud .jp-tank .wheel.a { left: 28px; }
+#hud .jp-tank .wheel.b { left: 86px; }
+#hud .jp-tank .wheel.c { left: 146px; }
+#hud .jp-tank .hull {
+  position: absolute; left: 36px; top: 34px; width: 140px; height: 32px;
+  background: linear-gradient(#9ecf63, #5f8a38); border: 3px solid #243018; border-radius: 6px 10px 4px 4px;
+}
+#hud .jp-tank .turret {
+  position: absolute; left: 78px; top: 16px; width: 52px; height: 26px; border-radius: 26px 26px 6px 6px;
+  background: linear-gradient(#b6e07a, #6f9a44); border: 3px solid #243018;
+}
+#hud .jp-tank .gun {
+  position: absolute; left: 124px; top: 22px; width: 78px; height: 12px; border-radius: 2px;
+  background: linear-gradient(#f4f7fb, #8ea0b4); border: 2px solid #2c3844;
+}
+#hud .jp-tank .gun::after {
+  content: ''; position: absolute; right: -6px; top: -3px; width: 10px; height: 16px;
+  background: #ffe27a; border-radius: 2px; box-shadow: 0 0 10px #ffd24a;
+}
+#hud .jp-lights, #hud .jackpot::after {
+  position: absolute; left: 14px; right: 14px; height: 12px; z-index: 2;
+  background: radial-gradient(circle, #ffe27a 0 4px, transparent 5px) left center / 20px 12px repeat-x;
+  animation: jpMarquee 0.35s linear infinite;
+}
+#hud .jp-lights { top: 8px; }
+#hud .jackpot::after { content: ''; bottom: 8px; }
 @keyframes jackpotPop { from { opacity: 0; transform: translate(-50%, -46%) scale(0.55) rotate(-4deg); } to { opacity: 1; transform: translate(-50%, -46%) scale(1) rotate(0); } }
-@keyframes jpMarquee { to { background-position: 22px 0; } }
+@keyframes jpMarquee { to { background-position: 20px center; } }
 #hud .banner { position: absolute; left: 0; right: 0; top: 22%; text-align: center; opacity: 0; pointer-events: none; }
 #hud .banner h2 { margin: 0; font-weight: 400; font-size: clamp(30px, 6vw, 56px); color: #fff; text-shadow: 3px 3px 0 #3a3a3a; }
 #hud .banner p { margin: 0.2em 0 0; font-size: clamp(14px, 2.2vw, 20px); color: #ffe8a0; }
