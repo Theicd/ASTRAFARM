@@ -369,6 +369,13 @@ export const SFX = {
     INSTRUMENTS.bell(ctx, out, t + 0.32, { f: 1568, vel: 0.35, dur: 1.4 });
   },
   ding(ctx, out, t) { INSTRUMENTS.bell(ctx, out, t, { f: 1319, vel: 0.5, dur: 0.9 }); INSTRUMENTS.bell(ctx, out, t + 0.1, { f: 1760, vel: 0.4, dur: 0.9 }); },
+  /** Soft arcade alarm: three quiet bells, not a siren. */
+  alarm(ctx, out, t, p = {}) {
+    const k = fin(p.pitch, 1);
+    INSTRUMENTS.bell(ctx, out, t, { f: 1174 * k, vel: 0.26, dur: 0.5, rev: 0.2 });
+    INSTRUMENTS.bell(ctx, out, t + 0.18, { f: 880 * k, vel: 0.2, dur: 0.65, rev: 0.24 });
+    INSTRUMENTS.bell(ctx, out, t + 0.36, { f: 1318 * k, vel: 0.14, dur: 0.7, rev: 0.18 });
+  },
   /** 緑のアレが地面から出てくる。 */
   mob_spawn(ctx, out, t, p = {}) {
     for (let i = 0; i < 3; i++) {

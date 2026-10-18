@@ -1113,6 +1113,7 @@ export class BeachDecor {
       f.state = 'out';
       this._seaSplash(x, shore);
       g.talk?.sys('sys.seaRise', null, 'warn');
+      g.audio?.sfx('alarm', { pos: { x, y: GY + 1, z: shore }, pitch: 1.08, minGap: 0.7 });
     }
     f.outT = (f.outT || 0) + dt;
     const giveUp = !f.raid || f.outT > 14 || (f.stuck || 0) > 2.2;

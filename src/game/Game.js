@@ -1560,7 +1560,7 @@ export class Game {
       this.lastMobMsg = this.time;
       this.talk.sys(msgKey, null, 'warn');
     }
-    if (guide || big || role !== 'boom') this.audio.sfx(big || role === 'dragon' || role === 'leviathan' ? 'boss_spawn' : 'mob_spawn', { pos: m.pos, refDistance: 8 });
+    this.audio.sfx('alarm', { pos: m.pos, refDistance: 14, pitch: big ? 0.82 : 1, minGap: 0.7 });
     if (big) this.hud.banner(t('banner.boss'), t('banner.bossSub'), 3.2);
     else if (role === 'golem') this.hud.banner(t('banner.golem'), t('banner.golemSub'), 2.6);
     else if (role === 'thief') this.hud.banner(t('banner.thief'), t('banner.thiefSub'), 2.4);
@@ -2806,6 +2806,7 @@ export class Game {
     const alarmOn = danger && this.state === 'play';
     if (alarmOn && !this._alarmLit) {
       this._alarmLit = true;
+      this.audio.sfx('alarm', { pitch: 1, minGap: 0.7 });
       if (this.tool !== 'sword') this.selectTool('sword');
       else this.player.show('sword', 0.55);
     } else if (!alarmOn) this._alarmLit = false;
