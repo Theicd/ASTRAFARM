@@ -792,8 +792,13 @@ export class BeachDecor {
       if (!v) continue;
       v.root.position.set(x, GY + 1, z);
       v.arms = [];
+      v.carrots = [];
       v.root.traverse((o) => {
         if (o.isBone && /upperarm/i.test(o.name)) v.arms.push(o);
+        if (/carrot/i.test(o.name)) {
+          o.visible = false;
+          v.carrots.push(o);
+        }
       });
       this.root.add(v.root);
       this._critters.push({ v, x, z, kind: 'bunny' });
@@ -883,6 +888,8 @@ export class BeachDecor {
     for (const c of this._critters || []) {
       if (c.kind === 'bunny') {
         this._bunnyWork(c, dt);
+        const holdCarrot = c.job?.type === 'harvest';
+        for (const mesh of c.v.carrots || []) mesh.visible = holdCarrot;
         syncDecorLabel(c, c.v.root, 'bunny', this.game.camera);
       } else {
         const a = t * 0.55 + c.z;
