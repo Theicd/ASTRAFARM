@@ -478,6 +478,7 @@ export class World {
     for (const [ax, az] of [[penCx - 2, penCz], [penCx + 2, penCz], [penCx, penCz + 2], [penCx - 1, penCz + 1], [penCx + 1, penCz - 1], [penCx + 2, penCz + 1]]) {
       if (ax > PP.x0 && ax < PP.x1 && az > PP.z0 && az < PP.z1 && at(ax, GY + 1, az) === B.AIR) put(ax, GY + 1, az, B.APPLE);
     }
+    this._penBuilt = true;
 
     // 池とサトウキビ（アストラがこわがる）
     const [px, pz] = LAYOUT.pond;
@@ -540,6 +541,69 @@ export class World {
     this.computeNav();
     this.collectSpawns();
     for (let i = 0; i < (WX / CHUNK) * (WZ / CHUNK); i++) this.dirty.add(i);
+  }
+
+  clearPigPen() {
+    if (!this._penBuilt) return;
+    const PP = LAYOUT.pigPen;
+    const wipe = (x, z) => {
+      this.set(x, GY, z, B.GRASS);
+      for (let y = GY + 1; y <= GY + 5; y++) this.set(x, y, z, B.AIR);
+    };
+    for (let z = PP.z0; z <= PP.z1; z++) for (let x = PP.x0; x <= PP.x1; x++) wipe(x, z);
+    for (let x = LAYOUT.fieldB.x1 + 1; x <= PP.gateX + 2; x++) {
+      for (let z = PP.gateZ0; z <= PP.gateZ1; z++) wipe(x, z);
+    }
+    this._penBuilt = false;
+  }
+
+  buildPigPen() {
+    if (this._penBuilt) return false;
+    const PP = LAYOUT.pigPen;
+    const isGate = (x, z) => x === PP.gateX && z >= PP.gateZ0 && z <= PP.gateZ1;
+    const isCorner = (x, z) => (x === PP.x0 || x === PP.x1) && (z === PP.z0 || z === PP.z1);
+    const isPost = (x, z) => {
+      if (!(x === PP.x0 || x === PP.x1 || z === PP.z0 || z === PP.z1)) return false;
+      if (isCorner(x, z)) return true;
+      if (x === PP.x0 || x === PP.x1) return ((z - PP.z0) % 2) === 0;
+      return ((x - PP.x0) % 2) === 0;
+    };
+    const isGatePost = (x, z) => x === PP.gateX && (z === PP.gateZ0 - 1 || z === PP.gateZ1 + 1);
+    for (let z = PP.z0; z <= PP.z1; z++) for (let x = PP.x0; x <= PP.x1; x++) {
+      this.set(x, GY, z, B.GRASS);
+      for (let y = GY + 1; y <= GY + 5; y++) this.set(x, y, z, B.AIR);
+    }
+    for (let x = LAYOUT.fieldB.x1 + 1; x <= PP.gateX + 2; x++) {
+      for (let z = PP.gateZ0; z <= PP.gateZ1; z++) {
+        this.set(x, GY, z, B.PATH);
+        this.set(x, GY + 1, z, B.AIR);
+      }
+    }
+    for (let z = PP.z0; z <= PP.z1; z++) for (let x = PP.x0; x <= PP.x1; x++) {
+      const edge = x === PP.x0 || x === PP.x1 || z === PP.z0 || z === PP.z1;
+      if (!edge || isGate(x, z)) continue;
+      if (isPost(x, z)) {
+        this.set(x, GY + 1, z, B.LOG);
+        if (isCorner(x, z) || isGatePost(x, z)) this.set(x, GY + 2, z, B.LANTERN);
+      } else this.set(x, GY + 1, z, B.PLANKS);
+    }
+    const penCx = (PP.x0 + PP.x1) >> 1;
+    const penCz = (PP.z0 + PP.z1) >> 1;
+    this.set(penCx - 1, GY + 1, PP.z1 - 1, B.HAY);
+    this.set(penCx, GY + 1, PP.z1 - 1, B.HAY);
+    this.set(penCx + 1, GY + 1, PP.z1 - 1, B.HAY);
+    this.set(penCx, GY + 2, PP.z1 - 1, B.HAY);
+    this.set(penCx, GY, penCz, B.DIRT);
+    this.set(penCx, GY + 1, penCz, B.LOG);
+    this.set(penCx, GY + 2, penCz, B.LOG);
+    this.set(penCx, GY + 3, penCz, B.LEAVES);
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) this.set(penCx + dx, GY + 3, penCz + dz, B.LEAVES);
+    this.set(penCx, GY + 4, penCz, B.LEAVES);
+    for (const [ax, az] of [[penCx - 2, penCz], [penCx + 2, penCz], [penCx, penCz + 2]]) {
+      if (this.get(ax, GY + 1, az) === B.AIR) this.set(ax, GY + 1, az, B.APPLE);
+    }
+    this._penBuilt = true;
+    return true;
   }
 
   collectSpawns() {

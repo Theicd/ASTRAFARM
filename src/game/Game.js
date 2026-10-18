@@ -50,11 +50,14 @@ import { names } from '../net/names.js';
 
 // 1 日ごとの設定：目標（収穫する数）、昼と夜の長さ（秒）、出てくる緑のアレの数
 export const DAYS = [
-  { goal: 40, day: 170, night: 50, mobsDay: 1, mobsNight: 2 },
-  { goal: 70, day: 145, night: 55, mobsDay: 1, mobsNight: 3 },
-  { goal: 100, day: 145, night: 60, mobsDay: 2, mobsNight: 5 },
-  { goal: 130, day: 145, night: 65, mobsDay: 4, mobsNight: 8 },
-  { goal: 160, day: 145, night: 75, mobsDay: 5, mobsNight: 9, boss: true },
+  { goal: 12, day: 150, night: 42, mobsDay: 0, mobsNight: 2 },
+  { goal: 24, day: 150, night: 48, mobsDay: 1, mobsNight: 3 },
+  { goal: 36, day: 145, night: 52, mobsDay: 1, mobsNight: 4 },
+  { goal: 48, day: 145, night: 56, mobsDay: 2, mobsNight: 5 },
+  { goal: 60, day: 140, night: 60, mobsDay: 2, mobsNight: 6 },
+  { goal: 72, day: 140, night: 64, mobsDay: 2, mobsNight: 7 },
+  { goal: 84, day: 135, night: 68, mobsDay: 3, mobsNight: 8 },
+  { goal: 96, day: 130, night: 74, mobsDay: 3, mobsNight: 8, boss: true },
 ];
 const DUSK = 12, DAWN = 7;
 const REACH = 4.8;
@@ -815,13 +818,17 @@ export class Game {
     this.pigGates = new PigGates(this);
     this.chargeBay = new ChargeBay(this);
     this.beachDecor = new BeachDecor(this);
-    this.patrol = new Patrol(this);
+    this.fieldBOpen = false;
+    this.penOpen = false;
     this.lodge = { hp: 140, max: 140 };
     this.penHp = { hp: 90, max: 90 };
     this.pondHp = { hp: 70, max: 70 };
     this._lodgeWarn = false;
     this._buildLodgeBar();
     this.spawnPigs();
+    this.fieldBOpen = false;
+    this._fieldB = false;
+    this.penOpen = false;
     this._roster = null;
     this._rosterLast = null;
     this.talk.reset();
@@ -905,6 +912,56 @@ export class Game {
     else if (act === 'endlessNew') this.startEndless(true);
   }
 
+  /** Story unlocks: day 1 house+one field, then tank, tower, pig pen. */
+  applyCampaign(i) {
+    const endless = this.mode === 'endless';
+    const tank = endless || i >= 1;
+    const fieldB = endless || i >= 1;
+    const pen = endless || i >= 3;
+    this.fieldBOpen = fieldB;
+    this.penOpen = pen;
+    if (tank) {
+      if (!this.patrol || this.patrol.dead) {
+        this.patrol?.dispose();
+        this.patrol = new Patrol(this);
+        if (i === 1) this.talk.sys('sys.unlockTank');
+      }
+    } else if (this.patrol) {
+      this.patrol.dispose();
+      this.patrol = null;
+    }
+    if (fieldB) this.openFieldB();
+    if (pen) {
+      const built = this.world.buildPigPen();
+      if (this.pigGates) this.pigGates.root.visible = true;
+      if (built) {
+        const P = LAYOUT.pigPen;
+        this.makePig((P.x0 + P.x1) * 0.5 + 1.2, (P.z0 + P.z1) * 0.5, { penned: true });
+        if (i === 3) this.talk.sys('sys.unlockPen');
+      }
+    } else {
+      this.world.clearPigPen();
+      if (this.pigGates) this.pigGates.root.visible = false;
+    }
+    if (i === 2) this.talk.sys('sys.unlockTower');
+  }
+
+  openFieldB() {
+    if (this._fieldB) return;
+    this._fieldB = true;
+    const F = LAYOUT.fieldB;
+    const w = this.world;
+    for (let z = F.z0; z <= F.z1; z++) for (let x = F.x0; x <= F.x1; x++) {
+      const below = w.get(x, GY, z);
+      const at = w.get(x, GY + 1, z);
+      if ((below === B.GRASS || below === B.DIRT) && (at === B.AIR || at === B.TALLGRASS || at === B.FLOWER_R || at === B.FLOWER_Y)) {
+        w.set(x, GY, z, B.FARM);
+        if (at !== B.AIR) w.set(x, GY + 1, z, B.AIR);
+      }
+    }
+    if (this.dayIndex === 1) this.talk.sys('sys.unlockField');
+  }
+
   // ------------------------------------------------------------------ 1 日
   startDay(i, { fromSave = false, endlessStart = false, endlessHello = false } = {}) {
     this.dayIndex = i;
@@ -917,6 +974,7 @@ export class Game {
     for (const m of this.mobs) { m.releasePig?.(); m.dispose(); }
     this.mobs = [];
     this.schedule = this.buildSchedule(this.cfg, i);
+    this.applyCampaign(i);
     this.arcade.planDay(i, this.cfg);
     this.player.reset(LAYOUT.spawn);
     this.talk.reset();
@@ -1107,10 +1165,8 @@ export class Game {
       daySlots.push({ t: start + ((end - start) * (k + 0.3 + rng() * 0.4)) / Math.max(1, cfg.mobsDay), kind });
     }
     if (i === 0) for (let k = 0; k < daySlots.length; k++) daySlots[k].t = 130 + k * 15; // day-1 tutorial boom
-    // Dragon only by day, and only once — robots sleep indoors at night
-    if (i === 0) {
-      daySlots.push({ t: 150, kind: 'dragon' });
-    } else {
+    // Dragon joins the story on day 3, once, and only in daylight
+    if (i >= 2) {
       daySlots.push({ t: start + (end - start) * (0.45 + rng() * 0.3), kind: 'dragon' });
     }
     for (const s of daySlots) list.push(s);
@@ -1367,10 +1423,6 @@ export class Game {
       const c = cells[Math.floor((i + 0.5) / 4 * cells.length + rng() * 20) % cells.length];
       this.makePig((c % WX) + 0.5, ((c / WX) | 0) + 0.5, {});
     }
-    // One already in the sty
-    const P = LAYOUT.pigPen;
-    const pcx = (P.x0 + P.x1) * 0.5 + 0.5, pcz = (P.z0 + P.z1) * 0.5 + 0.5;
-    this.makePig(pcx + 1.2, pcz - 0.8, { penned: true });
   }
 
   makePig(x, z, { penned = false, netId = null } = {}) {
@@ -1656,8 +1708,8 @@ export class Game {
       this.particles.burst(x, y, z, p.color, 10, 1.1);
       if (hit?.hit) {
         hit.hit(2, { x, y, z }, 0.45);
-        if (p.from === 'tank' && !hit.sea) {
-          hit.aggro = 8;
+        if (p.from === 'tank' && !hit.sea && hit === this.patrol?.focus) {
+          hit.aggro = 3.2;
           if (hit.state === 'eat' || hit.state === 'bash' || hit.state === 'fuse') {
             hit.state = hit.kind === 'chomp' || hit.kind === 'hop' ? 'hunt' : 'chase';
           }
@@ -1827,6 +1879,29 @@ export class Game {
         if (isRipe(next) && Math.random() < 0.3) this.particles.sparkle(x, y, z, 2, def.sparkle);
       } else this.crops.set(i, np);
     }
+  }
+
+  /** Walking the beds harvests ripe crops and plants seeds. No tool click. */
+  stepWalkFarm() {
+    const p = this.player;
+    if (!p?.alive || this.titleMode) return;
+    const x = Math.floor(p.pos.x);
+    const z = Math.floor(p.pos.z);
+    const key = x + z * WX;
+    if (key === this._walkFarm) return;
+    this._walkFarm = key;
+    if (!isFarm(this.world.get(x, GY, z))) return;
+    if (!this.fieldBOpen && x > LAYOUT.fieldA.x1) return;
+    const at = this.world.get(x, GY + 1, z);
+    if (isRipe(at)) {
+      this.syncFarm(() => this.harvest(x, GY + 1, z, 'player'));
+      return;
+    }
+    if (at !== B.AIR) return;
+    const crop = this.peekNextSeed();
+    if (!crop || this.seedCount(crop) <= 0) return;
+    const ok = this.syncFarm(() => this.plant(x, GY + 1, z, 'player', crop));
+    if (ok) this.advanceSeedCursor(crop);
   }
 
   /** Harvest a ripe crop. Player: drops fly out. Robot: shared bags. All crops count toward the daily goal. */
@@ -2203,6 +2278,7 @@ export class Game {
       this.player.update(dt, input, false);
     } else {
       this.player.update(dt, input, true);
+      this.stepWalkFarm();
       this.updateTargeting();
       this.handleActions(dt);
     }

@@ -232,6 +232,7 @@ export class Robot {
     };
     const reserve = this.helper ? 2 : 3;
     for (let z = Z.z0; z <= Z.z1; z++) for (let x = Z.x0; x <= Z.x1; x++) {
+      if (!g.fieldBOpen && x > LAYOUT.fieldA.x1) continue;
       const below = w.get(x, GY, z), at = w.get(x, GY + 1, z);
       const d = Math.hypot(x + 0.5 - p.x, z + 0.5 - p.z) + stripBias(x);
       if (g.isReserved(x, z)) continue;
@@ -246,7 +247,7 @@ export class Robot {
       }
     }
     // Also till the planned field rectangles (even edges outside farmZone scan)
-    for (const F of [LAYOUT.fieldA, LAYOUT.fieldB]) {
+    for (const F of (g.fieldBOpen ? [LAYOUT.fieldA, LAYOUT.fieldB] : [LAYOUT.fieldA])) {
       for (let z = F.z0; z <= F.z1; z++) for (let x = F.x0; x <= F.x1; x++) {
         if (g.isReserved(x, z)) continue;
         const below = w.get(x, GY, z), at = w.get(x, GY + 1, z);
@@ -272,7 +273,7 @@ export class Robot {
     const house = LAYOUT.house;
     mendAt('lodge', house.door[0], house.z1 + 1, g.lodge);
     const pen = LAYOUT.pigPen;
-    if (pen) mendAt('pen', pen.gateX - 1, (pen.gateZ0 + pen.gateZ1) * 0.5, g.penHp);
+    if (pen && g.penOpen) mendAt('pen', pen.gateX - 1, (pen.gateZ0 + pen.gateZ1) * 0.5, g.penHp);
     const pond = LAYOUT.pond;
     if (pond) mendAt('pond', pond[0], pond[1] + 3, g.pondHp);
     return best;

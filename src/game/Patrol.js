@@ -250,6 +250,7 @@ export class Patrol {
     if (this.barrel) this.barrel.position.z = 0.72 - this.kick * 0.2;
     const p = this.root.position;
     const foe = this._foe();
+    this.focus = foe || null;
     let tx, tz;
     if (foe) {
       const edge = this._skirt(foe.pos.x, foe.pos.z);
