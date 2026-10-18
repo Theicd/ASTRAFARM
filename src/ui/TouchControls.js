@@ -7,7 +7,6 @@ export const BUTTONS = [
   { action: 'attack', label: 'touch.attack', slot: 0 },
   { action: 'use', label: 'touch.use', slot: 1 },
   { action: 'jump', label: 'touch.jump', slot: 2 },
-  { action: 'eat', label: 'touch.eat', slot: 3 },
 ];
 
 export class TouchControls {
