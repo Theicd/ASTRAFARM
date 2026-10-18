@@ -6,6 +6,7 @@ import { damp } from '../core/math.js';
 import { mulberry32 } from '../core/rng.js';
 import { LAYOUT, GY, WX, WZ, SEA } from './world/World.js';
 import { B, isCrop } from './world/blocks.js';
+import { cropDefOf } from './crops.js';
 
 /** Spawn on the farm-facing beach (+Z past the fields). */
 function beachXZ(rng, spread = 12) {
@@ -509,24 +510,98 @@ export class ArcadeEvents {
   tickHurricane(dt) {
     const g = this.game;
     this.stormTarget = 1;
+    const mesh = this.stormMesh;
+    if (mesh) {
+      const cx = mesh.position.x;
+      const cz = mesh.position.z;
+      this.tossPlayer(cx, cz, 7);
+      this.tossMobs(cx, cz, 7.5);
+      this.tossCropBits(cx, cz, 6.5, dt);
+    }
     this._dmgT -= dt;
     if (this._dmgT > 0) return;
-    this._dmgT = 1.4 + Math.random() * 1.0;
-    // Damage near the moving vortex when possible
-    if (this.stormMesh) {
-      const p = this.stormMesh.position;
-      this.damageCropsNear(p.x, p.z, 5, 1 + (Math.random() < 0.4 ? 1 : 0), 0x88a0b8);
-    } else {
-      this.damageRandomCrops(1 + (Math.random() < 0.35 ? 1 : 0), 0x88a0b8);
+    this._dmgT = 1.5 + Math.random() * 0.8;
+    if (mesh) this.damageCropsNear(mesh.position.x, mesh.position.z, 5, 1, 0x88a0b8);
+    else this.damageRandomCrops(1, 0x88a0b8);
+  }
+
+  /** Lift the player in a spiral and let gravity bring them back down. */
+  tossPlayer(cx, cz, R) {
+    const g = this.game;
+    const pl = g.player;
+    if (g.state !== 'play' || !pl?.alive) return;
+    const p = pl.body.pos;
+    const H = LAYOUT.house;
+    const indoors = p.x > H.x0 + 0.4 && p.x < H.x1 - 0.4 && p.z > H.z0 + 0.4 && p.z < H.z1 - 0.4;
+    if (indoors) return;
+    const dx = p.x - cx;
+    const dz = p.z - cz;
+    const d = Math.hypot(dx, dz);
+    if (d > R || d < 0.35) return;
+    if (p.y > GY + 3.2) return;
+    if ((this._playerToss || 0) > g.time) return;
+    this._playerToss = g.time + 1.45;
+    const nx = -dz / d;
+    const nz = dx / d;
+    pl.body.vel.x = nx * 7 + (dx / d) * 1.2;
+    pl.body.vel.z = nz * 7 + (dz / d) * 1.2;
+    pl.body.vel.y = 14;
+    pl.body.onGround = false;
+    g.shake = Math.max(g.shake || 0, 0.4);
+    g.audio?.sfx('jump', { pos: p, pitch: 0.62 });
+  }
+
+  /** Enemies caught in the funnel get thrown up and spin. */
+  tossMobs(cx, cz, R) {
+    const g = this.game;
+    const now = g.time;
+    for (const m of g.mobs || []) {
+      if (!m?.body || m.dead || m.state === 'leave' || m.state === 'emerge') continue;
+      const p = m.body.pos;
+      const dx = p.x - cx;
+      const dz = p.z - cz;
+      const d = Math.hypot(dx, dz);
+      if (d > R || d < 0.2) continue;
+      if (p.y > GY + 4) continue;
+      if ((m._tossCool || 0) > now) continue;
+      m._tossCool = now + 1.05;
+      const nx = -dz / d;
+      const nz = dx / d;
+      m.body.vel.x = nx * 6;
+      m.body.vel.z = nz * 6;
+      m.body.vel.y = 10 + Math.random() * 4;
+      m.body.onGround = false;
+      m.yaw = (m.yaw || 0) + 2.2;
     }
-    if (g.state === 'play' && g.player?.alive) {
-      const p = g.player.body.pos;
-      const H = LAYOUT.house;
-      const indoors = p.x > H.x0 + 0.5 && p.x < H.x1 - 0.5 && p.z > H.z0 + 0.5 && p.z < H.z1 - 0.5;
-      if (!indoors) {
-        g.player.damage(0.5, p);
-        g.floats.add('!', p.x, p.y + 1.6, p.z, '#a0c8ff');
-      }
+  }
+
+  /** Vegetables under the funnel arc into the air without waiting for a full uproot. */
+  tossCropBits(cx, cz, R, dt) {
+    const g = this.game;
+    const w = g.world;
+    let n = 0;
+    for (const idx of g.crops.keys()) {
+      if (n >= 5) break;
+      const x = idx % WX;
+      const z = (idx / WX) | 0;
+      if (Math.hypot(x + 0.5 - cx, z + 0.5 - cz) > R) continue;
+      const def = cropDefOf(w.get(x, GY + 1, z));
+      if (!def) continue;
+      if (Math.random() > dt * 5) continue;
+      n++;
+      const ang = Math.random() * Math.PI * 2;
+      g.particles?.spawn({
+        x: x + 0.5, y: GY + 1.15, z: z + 0.5,
+        vx: Math.cos(ang) * (2 + Math.random() * 2),
+        vy: 9 + Math.random() * 7,
+        vz: Math.sin(ang) * (2 + Math.random() * 2),
+        color: def.sparkle || def.particle,
+        size: 0.16 + Math.random() * 0.1,
+        life: 1.25 + Math.random() * 0.45,
+        grav: 7.5,
+        drag: 0.25,
+        bright: 1.35,
+      });
     }
   }
 
@@ -541,6 +616,29 @@ export class ArcadeEvents {
 
   tickStampede() {
     this.stormTarget = 0.35;
+  }
+
+  uprootCrop(x, y, z, color) {
+    const g = this.game;
+    const w = g.world;
+    const id = w.get(x, y, z);
+    if (!isCrop(id)) return false;
+    const def = cropDefOf(id);
+    w.set(x, y, z, B.AIR);
+    g.crops.delete(w.idx(x, y, z));
+    g.today.lost = (g.today.lost | 0) + 1;
+    const col = def?.sparkle || color;
+    for (let k = 0; k < 8; k++) {
+      const ang = (k / 8) * Math.PI * 2;
+      g.particles?.spawn({
+        x: x + 0.5, y: y + 0.4, z: z + 0.5,
+        vx: Math.cos(ang) * 3.2, vy: 11 + Math.random() * 4, vz: Math.sin(ang) * 3.2,
+        color: col, size: 0.18, life: 1.4, grav: 8, drag: 0.2, bright: 1.3,
+      });
+    }
+    if (def) g.drops?.spawn(def.dropKind, x + 0.5, y + 0.6, z + 0.5, { vy: 12 });
+    g.floats.add('!', x + 0.5, y + 1.2, z + 0.5, '#a8d0ff');
+    return true;
   }
 
   damageCropsNear(cx, cz, radius, n, color) {
@@ -559,12 +657,7 @@ export class ArcadeEvents {
       const idx = cells.splice(Math.floor(Math.random() * cells.length), 1)[0];
       const x = idx % WX, z = (idx / WX) | 0;
       const y = GY + 1;
-      if (!isCrop(w.get(x, y, z))) continue;
-      w.set(x, y, z, B.AIR);
-      g.crops.delete(idx);
-      g.today.lost = (g.today.lost | 0) + 1;
-      g.particles.burst(x, y, z, color, 8, 1.1);
-      g.floats.add('!', x + 0.5, y + 1.2, z + 0.5, '#a8d0ff');
+      if (!this.uprootCrop(x, y, z, color)) continue;
       hit++;
     }
     if (hit > 0) g.talk.sys('sys.stormCrop', null, 'warn');
@@ -572,19 +665,13 @@ export class ArcadeEvents {
 
   damageRandomCrops(n, color) {
     const g = this.game;
-    const w = g.world;
     const cells = [...g.crops.keys()];
     if (!cells.length) return;
     for (let i = 0; i < n && cells.length; i++) {
       const idx = cells.splice(Math.floor(Math.random() * cells.length), 1)[0];
       const x = idx % WX, z = (idx / WX) | 0;
       const y = GY + 1;
-      if (!isCrop(w.get(x, y, z))) continue;
-      w.set(x, y, z, B.AIR);
-      g.crops.delete(idx);
-      g.today.lost = (g.today.lost | 0) + 1;
-      g.particles.burst(x, y, z, color, 8, 1.1);
-      g.floats.add('!', x + 0.5, y + 1.2, z + 0.5, '#a8d0ff');
+      this.uprootCrop(x, y, z, color);
     }
     if (n > 0) g.talk.sys('sys.stormCrop', null, 'warn');
   }
