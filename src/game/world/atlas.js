@@ -480,6 +480,21 @@ export const TILES = {
     p.outline(0x262a2e);
   },
   /** 土のブロック（持ちもの欄の絵：ななめから見た小さな立方体）。 */
+  item_coin(p) {
+    p.fill(0, 0);
+    p.ellipse(8, 8, 6.2, 6.2, [0xffe07a, 0xf6c945, 0xf0b429, 0xe8a820]);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const dx = (x + 0.5 - 8) / 4.1, dy = (y + 0.5 - 8) / 4.1;
+      const d = dx * dx + dy * dy;
+      if (d <= 1 && d >= 0.62) p.set(x, y, 0xb87a10);
+    }
+    p.set(8, 5, 0xfff6c4); p.set(8, 6, 0xfff6c4);
+    for (let x = 6; x <= 10; x++) p.set(x, 8, 0xfff3b0);
+    p.set(8, 7, 0xfff3b0); p.set(8, 9, 0xfff3b0);
+    p.set(8, 10, 0xfff6c4); p.set(8, 11, 0xfff6c4);
+    p.set(5, 5, 0xfff8d0);
+    p.outline(0x7a4e08);
+  },
   item_dirt(p) {
     p.fill(0, 0);
     const top = [0x6aae43, 0x5d9e3a, 0x77bb4c], left = [0x7a5539, 0x6e4c33, 0x825c3e], right = [0x966b4a, 0x8a6142, 0x9c7248];

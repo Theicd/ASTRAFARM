@@ -19,22 +19,31 @@ export class GameHud {
   <div class="alarm" aria-hidden="true"><div class="kozak"><i class="blue"></i><i class="red"></i></div></div>
   <div class="crosshair"></div>
   <div class="prompt hidden"><span class="pg"></span><b></b></div>
+  <div class="arcade">
+    <div class="arc-score">
+      <img class="arc-coin" alt="" src="${icon('item_coin')}">
+      <b class="arc-money">0</b>
+    </div>
+    <div class="arc-seeds"></div>
+    <div class="arc-day">
+      <span class="sunmoon"></span>
+      <b class="dayname"></b>
+      <b class="daypct">0%</b>
+    </div>
+    <div class="goal">
+      <span class="lbl" data-i18n="hud.goal">${t('hud.goal')}</span>
+      <b class="goalval">0%</b>
+    </div>
+  </div>
   <div class="tl">
     <button type="button" id="rts-toggle" class="rts-btn" data-i18n="rts.btn">${t('rts.btn')}</button>
     <div class="rts-card hidden"><b class="rts-name"></b><div class="rts-bar"><i></i></div><span class="rts-hp"></span></div>
-    <div class="day"><span class="sunmoon"></span><b class="dayname"></b><span class="clock"><i></i></span></div>
-    <div class="goal"><span class="lbl" data-i18n="hud.goal">${t('hud.goal')}</span><b class="goalval"></b><div class="bar"><i></i></div></div>
     <div class="obj hidden"></div>
     <div class="warehouse">
-      <div class="wh-top">
-        <span class="wh-title" data-i18n="panel.coins">${t('panel.coins')}</span>
-        <b class="wh-money"></b>
-      </div>
       <div class="wh-meta">
         <span class="wh-helpers"></span>
         <span class="wh-hoe"></span>
       </div>
-      <div class="wh-stock"></div>
     </div>
     <div class="chat" aria-live="polite"></div>
   </div>
@@ -79,12 +88,12 @@ export class GameHud {
     const q = (s) => el.querySelector(s);
     this.$ = {
       hurt: q('.hurt'), arrows: q('.arrows'), alarm: q('.alarm'), prompt: q('.prompt'), pg: q('.prompt .pg'), pt: q('.prompt b'),
-      sunmoon: q('.sunmoon'), dayname: q('.dayname'), clock: q('.clock i'), goal: q('.goal'), goalval: q('.goalval'), goalbar: q('.goal .bar i'),
+      sunmoon: q('.sunmoon'), dayname: q('.dayname'), daypct: q('.daypct'), goal: q('.goal'), goalval: q('.goalval'),
       obj: q('.obj'), face: q('.robot canvas'), rstate: q('.rstate'), robot: q('.robot'), chat: q('.chat'),
       hearts: [...el.querySelectorAll('.hearts img')], slots: Object.fromEntries([...el.querySelectorAll('.slot')].map((s) => [s.dataset.k, s])),
       banner: q('.banner'), bh: q('.banner h2'), bp: q('.banner p'), dead: q('.deadmsg'), slotname: q('.slotname'),
       jackpot: q('.jackpot'), jpTitle: q('.jackpot h2'), jpSub: q('.jackpot p'),
-      wh: q('.warehouse'), whMoney: q('.wh-money'), whStock: q('.wh-stock'),
+      wh: q('.warehouse'), whMoney: q('.arc-money'), whStock: q('.arc-seeds'),
       whHelpers: q('.wh-helpers'), whHoe: q('.wh-hoe'),
       rtsBtn: q('#rts-toggle'), rtsCard: q('.rts-card'), rtsName: q('.rts-name'), rtsFill: q('.rts-bar i'), rtsHp: q('.rts-hp'),
     };
@@ -155,15 +164,15 @@ export class GameHud {
   } = {}) {
     const key = `${money}|${bags.potato}|${bags.wheat}|${bags.carrot}|${bags.corn}|${helpers}|${helperCap}|${hoeLevel}`;
     this._set('wh', key, () => {
-      this.$.whMoney.textContent = t('panel.money', { n: money | 0 });
+      this.$.whMoney.textContent = String(money | 0);
       // Show total grower robots on the farm (main Astra + helpers), cap 3
       this.$.whHelpers.textContent = t('panel.helpers', { n: 1 + (helpers | 0), m: 1 + (helperCap | 0) });
       this.$.whHoe.textContent = t('panel.hoeLevel', { n: (hoeLevel | 0) + 1 });
       const rows = ['potato', 'wheat', 'carrot', 'corn'].map((k) => {
         const n = bags[k] | 0;
-        return `<div class="wh-row" data-crop="${k}">
-          <img alt="" src="${this.atlas.iconURL('item_' + k)}"><b>${t('item.' + k)}</b><em>×${n}</em>
-        </div>`;
+        return `<span class="arc-seed${n > 0 ? '' : ' empty'}" data-crop="${k}" title="${esc(t('item.' + k))}">
+          <img alt="" src="${this.atlas.iconURL('item_' + k)}"><b>${n}</b>
+        </span>`;
       }).join('');
       this.$.whStock.innerHTML = rows;
     });
@@ -184,19 +193,19 @@ export class GameHud {
   }
 
   setDay(n, phase, k, endless = false) {
-    this._set('day', `${n}|${phase}|${endless}`, () => {
+    const pct = Math.round(Math.max(0, Math.min(1, k)) * 100);
+    this._set('day', `${n}|${phase}|${endless}|${pct}`, () => {
       this.$.dayname.textContent = t(endless ? 'hud.dayEndless' : 'hud.day', { n });
       this.$.sunmoon.className = 'sunmoon ' + (phase === 'night' || phase === 'dusk' ? 'moon' : 'sun');
       this.$.sunmoon.title = t('hud.phase.' + phase);
+      this.$.daypct.textContent = pct + '%';
     });
-    const w = Math.round(k * 100);
-    this._set('clock', w, () => { this.$.clock.style.width = w + '%'; });
   }
 
   setGoal(n, m) {
-    this._set('goal', `${n}/${m}`, () => {
-      this.$.goalval.textContent = t('hud.goalVal', { n, m });
-      this.$.goalbar.style.width = Math.min(100, (n / Math.max(1, m)) * 100) + '%';
+    const pct = Math.round(Math.min(100, (n / Math.max(1, m)) * 100));
+    this._set('goal', `${n}/${m}/${pct}`, () => {
+      this.$.goalval.textContent = pct + '%';
       this.$.goal.classList.toggle('done', n >= m);
     });
   }
