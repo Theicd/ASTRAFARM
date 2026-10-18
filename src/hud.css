@@ -13,22 +13,30 @@
 #hud .prompt.dim { background: rgba(0, 0, 0, 0.35); color: #d8d8d8; }
 #hud .prompt.dim b { color: #ffe8a0; }
 
-/* Astra card and the score strip share one top row. */
+/* One transparent top line: Astra, score, and the pause button share the same height. */
 #hud .toprow {
   position: absolute; top: calc(8px + var(--safe-t));
   left: calc(8px + var(--safe-l)); right: calc(12px + var(--safe-r));
+  height: 48px;
   z-index: 7; display: flex; direction: ltr; align-items: center; gap: 8px;
   pointer-events: none;
 }
-#hud .toprow .robot { position: relative; top: auto; left: auto; right: auto; inset: auto; flex: none; pointer-events: auto; }
+#hud .toprow .robot {
+  position: relative; top: auto; left: auto; right: auto; inset: auto;
+  flex: none; pointer-events: auto;
+  height: 48px; box-sizing: border-box;
+  padding: 4px 8px 4px 4px; background: transparent;
+}
+#hud .toprow .robot canvas { width: 40px; height: 30px; }
 #hud .arcade {
   position: relative; top: auto; left: auto; right: auto; transform: none;
-  flex: 1 1 auto; min-width: 0; max-width: none;
-  display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
-  gap: 6px 12px; padding: 4px 12px;
+  flex: 1 1 auto; min-width: 0; max-width: none; height: 48px; box-sizing: border-box;
+  display: flex; flex-wrap: nowrap; justify-content: center; align-items: center;
+  gap: 6px 12px; padding: 0 4px;
   direction: rtl;
-  background: rgba(8, 14, 18, 0.86); border: 2px solid rgba(242, 193, 74, 0.9);
-  box-shadow: 0 2px 0 #000; pointer-events: none;
+  background: transparent; border: 0; box-shadow: none;
+  text-shadow: 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
 }
 #hud .arc-score, #hud .arc-seeds, #hud .arc-day, #hud .arcade .goal {
   display: flex; align-items: center; gap: 0.35em; flex: none;
@@ -232,11 +240,14 @@
 [data-device="touch"] #hud .slot { width: 44px; height: 44px; }
 [data-device="touch"] #hud .slot img { width: 30px; height: 30px; }
 [data-device="touch"] #hud .hearts img { width: 18px; height: 18px; }
-[data-device="touch"] #hud .toprow { right: calc(62px + var(--safe-r)); gap: 6px; }
+[data-device="touch"] #hud .toprow { right: calc(64px + var(--safe-r)); gap: 6px; }
 [data-device="touch"] #hud .arcade {
-  flex-wrap: wrap;
-  gap: 2px 8px;
-  padding: 2px 8px;
+  flex-wrap: nowrap;
+  gap: 4px 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 [data-device="touch"] #hud .arcade .goal .lbl { display: none; }
 [data-device="touch"] #hud .arc-3d,
