@@ -20,7 +20,26 @@
      the game module boots, beforeinstallprompt is already gone. -->
 <script>
 (function () {
-  var BUILD = '101';
+  var BUILD = '102';
+  function installedApp() {
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || window.navigator.standalone === true;
+  }
+  function hidePhoneBars() {
+    if (!installedApp()) return;
+    if (document.fullscreenElement || document.webkitFullscreenElement) return;
+    var el = document.documentElement;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) req.call(el).catch(function () {});
+  }
+  if (installedApp()) {
+    hidePhoneBars();
+    window.addEventListener('pointerdown', hidePhoneBars, { once: true });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') hidePhoneBars();
+    });
+  }
   window.__astraDeferredInstall = null;
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
