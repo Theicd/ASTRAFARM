@@ -13,11 +13,20 @@
 #hud .prompt.dim { background: rgba(0, 0, 0, 0.35); color: #d8d8d8; }
 #hud .prompt.dim b { color: #ffe8a0; }
 
-/* Arcade strip along the top: coin score, seed counts, day and mission as percents. */
+/* Astra card and the score strip share one top row. */
+#hud .toprow {
+  position: absolute; top: calc(8px + var(--safe-t));
+  left: calc(8px + var(--safe-l)); right: calc(12px + var(--safe-r));
+  z-index: 7; display: flex; direction: ltr; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+#hud .toprow .robot { position: relative; top: auto; left: auto; right: auto; inset: auto; flex: none; pointer-events: auto; }
 #hud .arcade {
-  position: absolute; top: calc(8px + var(--safe-t)); left: 50%; transform: translateX(-50%);
-  z-index: 7; display: flex; flex-wrap: nowrap; justify-content: center; align-items: center;
-  gap: 6px 12px; max-width: calc(100% - 220px); padding: 4px 12px;
+  position: relative; top: auto; left: auto; right: auto; transform: none;
+  flex: 1 1 auto; min-width: 0; max-width: none;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+  gap: 6px 12px; padding: 4px 12px;
+  direction: rtl;
   background: rgba(8, 14, 18, 0.86); border: 2px solid rgba(242, 193, 74, 0.9);
   box-shadow: 0 2px 0 #000; pointer-events: none;
 }
@@ -25,10 +34,11 @@
   display: flex; align-items: center; gap: 0.35em; flex: none;
 }
 #hud .arc-score { padding-inline-end: 8px; border-inline-end: 2px solid rgba(242, 193, 74, 0.45); }
-#hud .arc-coin { width: 22px; height: 22px; image-rendering: pixelated; }
+#hud .arc-3d { image-rendering: auto; width: 34px; height: 34px; object-fit: contain; filter: drop-shadow(0 2px 1px rgba(0,0,0,0.55)); }
+#hud .arc-coin { width: 36px; height: 36px; }
 #hud .arc-money { color: #ffe25a; font-size: 1.45em; font-weight: 400; letter-spacing: 0.03em; }
 #hud .arc-seed { display: flex; align-items: center; gap: 2px; }
-#hud .arc-seed img { width: 18px; height: 18px; image-rendering: pixelated; }
+#hud .arc-seed img { width: 32px; height: 32px; }
 #hud .arc-seed b { font-weight: 400; color: #fff; min-width: 0.8em; }
 #hud .arc-seed.empty { opacity: 0.38; }
 #hud .daypct, #hud .arcade .goalval { color: #ffe25a; font-size: 1.15em; font-weight: 400; }
@@ -36,7 +46,7 @@
 #hud .arcade .goal .lbl { font-size: 0.85em; color: #ddd; }
 
 /* 左上：やること（日付と目標は上の帯） */
-#hud .tl { position: absolute; top: calc(54px + var(--safe-t)); inset-inline-start: calc(12px + var(--safe-l)); display: grid; gap: 4px; max-width: min(46vw, 22em); }
+#hud .tl { position: absolute; top: calc(62px + var(--safe-t)); inset-inline-start: calc(12px + var(--safe-l)); display: grid; gap: 4px; max-width: min(46vw, 22em); }
 #hud { z-index: 6; }
 #hud .rts-btn { justify-self: start; position: relative; z-index: 8; pointer-events: auto; font: inherit; cursor: pointer; color: #f3e2b0; background: rgba(10, 18, 14, 0.94); border: 2px solid rgba(140, 210, 120, 0.85); padding: 0.28em 0.7em; }
 #hud .rts-btn.on { background: rgba(40, 90, 48, 0.92); color: #fff; }
@@ -70,7 +80,7 @@
 #hud .slot[data-k="turret"].locked { opacity: 0.4; filter: grayscale(0.85); }
 
 /* Police-style rotating alert light */
-#hud .alarm { position: absolute; top: calc(52px + var(--safe-t)); left: 50%; transform: translateX(-50%); width: 54px; height: 54px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 5; }
+#hud .alarm { position: absolute; top: calc(64px + var(--safe-t)); left: 50%; transform: translateX(-50%); width: 54px; height: 54px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 5; }
 #hud .alarm.on { opacity: 1; }
 #hud .kozak { position: relative; width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle at 50% 45%, #222 0 28%, #111 40%, #000 70%); box-shadow: 0 0 0 3px #333, 0 0 18px rgba(255,40,40,0.55); overflow: hidden; }
 #hud .kozak::after { content: ''; position: absolute; inset: 8px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); }
@@ -220,29 +230,20 @@
 [data-device="touch"] #hud .slot { width: 44px; height: 44px; }
 [data-device="touch"] #hud .slot img { width: 30px; height: 30px; }
 [data-device="touch"] #hud .hearts img { width: 18px; height: 18px; }
-[data-device="touch"] #hud .robot {
-  top: calc(10px + var(--safe-t));
-  left: calc(12px + var(--safe-l));
-  right: auto;
-  inset-inline-end: auto;
-}
+[data-device="touch"] #hud .toprow { right: calc(62px + var(--safe-r)); gap: 6px; }
 [data-device="touch"] #hud .arcade {
-  top: calc(52px + var(--safe-t));
-  left: 8px;
-  right: 8px;
-  transform: none;
-  max-width: none;
-  width: auto;
   flex-wrap: wrap;
-  gap: 4px 8px;
-  padding: 4px 8px;
+  gap: 2px 8px;
+  padding: 2px 8px;
 }
-[data-device="touch"] #hud .arc-coin { width: 18px; height: 18px; }
-[data-device="touch"] #hud .arc-seed img { width: 16px; height: 16px; }
-[data-device="touch"] #hud .arc-money { font-size: 1.2em; }
-[data-device="touch"] #hud .alarm { top: calc(8px + var(--safe-t)); }
+[data-device="touch"] #hud .arcade .goal .lbl { display: none; }
+[data-device="touch"] #hud .arc-3d,
+[data-device="touch"] #hud .arc-coin,
+[data-device="touch"] #hud .arc-seed img { width: 30px; height: 30px; }
+[data-device="touch"] #hud .arc-money { font-size: 1.15em; }
+[data-device="touch"] #hud .alarm { top: calc(62px + var(--safe-t)); }
 [data-device="touch"] #hud .tl {
-  top: calc(118px + var(--safe-t));
+  top: calc(74px + var(--safe-t));
   left: calc(12px + var(--safe-l));
   right: auto;
   inset-inline-start: auto;
@@ -252,14 +253,8 @@
 [data-device="touch"] #hud { font-size: 13px; }
 @media (orientation: landscape) and (max-height: 500px) {
   [data-device="touch"] #hud .bottom { bottom: calc(8px + var(--safe-b)); }
-  [data-device="touch"] #hud .robot {
-    top: calc(8px + var(--safe-t));
-    left: calc(12px + var(--safe-l));
-    right: auto;
-  }
-  [data-device="touch"] #hud .arcade { top: calc(42px + var(--safe-t)); }
   [data-device="touch"] #hud .tl {
-    top: calc(96px + var(--safe-t));
+    top: calc(58px + var(--safe-t));
     left: calc(12px + var(--safe-l));
     right: auto;
     max-width: 30vw;

@@ -2,6 +2,7 @@
 import { t, onLangChange, applyDom } from '../core/i18n.js';
 import { glyph } from './glyphs.js';
 import { getNet } from '../net/SosNet.js';
+import { icon3dURLs } from './icon3d.js';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class GameHud {
@@ -12,6 +13,9 @@ export class GameHud {
     this.drawFace = drawFace;
     this.glyphCtx = glyphCtx;
     const icon = (n) => atlas.iconURL(n);
+    const icons3d = icon3dURLs() || {};
+    const icon3 = (kind) => icons3d[kind] || icon('item_' + (kind === 'coin' ? 'coin' : kind));
+    this._icon3 = icon3;
     root.insertAdjacentHTML('beforeend', `
 <div id="hud" class="hidden">
   <div class="hurt"></div>
@@ -19,9 +23,11 @@ export class GameHud {
   <div class="alarm" aria-hidden="true"><div class="kozak"><i class="blue"></i><i class="red"></i></div></div>
   <div class="crosshair"></div>
   <div class="prompt hidden"><span class="pg"></span><b></b></div>
+  <div class="toprow">
+  <div class="robot"><div class="rface"><canvas width="16" height="12"></canvas><span class="net-slot" aria-hidden="true"></span></div><div class="rtext"><b data-i18n="name.astra">${t('name.astra')}</b><span class="rstate"></span></div></div>
   <div class="arcade">
     <div class="arc-score">
-      <img class="arc-coin" alt="" src="${icon('item_coin')}">
+      <img class="arc-coin arc-3d" alt="" src="${icon3('coin')}">
       <b class="arc-money">0</b>
     </div>
     <div class="arc-seeds"></div>
@@ -35,6 +41,7 @@ export class GameHud {
       <b class="goalval">0%</b>
     </div>
   </div>
+  </div>
   <div class="tl">
     <button type="button" id="rts-toggle" class="rts-btn" data-i18n="rts.btn">${t('rts.btn')}</button>
     <div class="rts-card hidden"><b class="rts-name"></b><div class="rts-bar"><i></i></div><span class="rts-hp"></span></div>
@@ -47,7 +54,6 @@ export class GameHud {
     </div>
     <div class="chat" aria-live="polite"></div>
   </div>
-  <div class="robot"><div class="rface"><canvas width="16" height="12"></canvas><span class="net-slot" aria-hidden="true"></span></div><div class="rtext"><b data-i18n="name.astra">${t('name.astra')}</b><span class="rstate"></span></div></div>
   <div class="bottom">
     <div class="hearts">${Array.from({ length: 10 }, () => `<img alt="" src="${icon('heart_full')}">`).join('')}</div>
     <div class="slotname"></div>
@@ -175,7 +181,7 @@ export class GameHud {
       const rows = ['potato', 'wheat', 'carrot', 'corn'].map((k) => {
         const n = bags[k] | 0;
         return `<span class="arc-seed${n > 0 ? '' : ' empty'}" data-crop="${k}" title="${esc(t('item.' + k))}">
-          <img alt="" src="${this.atlas.iconURL('item_' + k)}"><b>${n}</b>
+          <img class="arc-3d" alt="" src="${this._icon3(k)}"><b>${n}</b>
         </span>`;
       }).join('');
       this.$.whStock.innerHTML = rows;
