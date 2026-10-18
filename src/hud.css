@@ -200,6 +200,9 @@
 /* ダメージ */
 #hud .hurt { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 45%, rgba(200, 0, 0, 0.55) 100%); }
 
+/* Mobile: the left-side strategy button covers the info stack. Pause still opens strategy. */
+[data-device="touch"] #hud .rts-btn { display: none; }
+
 /* Mobile: pin info to physical left so RTL does not cover right-side touch controls / pause */
 [data-device="touch"] #hud .bottom { bottom: calc(228px + var(--safe-b)); }
 [data-device="touch"] #hud .slot { width: 44px; height: 44px; }
