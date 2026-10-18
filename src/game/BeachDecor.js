@@ -1192,9 +1192,9 @@ export class BeachDecor {
 
   _hutchSpot(i) {
     const H = LAYOUT.house;
-    // Under the stair run, against the east (right) wall. Opening faces the room.
-    const x = H.x1 - 1.22;
-    const z = (H.z1 - 5) + 1.15 + i * 0.38;
+    // On the floor against the east wall, south of the stair flight. Opening faces the room.
+    const x = H.x1 - 0.72;
+    const z = (H.z1 - 1.35) - 0.55 + i * 0.36;
     return { x, z, yaw: -Math.PI / 2 };
   }
 
@@ -1252,9 +1252,9 @@ export class BeachDecor {
       g.add(m);
       return m;
     };
-    // Tuck under the SE stair, opening toward the room (-X).
-    const cx = H.x1 - 1.05;
-    const cz = (H.z1 - 5) + 1.7;
+    // East wall, clear of the stair blocks (x 49–50, z 37–39). Opening faces the room.
+    const cx = H.x1 - 0.52;
+    const cz = H.z1 - 1.35;
     g.position.set(cx, GY + 1, cz);
     add(trim, new THREE.BoxGeometry(0.1, 0.92, 1.7), 0.42, 0.46, 0);
     add(plank, new THREE.BoxGeometry(0.85, 0.92, 0.08), 0.02, 0.46, 0.8);
